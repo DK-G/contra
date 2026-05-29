@@ -85,6 +85,11 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         concepts = _get_concepts(work)
         affiliations = _get_author_affiliations(work)
         publication_type = work.get("type") or work.get("type_crossref") or None
+        is_retracted = bool(work.get("is_retracted") or False)
+        title_str = str(title)
+        if not is_retracted:
+            tl = title_str.upper()
+            is_retracted = tl.startswith("RETRACTED:") or tl.startswith("WITHDRAWN:")
     except Exception as exc:  # pragma: no cover - defensive
         raise OpenAlexParseError(f"invalid work payload: {exc}") from exc
 
@@ -99,6 +104,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         concepts=concepts,
         author_affiliations=affiliations,
         publication_type=str(publication_type) if publication_type else None,
+        is_retracted=is_retracted,
     )
 
 

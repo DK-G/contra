@@ -182,27 +182,31 @@ def _llm_generate_track_a_text(
     level: str,
     model: str,
 ) -> Optional[tuple]:
+    """Return 4-part (relationship, summary, hypothesis, caution) for a Track A paper."""
     payload = {
         "model": model,
         "input": [
             {
                 "role": "system",
                 "content": (
-                    "Generate three concise Japanese sentences for a Track A research paper report. "
-                    "Return JSON: {relationship, summary, caution}"
+                    "Generate a 4-part Japanese writeup for a Track A research paper. "
+                    "Return JSON: {summary, relationship, hypothesis, caution}"
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     f"テーマ: {theme.theme_overview[:200]}\n"
+                    f"テーマの仮説: {'; '.join(theme.assumptions)}\n"
+                    f"テーマの不安点: {theme.concern or 'なし'}\n"
                     f"関係軸: {label}  関係度: {level}\n"
-                    f"論文: {work.title}\n"
-                    f"Abstract: {(work.abstract or '')[:300]}\n\n"
-                    "relationship: 関係軸と関係度を踏まえた1文（40-80字）\n"
-                    "summary: abstractの言い換え2文\n"
-                    "caution: テーマの前提に対する注意点1文\n"
-                    "JSON形式で返してください。"
+                    f"論文タイトル: {work.title}\n"
+                    f"Abstract: {(work.abstract or '')[:500]}\n\n"
+                    "以下の制約を守ってJSON形式で返してください。\n"
+                    "summary: abstractを自分の言葉で言い換えた2文。数値や実験条件があれば含めること。\n"
+                    "relationship: 関係軸と関係度を踏まえた1文（40-80字）。abstractの具体的な手法・対象・条件を1つ以上引用すること。\n"
+                    "hypothesis: この論文の知見をあなたのテーマにどう持ち込めるか、具体的な転用仮説を1〜2文で。論文固有の内容に基づくこと。\n"
+                    "caution: テーマの仮説または不安点のうち、この論文の前提条件と食い違う点を具体的に1文で指摘すること。「初期体験が重要」などの汎用文は禁止。\n"
                 ),
             },
         ],
@@ -213,9 +217,12 @@ def _llm_generate_track_a_text(
         text = extract_output_text(response).strip()
         data = _parse_json_object(text)
         if data:
-            r, s, c = data.get("relationship", ""), data.get("summary", ""), data.get("caution", "")
-            if r and s and c:
-                return r, s, c
+            s = data.get("summary", "")
+            r = data.get("relationship", "")
+            h = data.get("hypothesis", "")
+            c = data.get("caution", "")
+            if r and s and h and c:
+                return r, s, h, c
     except OpenAIError:
         pass
     return None
@@ -226,29 +233,40 @@ def _llm_generate_track_b_text(
     work: Work,
     label: str,
     model: str,
+    rationale: str = "",
 ) -> Optional[tuple]:
+    """Return 4-part (relationship, summary, hypothesis, caution) for a Track B paper.
+
+    The 'hypothesis' (役に立つ可能性の仮説) is the core field: it juxtaposes the user's
+    problem frame and the distant paper's solution frame (bisociation) and translates how
+    the distant finding might help, standing in for the user's domain sagacity.
+    """
     payload = {
         "model": model,
         "input": [
             {
                 "role": "system",
                 "content": (
-                    "Generate three concise Japanese sentences for a Track B research paper "
-                    "that has exactly one surprising connection to the theme. "
-                    "Return JSON: {relationship, summary, caution}"
+                    "Generate a 4-part Japanese writeup for a Track B paper from a DISTANT domain "
+                    "that shares one transferable relational structure with the theme. "
+                    "Return JSON: {summary, relationship, hypothesis, caution}"
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     f"テーマ: {theme.theme_overview[:200]}\n"
+                    f"テーマの目的: {theme.goal}\n"
+                    f"テーマの不安点: {theme.concern or 'なし'}\n"
                     f"接続点ラベル: {label}\n"
-                    f"論文: {work.title}\n"
-                    f"Abstract: {(work.abstract or '')[:300]}\n\n"
-                    "relationship: 接続点を起点にした関係説明1文\n"
-                    "summary: abstractの言い換え2文\n"
-                    "caution: 異なるドメインからの転用リスク1文\n"
-                    "JSON形式で返してください。"
+                    f"接続の関係構造（参考）: {rationale or '（未指定）'}\n"
+                    f"論文タイトル: {work.title}\n"
+                    f"Abstract: {(work.abstract or '')[:500]}\n\n"
+                    "以下の制約を守ってJSON形式で返してください。\n"
+                    "summary: abstractを自分の言葉で言い換えた2文。論文の主な発見を含めること。\n"
+                    "relationship: 接続点ラベルが指す『関係構造』が、なぜ表層分野は違えどテーマと一致するのかを1文で。表層キーワードの一致でなく構造の一致を述べること。\n"
+                    "hypothesis: ★中核。この遠い論文の知見を、あなたのテーマの具体的な局面にどう持ち込めるか、転用仮説を1〜2文で。課題の枠と解決の枠を並置し、論文固有の発見に基づくこと。汎用的な励ましは禁止。\n"
+                    "caution: この論文をテーマに転用する際に崩れる前提を具体的に1文で指摘すること。「転用に注意」などの汎用文は禁止。\n"
                 ),
             },
         ],
@@ -259,9 +277,12 @@ def _llm_generate_track_b_text(
         text = extract_output_text(response).strip()
         data = _parse_json_object(text)
         if data:
-            r, s, c = data.get("relationship", ""), data.get("summary", ""), data.get("caution", "")
-            if r and s and c:
-                return r, s, c
+            s = data.get("summary", "")
+            r = data.get("relationship", "")
+            h = data.get("hypothesis", "")
+            c = data.get("caution", "")
+            if r and s and h and c:
+                return r, s, h, c
     except OpenAIError:
         pass
     return None
@@ -274,13 +295,14 @@ def fill_track_entries(
     theme: ThemeInput | None = None,
     mode: str = "llm",
 ) -> List[OutputEntry]:
-    """Fill relationship/summary/caution for pre-classified Track A/B entries."""
+    """Fill 4-part (summary/relationship/hypothesis/caution) for pre-classified Track A/B entries."""
     cfg = config or GenerationConfig()
     result: List[OutputEntry] = []
     for idx, entry in enumerate(entries):
         relationship = entry.relationship
         summary = entry.abstract_summary
         caution = entry.caution
+        hypothesis = entry.usefulness_hypothesis
 
         if mode in ("llm", "plan_b") and theme and idx < cfg.llm_max_items:
             if entry.track == "A":
@@ -289,23 +311,31 @@ def fill_track_entries(
                 )
             else:
                 llm_result = _llm_generate_track_b_text(
-                    theme, entry.work, entry.label, cfg.llm_model
+                    theme, entry.work, entry.label, cfg.llm_model, entry.usefulness_hypothesis
                 )
             if llm_result:
-                relationship, summary, caution = llm_result
+                relationship, summary, hypothesis, caution = llm_result
 
         if not relationship:
             if entry.track == "A":
                 level = entry.relationship_level or "中"
                 relationship = f"関係軸「{entry.label}」で関係度「{level}」の関連性がある。"
             else:
-                relationship = f"{entry.label} という1点でテーマに接続する。"
+                relationship = f"{entry.label} という関係構造でテーマに接続する。"
         if not summary:
             summary = _summarize(entry.work.abstract) if theme is None else _structured_summary(entry.work.abstract, cfg)
+        if not hypothesis:
+            hypothesis = "この論文の知見をテーマの具体的局面に転用できるか要検討。"
         if not caution:
             caution = _structured_caution(theme) if theme else cfg.caution_stub
 
-        result.append(dc_replace(entry, relationship=relationship, abstract_summary=summary, caution=caution))
+        result.append(dc_replace(
+            entry,
+            relationship=relationship,
+            abstract_summary=summary,
+            usefulness_hypothesis=hypothesis,
+            caution=caution,
+        ))
     return result
 
 

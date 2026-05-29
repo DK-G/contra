@@ -43,6 +43,7 @@ class Work:
     concepts: List[str] = field(default_factory=list)
     author_affiliations: List[str] = field(default_factory=list)
     publication_type: Optional[str] = None
+    is_retracted: bool = False
 
 
 @dataclass
@@ -54,6 +55,12 @@ class OutputEntry:
     track: str = "A"
     label: str = ""
     relationship_level: str = ""
+    # Track B serendipity selection scores (0.0-1.0). See plan.md §6.2.
+    distance_score: float = 0.0
+    structure_score: float = 0.0
+    serendipity_score: float = 0.0
+    # The 4-part "役に立つ可能性の仮説" (usefulness hypothesis). See plan.md §7.
+    usefulness_hypothesis: str = ""
 
 
 @dataclass
