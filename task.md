@@ -12,12 +12,6 @@
 
 ## 未着手 (To Do)
 
-### Step 1: 仕様確定（実装前に決める）
-*   Track A の関係度表現を決定：5段階ラベル（高/中高/中/中低/低）vs 数値（1-10）
-*   Track A の関係軸ラベルを決定：LLM自由生成 vs 固定語彙リストから選択
-*   Track B の接続点タイプ8種を確定し、論文が見つからない場合の補充ルールを決める
-*   `classify_stub` の本実装方針を決定：LLMベース vs キーワード+ルールベース
-
 ### Step 2: データモデル更新（`src/core/`）
 *   `models.py` に `track`（A/B）・`label`（関係軸 or 接続点）フィールドを追加
 *   `OutputSection` をTrack A/B対応の構造に更新
