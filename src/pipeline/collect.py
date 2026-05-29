@@ -1,9 +1,9 @@
-﻿"""Collection pipeline (Phase 1 stub)."""
+﻿"""Collection pipeline."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig
@@ -107,4 +107,81 @@ def collect_and_filter(
     return limit_count(collected, max_count)
 
 
-__all__ = ["Collector", "CollectConfig", "collect_candidates", "collect_and_filter"]
+def filter_by_used_ids(works: List[Work], used_ids: Set[str]) -> List[Work]:
+    return [w for w in works if w.id not in used_ids]
+
+
+def generate_track_b_query(theme: ThemeInput, model: str = "gpt-4o-mini") -> str:
+    """Generate a cross-domain OpenAlex query for Track B via LLM."""
+    from src.openai_client import OpenAIError, extract_output_text, responses_create
+
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You generate a concise OpenAlex academic search query for a domain DIFFERENT from "
+                    "the given research theme. The goal is to find papers that might have one surprising "
+                    "methodological or conceptual connection. Return only the query string, 3-5 keywords."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Research theme: {theme.theme_overview[:300]}\n"
+                    f"Domain: {theme.scope.field}\n"
+                    f"Keywords: {', '.join(theme.keywords.include)}\n\n"
+                    "Generate a search query for a different academic domain with a potential single surprising connection."
+                ),
+            },
+        ],
+        "temperature": 0.7,
+    }
+    try:
+        response = responses_create(payload)
+        query = extract_output_text(response).strip().strip('"').strip("'")
+        if query:
+            return query
+    except OpenAIError:
+        pass
+    fallback = theme.keywords.include[0] if theme.keywords.include else theme.scope.field
+    return f"{fallback} algorithm optimization"
+
+
+def collect_track_b(
+    theme: ThemeInput,
+    config: Optional[CollectConfig] = None,
+    model: str = "gpt-4o-mini",
+    *,
+    max_count: int = 60,
+    used_ids: Optional[Set[str]] = None,
+) -> List[Work]:
+    """Collect Track B candidates from a different domain using an LLM-generated query."""
+    cfg = config or CollectConfig()
+    query = generate_track_b_query(theme, model)
+    collector = Collector(cfg)
+    works: List[Work] = []
+    seen_ids: Set[str] = set(used_ids or set())
+    for page in range(1, cfg.max_pages + 1):
+        payload = collector.client.get(
+            {"search": query, "per-page": cfg.per_page, "page": page}
+        )
+        for w in normalize_results(payload):
+            if w.id not in seen_ids and w.abstract:
+                seen_ids.add(w.id)
+                works.append(w)
+        if len(works) >= max_count:
+            break
+    return works[:max_count]
+
+
+__all__ = [
+    "Collector",
+    "CollectConfig",
+    "collect_candidates",
+    "collect_and_filter",
+    "collect_track_b",
+    "filter_by_used_ids",
+    "generate_track_b_query",
+]

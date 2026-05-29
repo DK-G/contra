@@ -1,4 +1,4 @@
-﻿"""Core data models for Phase 1."""
+﻿"""Core data models."""
 
 from __future__ import annotations
 
@@ -51,11 +51,15 @@ class OutputEntry:
     relationship: str
     abstract_summary: str
     caution: str
+    track: str = "A"
+    label: str = ""
+    relationship_level: str = ""
 
 
 @dataclass
 class OutputSection:
     title: str
+    track: str = ""
     entries: List[OutputEntry] = field(default_factory=list)
 
 
@@ -67,3 +71,10 @@ class OutputDocument:
     collected_count: Optional[int] = None
     filter_policy: Optional[str] = None
     collected_at: Optional[str] = None
+
+
+@dataclass
+class ThemeHistory:
+    theme_hash: str
+    used_ids: List[str]
+    generated_at: str
