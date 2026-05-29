@@ -7,6 +7,10 @@ from typing import Iterable, List, Sequence
 from src.core.models import Work
 
 
+def filter_retracted(works: Iterable[Work]) -> List[Work]:
+    return [w for w in works if not w.is_retracted]
+
+
 def filter_has_abstract(works: Iterable[Work]) -> List[Work]:
     return [w for w in works if w.abstract and w.abstract.strip()]
 
@@ -23,4 +27,4 @@ def limit_count(works: Iterable[Work], max_count: int) -> List[Work]:
     return list(works)[:max_count]
 
 
-__all__ = ["filter_has_abstract", "prioritize_abstract", "limit_count"]
+__all__ = ["filter_retracted", "filter_has_abstract", "prioritize_abstract", "limit_count"]

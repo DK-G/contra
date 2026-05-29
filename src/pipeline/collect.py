@@ -8,7 +8,7 @@ from typing import List, Optional, Set
 from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig
 from src.openalex.parser import normalize_results
-from src.pipeline.filter import filter_has_abstract, limit_count
+from src.pipeline.filter import filter_retracted, filter_has_abstract, limit_count
 
 
 @dataclass
@@ -80,21 +80,27 @@ def collect_and_filter(
     *,
     max_count: int = 500,
     require_abstract: bool = True,
+    use_assumption_queries: bool = True,
 ) -> List[Work]:
     cfg = config or CollectConfig()
     collector = Collector(cfg)
     collected: List[Work] = []
-    seen_ids = set()
-    queries = (
+    seen_ids: Set[str] = set()
+
+    base_queries = (
         collector._query_variants(theme) if cfg.relax_search else [collector._query_from_theme(theme)]
     )
-    for query in queries:
+    assumption_queries = generate_assumption_queries(theme) if use_assumption_queries else []
+    all_queries = base_queries + [q for q in assumption_queries if q not in base_queries]
+
+    for query in all_queries:
         works: List[Work] = []
         for page in range(1, cfg.max_pages + 1):
             payload = collector.client.get(
                 {"search": query, "per-page": cfg.per_page, "page": page}
             )
             works.extend(normalize_results(payload))
+        works = filter_retracted(works)
         if require_abstract:
             works = filter_has_abstract(works)
         for w in works:
@@ -111,19 +117,47 @@ def filter_by_used_ids(works: List[Work], used_ids: Set[str]) -> List[Work]:
     return [w for w in works if w.id not in used_ids]
 
 
-def generate_track_b_query(theme: ThemeInput, model: str = "gpt-4o-mini") -> str:
-    """Generate a cross-domain OpenAlex query for Track B via LLM."""
+_EXCLUDED_TRACK_B_DOMAINS = {"education", "gamification", "e-learning", "educational technology"}
+
+_TRACK_B_DOMAIN_COUNT = 5
+
+
+def _theme_anchor(theme: ThemeInput) -> str:
+    """The theme's core concept used to keep Track B queries 'distant but touchable'."""
+    if theme.keywords.include:
+        return theme.keywords.include[0]
+    if theme.goal:
+        return theme.goal
+    return theme.scope.field
+
+
+def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: int = _TRACK_B_DOMAIN_COUNT) -> List[str]:
+    """Generate N Track B queries, each = (distant domain concept) x (theme anchor term).
+
+    Pure distant-domain search returns generic top-cited reviews (the 'too far' failure
+    from the Goldilocks principle). Crossing each distant domain with a theme anchor term
+    keeps results in the moderate-distance band: distant in field, but structurally touchable.
+    """
     from src.openai_client import OpenAIError, extract_output_text, responses_create
 
+    excluded_note = ", ".join(sorted(_EXCLUDED_TRACK_B_DOMAINS))
+    anchor = _theme_anchor(theme)
     payload = {
         "model": model,
         "input": [
             {
                 "role": "system",
                 "content": (
-                    "You generate a concise OpenAlex academic search query for a domain DIFFERENT from "
-                    "the given research theme. The goal is to find papers that might have one surprising "
-                    "methodological or conceptual connection. Return only the query string, 3-5 keywords."
+                    f"You generate {n} OpenAlex academic search queries for finding papers that are in a "
+                    "DISTANT domain from the research theme but share a transferable RELATIONAL STRUCTURE "
+                    "(e.g. a feedback loop, a recovery-from-failure mechanism, a difficulty-progression curve) "
+                    "rather than surface keywords. "
+                    f"Each query MUST combine (a) a concept term from a distinct distant domain with "
+                    f"(b) an anchoring term tied to the theme's core (e.g. '{anchor}'), so results stay "
+                    "structurally connectable instead of generic. "
+                    f"Use {n} DIFFERENT distant domains. Do NOT use these domains: {excluded_note}. "
+                    "Each query is 3-5 keywords. "
+                    f"Return exactly {n} lines, one query per line, no numbering or extra text."
                 ),
             },
             {
@@ -131,22 +165,78 @@ def generate_track_b_query(theme: ThemeInput, model: str = "gpt-4o-mini") -> str
                 "content": (
                     f"Research theme: {theme.theme_overview[:300]}\n"
                     f"Domain: {theme.scope.field}\n"
-                    f"Keywords: {', '.join(theme.keywords.include)}\n\n"
-                    "Generate a search query for a different academic domain with a potential single surprising connection."
+                    f"Theme anchor term: {anchor}\n"
+                    f"Theme keywords: {', '.join(theme.keywords.include)}\n\n"
+                    f"Generate {n} cross-product queries (distant domain concept x theme anchor), "
+                    "each targeting a different distant domain that shares a relational structure with the theme. "
+                    "Do not repeat domains."
                 ),
             },
         ],
-        "temperature": 0.7,
+        "temperature": 0.9,
     }
     try:
         response = responses_create(payload)
-        query = extract_output_text(response).strip().strip('"').strip("'")
-        if query:
-            return query
+        text = extract_output_text(response).strip()
+        queries = [q.strip().strip('"').strip("'") for q in text.splitlines() if q.strip()]
+        queries = [q for q in queries if q]
+        if queries:
+            return queries[:n]
     except OpenAIError:
         pass
-    fallback = theme.keywords.include[0] if theme.keywords.include else theme.scope.field
-    return f"{fallback} algorithm optimization"
+    return [
+        f"{anchor} feedback loop",
+        f"{anchor} habit formation",
+        f"{anchor} recovery from failure",
+        f"{anchor} foraging behavior",
+        f"{anchor} skill acquisition curve",
+    ]
+
+
+def generate_track_b_query(theme: ThemeInput, model: str = "gpt-4o-mini") -> str:
+    """Generate a single cross-domain query (kept for backward compatibility)."""
+    queries = generate_track_b_queries(theme, model, n=1)
+    return queries[0] if queries else (theme.keywords.include[0] if theme.keywords.include else theme.scope.field)
+
+
+def generate_assumption_queries(theme: ThemeInput, model: str = "gpt-4o-mini") -> List[str]:
+    """Generate one OpenAlex search query per assumption in the theme input."""
+    from src.openai_client import OpenAIError, extract_output_text, responses_create
+
+    if not theme.assumptions:
+        return []
+
+    assumptions_text = "\n".join(f"- {a}" for a in theme.assumptions)
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You convert research assumptions into concise OpenAlex academic search queries. "
+                    "Return exactly one query per assumption, one per line, 3-6 keywords each. "
+                    "No numbering, no extra text."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Research theme: {theme.theme_overview[:200]}\n"
+                    f"Domain: {theme.scope.field}\n\n"
+                    f"Assumptions:\n{assumptions_text}\n\n"
+                    "Convert each assumption into a focused OpenAlex search query."
+                ),
+            },
+        ],
+        "temperature": 0.3,
+    }
+    try:
+        response = responses_create(payload)
+        text = extract_output_text(response).strip()
+        queries = [q.strip().strip('"').strip("'") for q in text.splitlines() if q.strip()]
+        return [q for q in queries if q][: len(theme.assumptions)]
+    except OpenAIError:
+        return []
 
 
 def collect_track_b(
@@ -157,20 +247,26 @@ def collect_track_b(
     max_count: int = 60,
     used_ids: Optional[Set[str]] = None,
 ) -> List[Work]:
-    """Collect Track B candidates from a different domain using an LLM-generated query."""
+    """Collect Track B candidates from multiple distinct domains using LLM-generated queries."""
     cfg = config or CollectConfig()
-    query = generate_track_b_query(theme, model)
+    queries = generate_track_b_queries(theme, model)
     collector = Collector(cfg)
     works: List[Work] = []
     seen_ids: Set[str] = set(used_ids or set())
-    for page in range(1, cfg.max_pages + 1):
-        payload = collector.client.get(
-            {"search": query, "per-page": cfg.per_page, "page": page}
-        )
-        for w in normalize_results(payload):
-            if w.id not in seen_ids and w.abstract:
-                seen_ids.add(w.id)
-                works.append(w)
+    per_query = max(max_count // len(queries), 5)
+    for query in queries:
+        count = 0
+        for page in range(1, cfg.max_pages + 1):
+            payload = collector.client.get(
+                {"search": query, "per-page": cfg.per_page, "page": page}
+            )
+            for w in filter_retracted(normalize_results(payload)):
+                if w.id not in seen_ids and w.abstract:
+                    seen_ids.add(w.id)
+                    works.append(w)
+                    count += 1
+            if count >= per_query:
+                break
         if len(works) >= max_count:
             break
     return works[:max_count]
@@ -184,4 +280,6 @@ __all__ = [
     "collect_track_b",
     "filter_by_used_ids",
     "generate_track_b_query",
+    "generate_track_b_queries",
+    "generate_assumption_queries",
 ]

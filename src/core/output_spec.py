@@ -13,7 +13,7 @@ def _auto_tag(section_idx: int, entry_idx: int, label: str, edge: str) -> str:
 
 def _lines_for_theme(theme: ThemeInput) -> List[str]:
     lines = []
-    lines.append(f"# {theme.scope.field} ブレインストーミング出力")
+    lines.append(f"# {theme.scope.field} contra 視座拡張レポート")
     lines.append("")
     lines.append("## 入力サマリ")
     lines.append("")
@@ -81,6 +81,25 @@ def _link_for_work(work: Work) -> str:
     return "TBD"
 
 
+def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
+    """Render the shared 4-part body: 概要 / 関連性 / 役に立つ可能性の仮説 / 注意点."""
+    lines = []
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
+    lines.append(f"1) 概要: {entry.abstract_summary}")
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
+    lines.append(f"2) テーマとの関連性: {entry.relationship}")
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "HYPOTHESIS", "START"))
+    lines.append(f"3) 役に立つ可能性の仮説: {entry.usefulness_hypothesis}")
+    lines.append(_auto_tag(section_idx, entry_idx, "HYPOTHESIS", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
+    lines.append(f"4) 注意点: {entry.caution}")
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
+    lines.append("")
+    return lines
+
+
 def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
     lines = []
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
@@ -90,16 +109,7 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")
     lines.append("")
-    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
-    lines.append(f"1) 関係性: {entry.relationship}")
-    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
-    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
-    lines.append(f"2) 要約: {entry.abstract_summary}")
-    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
-    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
-    lines.append(f"3) 注意点: {entry.caution}")
-    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
-    lines.append("")
+    lines.extend(_render_4part_body(section_idx, entry_idx, entry))
     return lines
 
 
@@ -108,19 +118,14 @@ def _render_track_b_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
     lines.append("")
     lines.append(f"- **接続点**: {entry.label or '—'}")
+    lines.append(
+        f"- **セレンディピティ・スコア**: {entry.serendipity_score} "
+        f"（距離 {entry.distance_score} × 構造 {entry.structure_score}）"
+    )
     lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")
     lines.append("")
-    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
-    lines.append(f"1) 関係性: {entry.relationship}")
-    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
-    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
-    lines.append(f"2) 要約: {entry.abstract_summary}")
-    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
-    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
-    lines.append(f"3) 注意点: {entry.caution}")
-    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
-    lines.append("")
+    lines.extend(_render_4part_body(section_idx, entry_idx, entry))
     return lines
 
 

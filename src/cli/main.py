@@ -12,7 +12,7 @@ from src.core.input_schema import InputValidationError, validate_and_normalize
 from src.core.models import OutputDocument, OutputSection, ThemeHistory
 from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
 from src.openalex.parser import OpenAlexParseError, normalize_results
-from src.pipeline.classify import classify_stub, classify_track_a, classify_track_b
+from src.pipeline.classify import classify_stub, classify_track_a, classify_track_b, select_track_b
 from src.pipeline.collect import (
     CollectConfig,
     Collector,
@@ -118,12 +118,13 @@ def _write_gemini_materials(
                 "cited_by_count": entry.work.cited_by_count,
             },
             "generated": {
-                "relationship": entry.relationship,
                 "summary": entry.abstract_summary,
+                "relationship": entry.relationship,
+                "usefulness_hypothesis": entry.usefulness_hypothesis,
                 "caution": entry.caution,
             },
             "instruction": (
-                "関係軸と関係度を踏まえた関係性・要約・注意点を各1文で洗練させてください。"
+                "4部構成（概要・テーマとの関連性・役に立つ可能性の仮説・注意点）を各1〜2文で洗練させてください。"
                 "言い換えを中心に構成し、語彙の重複を避けてください。"
             ),
         }
@@ -133,6 +134,9 @@ def _write_gemini_materials(
             "id": entry.work.id,
             "track": "B",
             "connection_label": entry.label,
+            "serendipity_score": entry.serendipity_score,
+            "distance_score": entry.distance_score,
+            "structure_score": entry.structure_score,
             "input_theme_summary": theme_summary,
             "paper_metadata": {
                 "title": entry.work.title,
@@ -145,13 +149,14 @@ def _write_gemini_materials(
                 "cited_by_count": entry.work.cited_by_count,
             },
             "generated": {
-                "relationship": entry.relationship,
                 "summary": entry.abstract_summary,
+                "relationship": entry.relationship,
+                "usefulness_hypothesis": entry.usefulness_hypothesis,
                 "caution": entry.caution,
             },
             "instruction": (
-                f"接続点ラベル「{entry.label}」を起点に、関係性・要約・注意点を各1文で洗練させてください。"
-                "異なるドメインからの転用リスクを注意点に含めてください。"
+                f"接続点ラベル「{entry.label}」が指す『関係構造』を起点に、4部構成（概要・関連性・役に立つ可能性の仮説・注意点）を洗練させてください。"
+                "『役に立つ可能性の仮説』を中核に、課題枠と解決枠を並置すること。異なるドメインからの転用リスクを注意点に含めてください。"
             ),
         }
         lines.append(json.dumps(payload, ensure_ascii=False))
@@ -180,6 +185,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--llm-max-items", type=int, default=20, help="Max items for LLM generation")
     parser.add_argument("--no-history", action="store_true", help="Skip history deduplication")
     parser.add_argument("--history-dir", default="data/history", help="History directory")
+    parser.add_argument("--single", action="store_true", help="MVP mode: output the single best Track B serendipity unit")
+    parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
+    parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
+    parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
     args = parser.parse_args(argv)
 
     if args.openalex_test:
@@ -242,13 +251,20 @@ def main(argv: list[str]) -> int:
 
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
 
-    try:
-        print("[info] collecting Track A candidates...")
-        track_a_works = collect_and_filter(theme, config, max_count=200, require_abstract=True)
-        track_a_works = filter_by_used_ids(track_a_works, used_ids)
-        print(f"[ok] Track A candidates: {len(track_a_works)}")
+    # MVP (--single): the single best Track B serendipity unit. Track A is an optional anchor.
+    track_b_target = 1 if args.single else args.track_b_count
+    track_a_target = 0 if args.single else args.track_a_count
 
-        print("[info] collecting Track B candidates (different domain)...")
+    track_a_works: list = []
+    track_a_entries: list = []
+    try:
+        if track_a_target > 0:
+            print("[info] collecting Track A (anchor) candidates...")
+            track_a_works = collect_and_filter(theme, config, max_count=200, require_abstract=True)
+            track_a_works = filter_by_used_ids(track_a_works, used_ids)
+            print(f"[ok] Track A candidates: {len(track_a_works)}")
+
+        print("[info] collecting Track B candidates (distant domain x theme anchor)...")
         track_b_works = collect_track_b(
             theme,
             config,
@@ -260,42 +276,50 @@ def main(argv: list[str]) -> int:
         print(f"[error] openalex: {exc}", file=sys.stderr)
         return 1
 
-    print("[info] classifying Track A...")
-    track_a_entries = classify_track_a(
-        track_a_works, theme, model=args.llm_model, count=10, use_llm=use_llm
-    )
-    print(f"[ok] Track A: {len(track_a_entries)} entries")
+    if track_a_target > 0:
+        print("[info] classifying Track A...")
+        track_a_entries = classify_track_a(
+            track_a_works, theme, model=args.llm_model, count=track_a_target, use_llm=use_llm
+        )
+        print(f"[ok] Track A: {len(track_a_entries)} entries")
 
-    print("[info] classifying Track B...")
-    track_b_entries = classify_track_b(
-        track_b_works, theme, model=args.llm_model, count=10, use_llm=use_llm
+    print("[info] selecting Track B (serendipity = structure x distance, gated)...")
+    track_b_entries = select_track_b(
+        track_b_works, theme, model=args.llm_model,
+        count=track_b_target, gate=args.serendipity_gate, use_llm=use_llm,
     )
-    print(f"[ok] Track B: {len(track_b_entries)} entries")
+    print(f"[ok] Track B: {len(track_b_entries)} entries (gate={args.serendipity_gate})")
 
     gen_config = GenerationConfig(llm_model=args.llm_model, llm_max_items=args.llm_max_items)
 
-    print("[info] generating Track A text...")
-    track_a_entries = fill_track_entries(track_a_entries, gen_config, theme=theme, mode=gen_mode)
-    print("[info] generating Track B text...")
+    if track_a_entries:
+        print("[info] generating Track A text...")
+        track_a_entries = fill_track_entries(track_a_entries, gen_config, theme=theme, mode=gen_mode)
+    print("[info] generating Track B text (4-part)...")
     track_b_entries = fill_track_entries(track_b_entries, gen_config, theme=theme, mode=gen_mode)
+
+    sections = [
+        OutputSection(
+            title=f"Track B: 接続点フィーチャー（{len(track_b_entries)}本）",
+            track="B",
+            entries=track_b_entries,
+        ),
+    ]
+    if track_a_entries:
+        sections.append(
+            OutputSection(
+                title=f"Track A: アンカー（{len(track_a_entries)}本）",
+                track="A",
+                entries=track_a_entries,
+            )
+        )
 
     doc = OutputDocument(
         theme=theme,
-        sections=[
-            OutputSection(
-                title="Track A: 関係グラデーション（10本）",
-                track="A",
-                entries=track_a_entries,
-            ),
-            OutputSection(
-                title="Track B: 接続点フィーチャー（10本）",
-                track="B",
-                entries=track_b_entries,
-            ),
-        ],
+        sections=sections,
         query=_build_query(theme),
         collected_count=len(track_a_works) + len(track_b_works),
-        filter_policy="abstractあり必須",
+        filter_policy="abstractあり必須・撤回論文除外・質ゲート",
         collected_at=date.today().isoformat(),
     )
 

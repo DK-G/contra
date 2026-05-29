@@ -6,50 +6,28 @@
 
 ## 作業中 (In Progress)
 
-*   なし
+### Step 7: サンプル生成・品質評価
+*   複数テーマで実行し、「遠いが構造一致」の1本が出るか評価
+*   Anomaly（無意味接続）・近接（マイオピア）が混入しないことを確認
+*   「役に立つ可能性の仮説」が論文固有で汎用文になっていないか確認
+*   進捗: casual_puzzle テーマで `--single` のE2E成功（IDC theory「興味のループ」をスコア0.63で選出、4部構成出力を確認）
 
 ---
 
 ## 未着手 (To Do)
 
-### Step 2: データモデル更新（`src/core/`）
-*   `models.py` に `track`（A/B）・`label`（関係軸 or 接続点）フィールドを追加
-*   `OutputSection` をTrack A/B対応の構造に更新
-*   履歴管理用の `ThemeHistory` データクラスを追加（theme_hash, used_ids, generated_at）
+> 2026-05-30 のMVP E2E成功後に判明した較正・検証タスク。詳細は [`plan.md`](plan.md) §6。
 
-### Step 3: 収集ロジック更新（`src/pipeline/collect.py` 他）
-*   Track B 用別ドメインクエリのLLM生成プロンプト設計・実装
-*   Track B 専用の収集フロー実装（別クエリでOpenAlexを叩く）
-*   履歴除外ロジック実装：収集候補から既使用IDをフィルタリング
-*   履歴の読み込み・書き込みユーティリティ実装（`data/history/{theme_hash}.json`）
+### Step 8 (A): 距離スコアの較正
+*   `surface_overlap` 判定が緩く、隣接ドメイン（例: technology enhanced learning）に距離0.9が付く問題を是正
+*   中距離（0.5〜0.7）を適正評価するようプロンプト/スコア定義を調整
+*   除外ドメイン（education/gamification）を選別段階にも効かせる（収集の掛け合わせで漏れる分の補完）
+*   `usefulness_hypothesis` が論文固有の発見を起点にするようプロンプトを強化（テーマの不安点をなぞらない）
 
-### Step 4: 分類ロジック実装（`src/pipeline/classify.py`）
-*   Track A 選出：キーワードスコアリング → 上位10本
-*   Track A ラベル付与：LLMがテーマから関係軸候補リストを生成し、各論文に割り当て
-*   Track B 選出：LLMが別ドメイン収集結果から「1点だけ接続」論文を識別・ラベル化
-*   `classify_stub` を上記本実装に置き換え
-
-### Step 5: 生成ロジック更新（`src/pipeline/generate.py`）
-*   Track A 用：関係軸ラベル付きの関係性文生成（`--gen-mode llm` 対応）
-*   Track B 用：接続点ラベル `【接続点: 〇〇だけ関係ある】` 付きの関係性文生成
-
-### Step 5: 出力整形更新（`src/pipeline/export.py`）
-*   レポートヘッダー（テーマ概要・仮説サマリー）の出力を追加
-*   Track A セクション（関係度順10本）・Track B セクション（接続点ラベル付き10本）の構成に変更
-
-### Step 6: CLI本体更新（`src/cli/main.py`）
-*   `_build_document()` を Track A/B 20本構造に書き換え（旧100/200/200構造を廃止）
-*   `_write_gemini_materials()` の出力フォーマットをTrack A/B対応に更新
-*   実行後に採用論文IDを履歴ファイルへ追記する処理を追加
-
-### Step 7: サンプル生成・品質評価
-*   新構造で複数テーマのレポートを生成
-*   Track A「関係軸ラベルが的確か」・Track B「接続点が意外で納得感があるか」を評価軸にレビュー
-*   同テーマを2回実行し、重複論文が除外されていることを確認
-
-### Step 8: GeminiCLI後処理フロー整備
-*   GeminiCLIで3行（関係性/要約/注意点）を更新する後処理フロー設計
-*   Track A/B形式の `gemini_materials.jsonl` を入力とした実行手順を整備
+### Step 9 (B): 複数本モードの挙動検証
+*   `--track-b-count 10` 等で質ゲート通過数を確認し、「20本程度」のボリュームが質を保てるか検証
+*   閾値 `--serendipity-gate` の妥当な水準を複数テーマで探る
+*   通過数が少なすぎ／多すぎる場合のゲート・チャンク上限（`_SCORE_MAX_CANDIDATES`）の調整
 
 ---
 
@@ -70,5 +48,19 @@
 ### 方針・設計
 *   Plan A/B並立を廃止し、Plan B（LLM）＋GeminiCLI後処理の方針に一本化
 *   500本収集→20本レポート形式（Track A/B構成）に方針変更
-*   `plan.md`, `roadmap.md` を新方針に更新
 *   `spec.md`（AI向け開発仕様書）を新規作成
+
+### 2026-05-30 方針再定義（contrarian 中核化）
+*   セレンディピティ発生条件をNotebookLM Deep Research（66ソース）で調査・一次資料化（`docs/research/serendipity_conditions.md`）
+*   MVPを「20本レポート」から「**Track B の良質な1本**」へ再定義（本数は質ゲートの出力）
+*   Track Bを中核・Track Aをアンカーに再配置、選別を距離×構造の乗算に、出力を4部構成に復活
+*   `plan.md`・`spec.md`・`roadmap.md`・`task.md` を新方針に全面更新
+*   実装済み: 撤回論文フィルタ、Track B複数ドメインクエリ、assumptionsクエリ、ドメインペナルティ（旧20本構造上での先行修正）
+
+### 2026-05-30 MVP実装（Step 2〜6 完了・E2E成功）
+*   Step 2: `collect.py` の Track Bクエリを「別ドメイン概念 × テーマ核心語」の掛け合わせ式に（`generate_track_b_queries`, `_theme_anchor`）
+*   Step 3: `classify.py` に `select_track_b`（距離×構造の乗算、Anomaly棄却 `_STRUCTURE_MIN`、近接棄却 `_SURFACE_MAX`、質ゲート `_SERENDIPITY_GATE`）。スコアリングはチャンク分割でAPIタイムアウト回避
+*   Step 4: `generate.py` を4部構成に（`_llm_generate_track_a/b_text` が4要素タプル、`usefulness_hypothesis` 追加）
+*   Step 5: `main.py` に `--single`/`--track-b-count`/`--track-a-count`/`--serendipity-gate`。Track Aは任意アンカー化
+*   Step 6: `output_spec.py` の `_render_4part_body` でSUMMARY/RELATIONSHIP/HYPOTHESIS/CAUTIONを出力。`gemini_materials.jsonl` も4部構成＋スコア対応
+*   `models.py` の `OutputEntry` に距離/構造/セレンディピティスコアと `usefulness_hypothesis` を追加（非破壊）
