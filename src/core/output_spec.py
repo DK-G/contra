@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List
 
-from src.core.models import OutputDocument, OutputEntry, OutputSection, ThemeInput, Work
+from src.core.models import OutputDocument, OutputEntry, OutputSection, ThemeInput, Work  # noqa: F401
 
 
 def _auto_tag(section_idx: int, entry_idx: int, label: str, edge: str) -> str:
@@ -81,38 +81,104 @@ def _link_for_work(work: Work) -> str:
     return "TBD"
 
 
+def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
+    lines = []
+    lines.append(f"### {entry_idx + 1}. {entry.work.title}")
+    lines.append("")
+    lines.append(f"- **関係度**: {entry.relationship_level or '—'}")
+    lines.append(f"- **関係軸**: {entry.label or '—'}")
+    lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
+    lines.append(f"- リンク: {_link_for_work(entry.work)}")
+    lines.append("")
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
+    lines.append(f"1) 関係性: {entry.relationship}")
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
+    lines.append(f"2) 要約: {entry.abstract_summary}")
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
+    lines.append(f"3) 注意点: {entry.caution}")
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
+    lines.append("")
+    return lines
+
+
+def _render_track_b_entry(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
+    lines = []
+    lines.append(f"### {entry_idx + 1}. {entry.work.title}")
+    lines.append("")
+    lines.append(f"- **接続点**: {entry.label or '—'}")
+    lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
+    lines.append(f"- リンク: {_link_for_work(entry.work)}")
+    lines.append("")
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
+    lines.append(f"1) 関係性: {entry.relationship}")
+    lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
+    lines.append(f"2) 要約: {entry.abstract_summary}")
+    lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
+    lines.append(f"3) 注意点: {entry.caution}")
+    lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
+    lines.append("")
+    return lines
+
+
 def render_markdown(doc: OutputDocument) -> str:
     lines = _lines_for_theme(doc.theme)
-    lines.append("## 目次")
-    lines.append("")
-    for section_idx, section in enumerate(doc.sections):
-        lines.append(f"- {section.title}")
-    lines.append("")
 
-    for section in doc.sections:
-        lines.append(f"## {section.title}")
+    has_track_sections = any(s.track in ("A", "B") for s in doc.sections)
+
+    if has_track_sections:
+        lines.append("## 目次")
         lines.append("")
-        if not section.entries:
-            lines.append("- （未収集）")
+        for section in doc.sections:
+            lines.append(f"- {section.title}")
+        lines.append("")
+
+        for section_idx, section in enumerate(doc.sections):
+            lines.append(f"## {section.title}")
             lines.append("")
-            continue
-        for entry_idx, entry in enumerate(section.entries):
-            lines.append(f"- タイトル: {entry.work.title}")
-            lines.append(f"- 年: {entry.work.year}")
-            lines.append(f"- 掲載: {entry.work.venue}")
-            lines.append(f"- 被引用: {entry.work.cited_by_count}")
-            lines.append(f"- リンク: {_link_for_work(entry.work)}")
+            if not section.entries:
+                lines.append("- （未収集）")
+                lines.append("")
+                continue
+            for entry_idx, entry in enumerate(section.entries):
+                if section.track == "B":
+                    lines.extend(_render_track_b_entry(section_idx, entry_idx, entry))
+                else:
+                    lines.extend(_render_track_a_entry(section_idx, entry_idx, entry))
+    else:
+        # Legacy format
+        lines.append("## 目次")
+        lines.append("")
+        for section in doc.sections:
+            lines.append(f"- {section.title}")
+        lines.append("")
+        for section_idx, section in enumerate(doc.sections):
+            lines.append(f"## {section.title}")
             lines.append("")
-            lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
-            lines.append("1) 関係性: ")
-            lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
-            lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
-            lines.append("2) 要約: ")
-            lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
-            lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
-            lines.append("3) 注意点: ")
-            lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
-            lines.append("")
+            if not section.entries:
+                lines.append("- （未収集）")
+                lines.append("")
+                continue
+            for entry_idx, entry in enumerate(section.entries):
+                lines.append(f"- タイトル: {entry.work.title}")
+                lines.append(f"- 年: {entry.work.year}")
+                lines.append(f"- 掲載: {entry.work.venue}")
+                lines.append(f"- 被引用: {entry.work.cited_by_count}")
+                lines.append(f"- リンク: {_link_for_work(entry.work)}")
+                lines.append("")
+                lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "START"))
+                lines.append("1) 関係性: ")
+                lines.append(_auto_tag(section_idx, entry_idx, "RELATIONSHIP", "END"))
+                lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "START"))
+                lines.append("2) 要約: ")
+                lines.append(_auto_tag(section_idx, entry_idx, "SUMMARY", "END"))
+                lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "START"))
+                lines.append("3) 注意点: ")
+                lines.append(_auto_tag(section_idx, entry_idx, "CAUTION", "END"))
+                lines.append("")
 
     lines.append("## 付録")
     lines.append("")

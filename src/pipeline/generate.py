@@ -1,8 +1,9 @@
-﻿"""Generation utilities (Phase 1 stub)."""
+﻿"""Generation utilities."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, replace as dc_replace
 from typing import List, Optional
 
 from src.core.models import OutputEntry, ThemeInput, Work
@@ -163,4 +164,149 @@ def generate_entries(
     return entries
 
 
-__all__ = ["GenerationConfig", "generate_entries"]
+def _parse_json_object(text: str) -> Optional[dict]:
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start:end])
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def _llm_generate_track_a_text(
+    theme: ThemeInput,
+    work: Work,
+    label: str,
+    level: str,
+    model: str,
+) -> Optional[tuple]:
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Generate three concise Japanese sentences for a Track A research paper report. "
+                    "Return JSON: {relationship, summary, caution}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"テーマ: {theme.theme_overview[:200]}\n"
+                    f"関係軸: {label}  関係度: {level}\n"
+                    f"論文: {work.title}\n"
+                    f"Abstract: {(work.abstract or '')[:300]}\n\n"
+                    "relationship: 関係軸と関係度を踏まえた1文（40-80字）\n"
+                    "summary: abstractの言い換え2文\n"
+                    "caution: テーマの前提に対する注意点1文\n"
+                    "JSON形式で返してください。"
+                ),
+            },
+        ],
+        "temperature": 0.4,
+    }
+    try:
+        response = responses_create(payload)
+        text = extract_output_text(response).strip()
+        data = _parse_json_object(text)
+        if data:
+            r, s, c = data.get("relationship", ""), data.get("summary", ""), data.get("caution", "")
+            if r and s and c:
+                return r, s, c
+    except OpenAIError:
+        pass
+    return None
+
+
+def _llm_generate_track_b_text(
+    theme: ThemeInput,
+    work: Work,
+    label: str,
+    model: str,
+) -> Optional[tuple]:
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Generate three concise Japanese sentences for a Track B research paper "
+                    "that has exactly one surprising connection to the theme. "
+                    "Return JSON: {relationship, summary, caution}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"テーマ: {theme.theme_overview[:200]}\n"
+                    f"接続点ラベル: {label}\n"
+                    f"論文: {work.title}\n"
+                    f"Abstract: {(work.abstract or '')[:300]}\n\n"
+                    "relationship: 接続点を起点にした関係説明1文\n"
+                    "summary: abstractの言い換え2文\n"
+                    "caution: 異なるドメインからの転用リスク1文\n"
+                    "JSON形式で返してください。"
+                ),
+            },
+        ],
+        "temperature": 0.4,
+    }
+    try:
+        response = responses_create(payload)
+        text = extract_output_text(response).strip()
+        data = _parse_json_object(text)
+        if data:
+            r, s, c = data.get("relationship", ""), data.get("summary", ""), data.get("caution", "")
+            if r and s and c:
+                return r, s, c
+    except OpenAIError:
+        pass
+    return None
+
+
+def fill_track_entries(
+    entries: List[OutputEntry],
+    config: GenerationConfig | None = None,
+    *,
+    theme: ThemeInput | None = None,
+    mode: str = "llm",
+) -> List[OutputEntry]:
+    """Fill relationship/summary/caution for pre-classified Track A/B entries."""
+    cfg = config or GenerationConfig()
+    result: List[OutputEntry] = []
+    for idx, entry in enumerate(entries):
+        relationship = entry.relationship
+        summary = entry.abstract_summary
+        caution = entry.caution
+
+        if mode in ("llm", "plan_b") and theme and idx < cfg.llm_max_items:
+            if entry.track == "A":
+                llm_result = _llm_generate_track_a_text(
+                    theme, entry.work, entry.label, entry.relationship_level, cfg.llm_model
+                )
+            else:
+                llm_result = _llm_generate_track_b_text(
+                    theme, entry.work, entry.label, cfg.llm_model
+                )
+            if llm_result:
+                relationship, summary, caution = llm_result
+
+        if not relationship:
+            if entry.track == "A":
+                level = entry.relationship_level or "中"
+                relationship = f"関係軸「{entry.label}」で関係度「{level}」の関連性がある。"
+            else:
+                relationship = f"{entry.label} という1点でテーマに接続する。"
+        if not summary:
+            summary = _summarize(entry.work.abstract) if theme is None else _structured_summary(entry.work.abstract, cfg)
+        if not caution:
+            caution = _structured_caution(theme) if theme else cfg.caution_stub
+
+        result.append(dc_replace(entry, relationship=relationship, abstract_summary=summary, caution=caution))
+    return result
+
+
+__all__ = ["GenerationConfig", "generate_entries", "fill_track_entries"]
