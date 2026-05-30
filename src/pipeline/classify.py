@@ -972,7 +972,7 @@ def select_track_b(
             abstract_summary="",
             caution="",
             track="B",
-            label=f"【接続点: {s['connection_label']}】",
+            label=_b_label(s),
             relationship_level="",
             distance_score=round(mech_dist, 2),
             structure_score=round(s["purpose_sim"], 2),
@@ -980,6 +980,16 @@ def select_track_b(
             usefulness_hypothesis=s.get("serendipity_rationale", ""),
         ))
     return result
+
+
+def _b_label(s: dict) -> str:
+    """Track B connection chip. Surface the judge's verdict as an honesty signal: when the
+    candidate lacks an explicit causal Purpose-Mechanism link (has_causal_pm=False) it is a
+    looser, thought-seed analogy rather than a tight isomorphism (R2/#2, display-only)."""
+    base = s.get("connection_label", "構造的接続")
+    if s.get("has_causal_pm") is False:
+        return f"【接続点（構造対応ゆるめ・思考のタネ）: {base}】"
+    return f"【接続点: {base}】"
 
 
 def classify_track_b(

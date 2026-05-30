@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, replace as dc_replace
 from typing import List, Optional
 
@@ -164,6 +165,24 @@ def generate_entries(
     return entries
 
 
+_NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numeric_tokens(text: str) -> set:
+    """Numbers in text, with comma decimal separators normalised to dots ('6,0' -> '6.0')."""
+    return set(_NUM_RE.findall((text or "").replace(",", ".")))
+
+
+def _unsupported_numbers(hypothesis: str, abstract: str) -> set:
+    """Numbers cited in the hypothesis that do NOT appear in the abstract.
+
+    Guards against R1's specificity push making the model FABRICATE statistics (e.g. an
+    invented '85%') to satisfy the 'name the concrete finding' instruction. We only allow
+    figures grounded verbatim in the source abstract; anything else is treated as suspect.
+    """
+    return _numeric_tokens(hypothesis) - _numeric_tokens(abstract)
+
+
 def _parse_json_object(text: str) -> Optional[dict]:
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -241,65 +260,88 @@ def _llm_generate_track_b_text(
     problem frame and the distant paper's solution frame (bisociation) and translates how
     the distant finding might help, standing in for the user's domain sagacity.
     """
-    payload = {
-        "model": model,
-        "input": [
-            {
-                "role": "system",
-                "content": (
-                    "Generate a 4-part Japanese writeup for a Track B paper from a DISTANT domain "
-                    "that shares one transferable relational structure with the theme. "
-                    "You are given a pre-identified VARIABLE CORRESPONDENCE (接続の構造) between "
-                    "the paper and the theme — treat it as the SPINE of the hypothesis, and flesh "
-                    "it out with the paper's concrete findings from the abstract. "
-                    "Return JSON: {summary, relationship, hypothesis, caution}"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"【接続の構造】← この変数対応を仮説の背骨にせよ\n"
-                    f"{rationale or '（未指定：Abstractから構造的対応を自分で同定すること）'}\n"
-                    f"接続点ラベル: {label}\n\n"
-                    f"【論文】\n"
-                    f"タイトル: {work.title}\n"
-                    f"Abstract: {(work.abstract or '')[:500]}\n\n"
-                    f"【テーマ】\n"
-                    f"概要: {theme.theme_overview[:200]}\n"
-                    f"目的: {theme.goal}\n"
-                    f"不安点: {theme.concern or 'なし'}\n\n"
-                    "以下の制約を守ってJSON形式で返してください。\n"
-                    "summary: Abstractを忠実に日本語へ翻訳し2〜3文に凝縮する。言い換え・解釈・推測を加えず、"
-                    "原文の主張と具体的発見（数値・効果量・実験条件があれば保持）をそのまま訳すこと。"
-                    "原文にない情報を足さないこと。\n"
-                    "relationship: 接続点ラベルが指す『関係構造』が、なぜ表層分野は違えどテーマと一致するのかを1文で。表層キーワードの一致でなく構造の一致を述べること。\n"
-                    f"hypothesis: ★中核。【接続の構造】に示された〈論文側の変数〉↔〈テーマ側の変数〉の対応を背骨とし、"
-                    "(1) その〈論文側の変数〉を、Abstractの具体的な発見・数値・効果量・実験手法のいずれかで肉付けして名指しし、"
-                    "(2) それがテーマの〈対応する局面〉に何を示唆するかを述べること（1〜2文）。"
-                    "【接続の構造】に方向や数値・効果量・指数（例: 「多いほど遅くなる」「ln(t)/√t」）が含まれていれば、"
-                    "それを hypothesis 本文に明示的に引用すること（抽象化して落とさない）。"
-                    "Abstractに数値がなければ、論文の方法論的特徴（実験設計・比較条件・対象）を引用すること。"
-                    f"テーマの不安点（{theme.concern or '上記不安点'}）の言い換えや、論文の具体的内容に触れない汎用的転用仮説は禁止。\n"
-                    "caution: この論文をテーマに転用する際に崩れる前提（対象母集団・実験条件・文化的文脈などの具体的な差異）を1文で指摘すること。「転用に注意」などの汎用文は禁止。\n"
-                ),
-            },
-        ],
-        "temperature": 0.4,
-    }
-    try:
-        response = responses_create(payload)
-        text = extract_output_text(response).strip()
-        data = _parse_json_object(text)
-        if data:
-            s = data.get("summary", "")
-            r = data.get("relationship", "")
-            h = data.get("hypothesis", "")
-            c = data.get("caution", "")
-            if r and s and h and c:
-                return r, s, h, c
-    except OpenAIError:
-        pass
-    return None
+    abstract_full = work.abstract or ""
+
+    def _payload(extra: str) -> dict:
+        return {
+            "model": model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Generate a 4-part Japanese writeup for a Track B paper from a DISTANT domain "
+                        "that shares one transferable relational structure with the theme. "
+                        "You are given a pre-identified VARIABLE CORRESPONDENCE (接続の構造) between "
+                        "the paper and the theme — treat it as the SPINE of the hypothesis, and flesh "
+                        "it out with the paper's concrete findings from the abstract. "
+                        "Return JSON: {summary, relationship, hypothesis, caution}"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"【接続の構造】← この変数対応を仮説の背骨にせよ\n"
+                        f"{rationale or '（未指定：Abstractから構造的対応を自分で同定すること）'}\n"
+                        f"接続点ラベル: {label}\n\n"
+                        f"【論文】\n"
+                        f"タイトル: {work.title}\n"
+                        f"Abstract: {(work.abstract or '')[:500]}\n\n"
+                        f"【テーマ】\n"
+                        f"概要: {theme.theme_overview[:200]}\n"
+                        f"目的: {theme.goal}\n"
+                        f"不安点: {theme.concern or 'なし'}\n\n"
+                        "以下の制約を守ってJSON形式で返してください。\n"
+                        "summary: Abstractを忠実に日本語へ翻訳し2〜3文に凝縮する。言い換え・解釈・推測を加えず、"
+                        "原文の主張と具体的発見（数値・効果量・実験条件があれば保持）をそのまま訳すこと。"
+                        "原文にない情報を足さないこと。\n"
+                        "relationship: 接続点ラベルが指す『関係構造』が、なぜ表層分野は違えどテーマと一致するのかを1文で。表層キーワードの一致でなく構造の一致を述べること。\n"
+                        f"hypothesis: ★中核。【接続の構造】に示された〈論文側の変数〉↔〈テーマ側の変数〉の対応を背骨とし、"
+                        "(1) その〈論文側の変数〉を、Abstractの具体的な発見・数値・効果量・実験手法のいずれかで肉付けして名指しし、"
+                        "(2) それがテーマの〈対応する局面〉に何を示唆するかを述べること（1〜2文）。"
+                        "【接続の構造】に方向や数値・効果量・指数（例: 「多いほど遅くなる」「ln(t)/√t」）が含まれていれば、"
+                        "それを hypothesis 本文に明示的に引用すること（抽象化して落とさない）。"
+                        "数値はAbstractに逐語的に存在するものだけを引用し、Abstractに無い数値を創作しないこと。"
+                        "数値が無ければ方向性（増減・大小）と論文の方法論的特徴（実験設計・比較条件・対象）で述べること。\n"
+                        f"テーマの不安点（{theme.concern or '上記不安点'}）の言い換えや、論文の具体的内容に触れない汎用的転用仮説は禁止。\n"
+                        "caution: この論文をテーマに転用する際に崩れる前提（対象母集団・実験条件・文化的文脈などの具体的な差異）を1文で指摘すること。「転用に注意」などの汎用文は禁止。\n"
+                        + (f"\n{extra}" if extra else "")
+                    ),
+                },
+            ],
+            "temperature": 0.4,
+        }
+
+    # Numeric grounding (R1/#3): the specificity push can make the model fabricate stats.
+    # Verify the hypothesis cites only numbers present in the abstract; if not, regenerate
+    # once naming the ungrounded figures, then keep the best-grounded attempt.
+    best: Optional[tuple] = None
+    best_unsupported = None
+    extra = ""
+    for _ in range(2):
+        try:
+            data = _parse_json_object(extract_output_text(responses_create(_payload(extra))).strip())
+        except OpenAIError:
+            break
+        if not data:
+            break
+        r = data.get("relationship", "")
+        s = data.get("summary", "")
+        h = data.get("hypothesis", "")
+        c = data.get("caution", "")
+        if not (r and s and h and c):
+            break
+        unsupported = _unsupported_numbers(h, abstract_full)
+        if best is None or len(unsupported) < best_unsupported:
+            best = (r, s, h, c)
+            best_unsupported = len(unsupported)
+        if not unsupported:
+            break
+        nums = "、".join(sorted(unsupported))
+        extra = (
+            f"前回の hypothesis に Abstract へ存在しない数値（{nums}）が含まれていた。"
+            "Abstract に逐語的に無い数値は一切書かず、定量が無ければ方向性と方法論的特徴のみで述べ直すこと。"
+        )
+    return best
 
 
 def fill_track_entries(
