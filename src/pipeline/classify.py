@@ -238,10 +238,12 @@ def _classify_b_connections(
 # purpose_sim  : how well the candidate's problem STRUCTURE maps onto the theme purpose.
 # mechanism_dist: how FAR the candidate's mechanism is from the theme mechanism.
 # Target = purpose_sim high AND mechanism_dist high (same problem, different approach).
-_PURPOSE_SIM_MIN = 0.40   # below this = no genuine problem-structure alignment -> reject
-# Raised 0.25 -> 0.40 (spec §7 Step 9): 0.25-0.39 range was dominated by abstract-
-# category matches ("both involve risk/energy/stability") not structural analogies.
-# True structural analogies show purpose_sim >= 0.5 in calibrated scoring. (2026-05-30)
+_PURPOSE_SIM_MIN = 0.20   # below this = essentially no problem-structure alignment -> reject
+# History: 0.25 -> 0.40 (Step 9) to cut abstract-category matches. RELAXED 0.40 -> 0.20
+# (R5, 2026-05-31): with the R2 structural-depth judge now doing the quality gate, a hard
+# 0.40 floor was redundant DOUBLE-GATING that bisected borderline far candidates on rating
+# flipping-noise (bynote: hard floors fail under rater noise; rely on rank/percentile +
+# downstream judge). 0.20 only drops near-zero alignment; percentile gate + R2 judge select.
 _NEAR_DOMAIN_MECH_CAP = 0.5  # mechanism_dist cap for same-L0/L1-domain papers (near_domain_signal)
 _SERENDIPITY_GATE = 0.20  # absolute floor for the percentile gate (never pass below this)
 _FALLBACK_FLOOR = 0.10    # relaxed floor for single-best fallback when nothing passes gate
@@ -447,7 +449,7 @@ def _score_b_chunk_pm(
                 ),
             },
         ],
-        "temperature": 0.2,
+        "temperature": 0.0,  # rating task: minimise sampling jitter (R5, 2026-05-31)
     })
     return _parse_array(text) if text else None
 
@@ -604,7 +606,7 @@ def _judge_b_candidates(
                 ),
             },
         ],
-        "temperature": 0.2,
+        "temperature": 0.0,  # rating task: minimise sampling jitter (R5, 2026-05-31)
     })
     items = _parse_array(text) if text else None
     result: Dict[str, dict] = {}
