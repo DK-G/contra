@@ -191,6 +191,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
     parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
+    parser.add_argument("--struct-depth-gate", type=float, default=0.30, help="Track B hollow gate: min judge structural_depth (0-1); only truly superficial (shared-category) candidates below it are rejected. Loose causal links are kept as thought-seeds")
     args = parser.parse_args(argv)
 
     if args.openalex_test:
@@ -309,7 +310,7 @@ def main(argv: list[str]) -> int:
     track_b_entries = select_track_b(
         track_b_works, theme, model=args.llm_model,
         count=track_b_target, gate=args.serendipity_gate, use_llm=use_llm,
-        theme_profile=theme_profile,
+        theme_profile=theme_profile, struct_depth_gate=args.struct_depth_gate,
     )
     print(f"[ok] Track B: {len(track_b_entries)} 件 (gate={args.serendipity_gate})")
 

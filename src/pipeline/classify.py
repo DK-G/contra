@@ -250,6 +250,18 @@ _SCORE_CHUNK_SIZE = 8    # papers per LLM call. Smaller chunk = more per-paper a
 # (fewer dropped connection_label/serendipity_rationale fields) and keeps each request
 # under the API timeout now that abstracts are sent at 500 chars (Step 9 Phase 2).
 _SCORE_MAX_CANDIDATES = 60  # cap total candidates scored (cost/latency bound)
+_SCORE_PM_MAX_ATTEMPTS = 2  # retry a chunk if gpt-4o-mini drops the relational spine fields
+
+# R2 candidate-level hollow gate (spec §7 Step 9 Phase2; bynote H3: SOLVENT/BioDSA/AR
+# all recommend gating hollow candidates BEFORE generation). A separate judge pass scores
+# the survivors on Structural Depth (Gentner) and flags has_causal_pm.
+# CALIBRATION (2026-05-30, user decision): serendipity has an inherently low base rate and
+# the tool runs periodically as a "thought-seed" feed, so we favour RECALL of far candidates.
+# Only TRULY hollow (pure shared-category/lexical, structural_depth < gate) are cut; a loose
+# causal link (has_causal_pm=False) is recorded/surfaced as a caveat but does NOT reject —
+# otherwise far-but-genuine analogies (e.g. quantum subdiffusion) get over-pruned.
+_STRUCT_DEPTH_GATE = 0.30   # reject structural_depth (0-1, =judge 0-10/10) BELOW this only
+_JUDGE_MAX_CANDIDATES = 20  # cap survivors sent to the judge (cost bound; survivors are few)
 
 
 # ---------------------------------------------------------------------------
@@ -326,12 +338,17 @@ def _score_b_chunk_pm(
     theme_schema: dict,
     theme: ThemeInput,
     model: str,
+    retry_feedback: str = "",
 ) -> Optional[list]:
     """Score papers via Purpose-Mechanism structure abduction (SOLVENT framework).
 
     Each paper's P/M is extracted FIRST, then compared to the theme schema.
     This avoids the LLM surface-keyword bias of one-shot similarity scoring.
     Returns JSON list with purpose_sim, mechanism_dist, connection_label, serendipity_rationale.
+
+    `retry_feedback` (error-aware retry, STROT-style): when a previous attempt dropped the
+    relational spine fields, this names the offending ids/fields so the model fixes them,
+    rather than blindly re-rolling (more deterministic for gpt-4o-mini).
     """
     text = _llm_call({
         "model": model,
@@ -367,10 +384,26 @@ def _score_b_chunk_pm(
                     "  How DIFFERENT is the paper's mechanism from the theme's?\n"
                     "  HIGH (0.7–1.0): Completely different domain/field/approach.\n"
                     "  LOW (0.0–0.3): Same field or very similar methodology.\n\n"
-                    "STEP 4 — Build the bridge FROM the paper_purpose / paper_mechanism "
-                    "you extracted in STEP 1. Identify the ONE specific variable on the "
-                    "paper side and the ONE specific variable on the theme side that map "
-                    "onto each other. Do NOT fall back to generic category words here.\n\n"
+                    "STEP 3.5 — Extract paper_finding: the paper's SINGLE most important "
+                    "CONCRETE result from the abstract, as a DIRECTION + MAGNITUDE/MECHANISM "
+                    "(not a topic). Pull the actual numbers, effect sizes, scaling exponents, "
+                    "or directional findings stated in the abstract (what increases/decreases "
+                    "with what, and by how much). If the abstract has no numbers, name the "
+                    "specific experimental/structural result (which variable drives which, and "
+                    "in which direction).\n"
+                    "  BAD  (topic, no finding): 「情報拡散を研究した」「対称性を扱う」\n"
+                    "  GOOD (direction+magnitude): 「重なり合う保存則が多いほど電荷拡散が遅く"
+                    "なる（異常サブ拡散; 2次元で ln(t)/√t, 3次元で 1/t^{3/4} に減衰・非ガウス的）」\n\n"
+                    "STEP 4 — Build the bridge FROM paper_finding (STEP 3.5) and the "
+                    "paper_purpose/paper_mechanism (STEP 1). Identify the ONE specific variable "
+                    "on the paper side — it MUST carry the finding's direction/magnitude — and "
+                    "the ONE specific variable on the theme side that map onto each other. Do "
+                    "NOT fall back to generic category words here.\n"
+                    "  The mapped paper-side variable MUST be a RELATION/MECHANISM that the "
+                    "finding quantifies (e.g. 「保存則の数→拡散速度」: more X drives slower Y), "
+                    "NOT a standalone object attribute (e.g. 「対称性をもつ」). Map by FUNCTION "
+                    "(what drives what), not by surface attribute — otherwise the analogy is a "
+                    "literal-similarity / mere-appearance match, not a structural one.\n\n"
                     "connection_label: 8–24 char Japanese chip for at-a-glance scanning. "
                     "It MUST express a RELATIONSHIP or PROCESS (the mechanism that "
                     "transfers), by either (i) containing a causal verb (律速する/分岐"
@@ -382,19 +415,24 @@ def _score_b_chunk_pm(
                     "  REQUIRED (relationship/process)  : 「対称性保存則が拡散速度を律速"
                     "する」「難易度漸増による長期定着」「臨界遷移の早期警告が分岐を予兆」\n"
                     "serendipity_rationale: ONE Japanese sentence stating the VARIABLE "
-                    "CORRESPONDENCE, in this form:\n"
-                    "  「論文の〈paper側の具体変数/機構〉は、テーマの〈theme側の局面〉に"
-                    "おける〈theme側の対応変数〉に相当する」\n"
-                    "  - The 〈paper側の具体変数〉 MUST come from the paper_purpose/"
-                    "paper_mechanism above, not a generic restatement.\n"
-                    "  - FORBIDDEN: 「両者とも○○に関わる」「○○という点で共通している」 "
-                    "— these state shared category membership, not a variable mapping.\n\n"
-                    "EVERY paper in the array MUST have ALL fields populated. "
+                    "CORRESPONDENCE that EMBEDS paper_finding's concrete direction/magnitude, "
+                    "in this form:\n"
+                    "  「論文の〈paper_finding を含む具体変数：方向＋数値/効果〉は、テーマの"
+                    "〈theme側の局面〉における〈theme側の対応変数〉に相当する」\n"
+                    "  - The 〈paper側の具体変数〉 MUST carry the STEP 3.5 finding (direction "
+                    "＋ number/effect), NOT a generic restatement or a bare topic noun.\n"
+                    "  - FORBIDDEN: 「両者とも○○に関わる」「○○という点で共通している」, and "
+                    "abstracting the finding away into a category noun (e.g. 「情報の伝播」).\n\n"
+                    "GOOD example (paper_finding→rationale): finding=「保存則が多いほど"
+                    "拡散が遅い（異常サブ拡散 ln(t)/√t〜1/t^{3/4}）」/ rationale=「論文の〈保存則が"
+                    "多いほど拡散が遅い異常サブ拡散（ln(t)/√t〜1/t^{3/4}）〉は、テーマの〈拡散の分岐〉に"
+                    "おける〈発信者の制約が拡散指数αに相当する律速要因〉に相当する」\n\n"
+                    "EVERY paper in the array MUST have ALL fields populated. paper_finding, "
                     "connection_label and serendipity_rationale are REQUIRED and must "
                     "NEVER be empty or omitted, even for low-scoring papers.\n\n"
                     "Return JSON array:\n"
                     '[{"id":"...","paper_purpose":"...","paper_mechanism":"...",'
-                    '"purpose_sim":0.0,"mechanism_dist":0.0,'
+                    '"paper_finding":"...","purpose_sim":0.0,"mechanism_dist":0.0,'
                     '"connection_label":"...","serendipity_rationale":"..."}]'
                 ),
             },
@@ -405,6 +443,7 @@ def _score_b_chunk_pm(
                     f"{theme.scope.field}\n\n"
                     f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
                     "各論文のPurpose/Mechanismを先に抽出し、テーマとの類推スコアをJSON配列のみで返してください。"
+                    + (f"\n\n{retry_feedback}" if retry_feedback else "")
                 ),
             },
         ],
@@ -432,29 +471,161 @@ def _score_b_candidates_pm(
             {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:500]}
             for w in chunk
         ]
-        items = _score_b_chunk_pm(papers_input, theme_schema, theme, model)
-        if not items:
-            continue
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            wid = str(item.get("id") or "")
-            if not wid:
-                continue
-            try:
-                purpose_sim = float(item.get("purpose_sim", 0.0))
-                mechanism_dist = float(item.get("mechanism_dist", 0.0))
-            except (TypeError, ValueError):
-                continue
-            scores[wid] = {
-                "purpose_sim": max(0.0, min(1.0, purpose_sim)),
-                "mechanism_dist": max(0.0, min(1.0, mechanism_dist)),
-                "connection_label": str(item.get("connection_label") or "構造的接続"),
-                "serendipity_rationale": str(item.get("serendipity_rationale") or ""),
-                "paper_purpose": str(item.get("paper_purpose") or ""),
-                "paper_mechanism": str(item.get("paper_mechanism") or ""),
-            }
+        # gpt-4o-mini stochastically drops the later relational fields (connection_label/
+        # serendipity_rationale/paper_finding) under the longer P/M+finding instruction.
+        # Error-aware retry (STROT-style): name the offending ids/fields and ask the model to
+        # fix them, keeping per paper the most complete row. Beats a blind re-roll for mini.
+        chunk_ids = [w.id for w in chunk]
+        chunk_best: Dict[str, Tuple[dict, bool]] = {}
+        feedback = ""
+        for _ in range(_SCORE_PM_MAX_ATTEMPTS):
+            items = _score_b_chunk_pm(papers_input, theme_schema, theme, model, retry_feedback=feedback)
+            for wid, row, complete in _parse_pm_items(items):
+                if wid not in chunk_best or (complete and not chunk_best[wid][1]):
+                    chunk_best[wid] = (row, complete)
+            missing = [wid for wid in chunk_ids if wid not in chunk_best or not chunk_best[wid][1]]
+            if not missing:
+                break
+            feedback = (
+                "PREVIOUS ATTEMPT WAS INCOMPLETE. These paper ids had empty/omitted "
+                "connection_label, serendipity_rationale, or paper_finding: "
+                f"{json.dumps(missing, ensure_ascii=False)}. Re-output the FULL JSON array for "
+                "ALL papers, and for these ids ensure paper_finding (concrete direction＋"
+                "magnitude), connection_label, and serendipity_rationale (with the finding "
+                "embedded in the variable correspondence) are ALL non-empty."
+            )
+        for wid, (row, _complete) in chunk_best.items():
+            scores[wid] = row
     return scores
+
+
+def _parse_pm_items(items: Optional[list]) -> List[Tuple[str, dict, bool]]:
+    """Parse a _score_b_chunk_pm response into (work_id, score_row, is_complete) tuples.
+
+    is_complete = the relational spine survived (connection_label + serendipity_rationale
+    both non-empty). Incomplete rows are kept as a fallback but lose to complete ones.
+    """
+    out: List[Tuple[str, dict, bool]] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        wid = str(item.get("id") or "")
+        if not wid:
+            continue
+        try:
+            purpose_sim = float(item.get("purpose_sim", 0.0))
+            mechanism_dist = float(item.get("mechanism_dist", 0.0))
+        except (TypeError, ValueError):
+            continue
+        label = str(item.get("connection_label") or "")
+        rationale = str(item.get("serendipity_rationale") or "")
+        complete = bool(label and rationale)
+        out.append((wid, {
+            "purpose_sim": max(0.0, min(1.0, purpose_sim)),
+            "mechanism_dist": max(0.0, min(1.0, mechanism_dist)),
+            "connection_label": label or "構造的接続",
+            "serendipity_rationale": rationale,
+            "paper_purpose": str(item.get("paper_purpose") or ""),
+            "paper_mechanism": str(item.get("paper_mechanism") or ""),
+            "paper_finding": str(item.get("paper_finding") or ""),
+        }, complete))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (R2): candidate-level hollow gate — Structural Depth judge
+# ---------------------------------------------------------------------------
+
+def _judge_b_candidates(
+    survivors: List[Tuple[Work, dict]],
+    theme_schema: dict,
+    theme: ThemeInput,
+    model: str,
+) -> Dict[str, dict]:
+    """Judge each surviving candidate for analogy QUALITY (a separate pass, not folded into
+    scoring — bynote H2: separate calls beat overloading one prompt for small models).
+
+    Scores Structural Depth (Gentner: are the object mappings deep & one-to-one, or a hollow
+    shared-category match?) and Applicability, and flags whether an explicit causal Purpose→
+    Mechanism link exists (false = observational/understanding-oriented or surface-attribute
+    mapping → hollow). Returns wid -> {structural_depth, applicability, has_causal_pm,
+    judge_reason} with scores normalized to 0-1. Empty dict on LLM failure (fail-open).
+    """
+    if not survivors:
+        return {}
+    judged_input = [
+        {
+            "id": w.id,
+            "paper_purpose": s.get("paper_purpose", ""),
+            "paper_mechanism": s.get("paper_mechanism", ""),
+            "paper_finding": s.get("paper_finding", ""),
+            "proposed_mapping": s.get("serendipity_rationale", ""),
+        }
+        for w, s in survivors[:_JUDGE_MAX_CANDIDATES]
+    ]
+    text = _llm_call({
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a STRICT judge of cross-domain analogy quality "
+                    "(Gentner structure-mapping + SOLVENT). For each candidate you get the "
+                    "theme's purpose/mechanism and the candidate's extracted paper_purpose / "
+                    "paper_mechanism / paper_finding and a proposed_mapping (variable "
+                    "correspondence). Score each:\n\n"
+                    f"THEME PURPOSE: {theme_schema['purpose']}\n"
+                    f"THEME MECHANISM: {theme_schema['mechanism']}\n\n"
+                    "- structural_depth (0–10): how well-defined and meaningful is the object-"
+                    "to-object mapping? 0 = vague/superficial/HOLLOW — rests on a shared "
+                    "CATEGORY or attribute ('both involve diffusion/risk/networks') with little "
+                    "explanatory power. 10 = deep one-to-one correspondence of FUNCTIONAL ROLES "
+                    "with a transferable mechanism.\n"
+                    "- applicability (0–10): how concretely could this analogy inform the theme? "
+                    "0 = misleading/unhelpful; 10 = directly enables a concrete, testable "
+                    "hypothesis for the theme.\n"
+                    "- has_causal_pm (true/false): does the candidate have an EXPLICIT causal "
+                    "Purpose→Mechanism link with a TRANSFERABLE mechanism? false if the paper is "
+                    "purely observational / understanding-oriented (reports WHAT happens with no "
+                    "transferable HOW/WHY), or the mapping rests on a shared category/attribute "
+                    "rather than a relation.\n"
+                    "- judge_reason: ONE short Japanese sentence.\n\n"
+                    "Be harsh: most cross-domain pairings are hollow. Reserve high "
+                    "structural_depth for genuine relational isomorphism.\n"
+                    'Return JSON array only: [{"id":"...","structural_depth":0,'
+                    '"applicability":0,"has_causal_pm":false,"judge_reason":"..."}]'
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"候補:\n{json.dumps(judged_input, ensure_ascii=False)}\n\n"
+                    "各候補を厳格に採点し、JSON配列のみで返してください。"
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    })
+    items = _parse_array(text) if text else None
+    result: Dict[str, dict] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        wid = str(item.get("id") or "")
+        if not wid:
+            continue
+        try:
+            sd = float(item.get("structural_depth", 0.0))
+            ap = float(item.get("applicability", 0.0))
+        except (TypeError, ValueError):
+            continue
+        result[wid] = {
+            "structural_depth": max(0.0, min(1.0, sd / 10.0)),
+            "applicability": max(0.0, min(1.0, ap / 10.0)),
+            "has_causal_pm": bool(item.get("has_causal_pm", True)),
+            "judge_reason": str(item.get("judge_reason") or ""),
+        }
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +803,7 @@ def select_track_b(
     gate: float = _SERENDIPITY_GATE,
     use_llm: bool = True,
     theme_profile: Optional[ThemeProfile] = None,
+    struct_depth_gate: float = _STRUCT_DEPTH_GATE,
 ) -> List[OutputEntry]:
     """Select Track B entries via Purpose-Mechanism analogy scoring (SOLVENT, spec §7 Step 9).
 
@@ -705,6 +877,41 @@ def select_track_b(
 
     if not all_scored:
         print("[info] Track B: 0件（有効スコア候補なし）")
+        return []
+
+    # Step 3.5 (R2): candidate-level hollow gate. A separate judge pass scores the survivors
+    # on Structural Depth and flags missing causal Purpose-Mechanism links; hollow candidates
+    # (shared-category / observational-only) are rejected BEFORE generation (bynote H3).
+    # Fail-open: candidates the judge did not return a verdict for are kept.
+    print(f"[info] hollow ゲート: {len(all_scored)} 件を judge 評価中 (structural depth)...")
+    judged = _judge_b_candidates(
+        [(id_to_work[wid], s) for _, wid, s in all_scored], theme_schema, theme, model
+    )
+    kept: List[Tuple[float, str, dict]] = []
+    hollow_count = 0
+    loose_causal_count = 0
+    for ser, wid, s in all_scored:
+        j = judged.get(wid)
+        if j is not None:
+            s["structural_depth"] = j["structural_depth"]
+            s["applicability"] = j["applicability"]
+            s["has_causal_pm"] = j["has_causal_pm"]
+            s["judge_reason"] = j["judge_reason"]
+            # Only truly hollow (shared-category/lexical) are cut. A loose causal link is
+            # surfaced as a caveat (thought-seed), not rejected (user calibration 2026-05-30).
+            if j["structural_depth"] < struct_depth_gate:
+                hollow_count += 1
+                continue
+            if not j["has_causal_pm"]:
+                loose_causal_count += 1
+        kept.append((ser, wid, s))
+    print(
+        f"[info] hollow 除外 (structural_depth<{struct_depth_gate:.2f}): {hollow_count} 件 "
+        f"-> 残 {len(kept)} 件 (うち因果ゆるめ {loose_causal_count} 件=思考のタネとして保持)"
+    )
+    all_scored = kept
+    if not all_scored:
+        print("[info] Track B: 0件（全候補が hollow と判定）")
         return []
 
     # Step 4: Percentile gate (top-30% or absolute floor, whichever is higher)
