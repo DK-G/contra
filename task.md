@@ -51,11 +51,13 @@
 *   `plan.md`・`spec.md`・`roadmap.md`・`task.md` を新方針に全面更新
 *   実装済み: 撤回論文フィルタ、Track B複数ドメインクエリ、assumptionsクエリ、ドメインペナルティ（旧20本構造上での先行修正）
 
-### Step 8 (A): 距離スコアの較正（2026-05-30 完了）
-*   `_score_b_chunk` プロンプトに較正アンカーを追加し、隣接行動ドメイン（教育・gamification）が0.3-0.5にマッピングされるよう修正（旧来の距離0.9超えを解消）
-*   `select_track_b` に `_ADJACENT_DOMAIN_TERMS` × `_ADJACENT_SURFACE_BUMP(+0.25)` のペナルティを追加し、収集段階で漏れた隣接論文を選別段階でも除減
-*   `_llm_generate_track_b_text` のユーザープロンプトを「論文先頭・テーマ後置」に再構成し、Abstract固有の数値・発見引用を必須化（テーマの不安点の言い換え禁止を明示）
-*   `--single` にて casual_puzzle / energy の2テーマで改善を確認（距離0.6-0.7、energy論文で論文固有数値の引用を確認）
+### Step 8 (A): 距離スコアの較正（2026-05-30 完了・テーマ非依存化）
+*   **near/far はテーマ相対量**という原則を確立。特定ドメイン語のハードコードリスト（ゲームテーマ由来）を全廃し、テーマ自身の field・keywords を near の基準点として LLM に渡す方式へ統一。多岐にわたるテーマで誤作動しない設計に。
+*   `_score_b_chunk` プロンプトを書き換え: surface_overlap をテーマの field・keywords 基準で較正（「テーマと同じ現象/課題を別の応用分野で扱う論文は隣接=0.3-0.5、near 0 にしない」）。structure_match に Gentner の literal-vs-analogy 区別を追加（隣接ゆえの見かけの構造一致は surface 側へ寄せる）。
+*   `collect.py generate_track_b_queries`: グローバル定数 `_EXCLUDED_TRACK_B_DOMAINS`（education/gamification 固定）を撤廃。「テーマと同じ現象/課題を扱う隣接分野は除外」という判断基準＋テーマの field・keywords を LLM に渡す方式へ（テーマごとに near が変わる問題を解消）。
+*   `_llm_generate_track_b_text` のユーザープロンプトを「論文先頭・テーマ後置」に再構成し、Abstract固有の数値・発見引用を必須化（テーマの不安点の言い換え禁止を明示）。
+*   検証: `--single` で casual_puzzle（距離0.7×構造0.6=0.42）と energy（距離0.5×構造0.6=0.3）の2テーマ実行。旧来の距離0.9過大評価は再現せず中距離帯に収まることを確認。hypothesis は論文固有のメカニズムを起点にしている。
+*   補足（Step 9 へ）: energy 試行で選出論文がやや近接寄り（距離0.5）。質ゲート水準と候補プールの遠さ確保は Step 9 で調整。`classify.py _DOMAIN_PENALTY_TERMS`（Track A・ゲーム語固定）も同種のテーマ依存が残存しており要整理。
 
 ### 2026-05-30 MVP実装（Step 2〜6 完了・E2E成功）
 *   Step 2: `collect.py` の Track Bクエリを「別ドメイン概念 × テーマ核心語」の掛け合わせ式に（`generate_track_b_queries`, `_theme_anchor`）

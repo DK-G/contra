@@ -117,8 +117,6 @@ def filter_by_used_ids(works: List[Work], used_ids: Set[str]) -> List[Work]:
     return [w for w in works if w.id not in used_ids]
 
 
-_EXCLUDED_TRACK_B_DOMAINS = {"education", "gamification", "e-learning", "educational technology"}
-
 _TRACK_B_DOMAIN_COUNT = 5
 
 
@@ -140,7 +138,6 @@ def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: i
     """
     from src.openai_client import OpenAIError, extract_output_text, responses_create
 
-    excluded_note = ", ".join(sorted(_EXCLUDED_TRACK_B_DOMAINS))
     anchor = _theme_anchor(theme)
     payload = {
         "model": model,
@@ -155,7 +152,12 @@ def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: i
                     f"Each query MUST combine (a) a concept term from a distinct distant domain with "
                     f"(b) an anchoring term tied to the theme's core (e.g. '{anchor}'), so results stay "
                     "structurally connectable instead of generic. "
-                    f"Use {n} DIFFERENT distant domains. Do NOT use these domains: {excluded_note}. "
+                    f"Use {n} DIFFERENT distant domains. "
+                    "AVOID domains that are merely ADJACENT to the theme: any field that studies the SAME "
+                    "phenomenon, problem, or population the theme names (even in a different application "
+                    "context) is too near and yields obvious connections — do not use it. A genuinely "
+                    "distant domain shares only an abstract relational structure, not the theme's topic. "
+                    "Also avoid the theme's own field and keywords (given below). "
                     "Each query is 3-5 keywords. "
                     f"Return exactly {n} lines, one query per line, no numbering or extra text."
                 ),
@@ -164,12 +166,12 @@ def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: i
                 "role": "user",
                 "content": (
                     f"Research theme: {theme.theme_overview[:300]}\n"
-                    f"Domain: {theme.scope.field}\n"
-                    f"Theme anchor term: {anchor}\n"
-                    f"Theme keywords: {', '.join(theme.keywords.include)}\n\n"
+                    f"Theme's own field (too near, avoid): {theme.scope.field}\n"
+                    f"Theme's keywords / phenomenon (too near, avoid as domains): {', '.join(theme.keywords.include)}\n"
+                    f"Theme anchor term (use as the (b) cross term): {anchor}\n\n"
                     f"Generate {n} cross-product queries (distant domain concept x theme anchor), "
-                    "each targeting a different distant domain that shares a relational structure with the theme. "
-                    "Do not repeat domains."
+                    "each targeting a different distant domain that shares a relational structure with the theme "
+                    "but does NOT study the theme's own phenomenon. Do not repeat domains."
                 ),
             },
         ],

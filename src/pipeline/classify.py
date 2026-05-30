@@ -229,19 +229,6 @@ _STRUCTURE_MIN = 0.35   # below this = Anomaly (no shared relational structure) 
 _SURFACE_MAX = 0.60     # above this = too close (myopia / literal similarity) -> reject
 _SERENDIPITY_GATE = 0.25  # quality gate on (structure x distance)
 
-# Adjacent-domain correction (Step 8).
-# These domains are conceptually close to game-engagement / behavioral-retention themes even when
-# the application context differs (classroom vs. game).  Papers that mention these terms share the
-# same behavioral phenomenon at the surface level and should NOT score near 0 for surface_overlap.
-# Adding _ADJACENT_SURFACE_BUMP pulls their distance down toward the Goldilocks mid-range and
-# prevents spuriously high serendipity scores caused by LLM under-estimating surface similarity.
-_ADJACENT_DOMAIN_TERMS: frozenset[str] = frozenset({
-    "education", "educational", "e-learning", "gamification",
-    "educational technology", "learning engagement", "academic achievement",
-    "instructional", "pedagogy", "classroom", "student motivation",
-})
-_ADJACENT_SURFACE_BUMP = 0.25  # added to surface_overlap before gating
-
 
 _SCORE_CHUNK_SIZE = 12   # papers per LLM call (keeps each request under the API timeout)
 _SCORE_MAX_CANDIDATES = 60  # cap total candidates scored (cost/latency bound)
@@ -255,20 +242,28 @@ def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> O
                 "role": "system",
                 "content": (
                     "You score papers for serendipitous cross-domain analogy with a research theme, "
-                    "using Gentner's structure-mapping distinction. For each paper return:\n"
-                    "- surface_overlap (0.0-1.0): how much the paper shares surface-level features with the "
-                    "theme — application domain, research population, studied phenomenon/behavior name, or "
-                    "shared vocabulary. Calibration: "
-                    "0.0-0.2 = entirely different phenomenon and population (materials science, climate, finance); "
-                    "0.3-0.5 = adjacent domain studying the same behavioral/psychological phenomenon "
-                    "(e.g., user engagement, retention, motivation) in a different application context "
-                    "(education, healthcare, sports — NOT game players but sharing the phenomenon name); "
-                    "0.6-0.8 = partially overlapping field (mobile apps, digital behavior, HCI); "
-                    "0.9-1.0 = essentially the same domain. "
-                    "Do NOT score adjacent behavioral domains near 0.0 just because the application context differs.\n"
-                    "- structure_match (0.0-1.0): shared RELATIONAL structure (e.g. a feedback loop, "
-                    "recovery-from-failure mechanism, difficulty-progression curve), independent of surface. "
-                    "High = a real transferable analogy; near 0 = no genuine structural link (Anomaly).\n"
+                    "using Gentner's structure-mapping distinction. Judge every score RELATIVE TO THE "
+                    "THEME's own field and keywords given below — never against a fixed list of domains. "
+                    "For each paper return:\n"
+                    "- surface_overlap (0.0-1.0): how much the paper shares the THEME'S OWN surface markers "
+                    "— its home field, its keywords, and the named phenomenon / problem / population it "
+                    "studies. Use the theme's field and keywords as the reference for what counts as 'near'. "
+                    "Calibration:\n"
+                    "  0.0-0.2 = different field AND a different phenomenon/problem from the theme;\n"
+                    "  0.3-0.5 = a DIFFERENT applied field, but it studies the SAME phenomenon/problem the "
+                    "theme names (the theme's keyword concepts appear, just in another application context). "
+                    "This is ADJACENT, not far — score it here, NOT near 0;\n"
+                    "  0.6-0.8 = field that partly overlaps the theme's field;\n"
+                    "  0.9-1.0 = essentially the theme's own field.\n"
+                    "  Key rule: a paper that tackles the theme's same problem in a neighboring applied field "
+                    "is adjacent (0.3-0.5), so do not give it a near-0 surface just because the field label differs.\n"
+                    "- structure_match (0.0-1.0): shared RELATIONAL structure (a causal mechanism, feedback "
+                    "loop, recovery-from-failure dynamic, difficulty-progression curve) that TRANSFERS across "
+                    "different surface domains, independent of surface. High = a non-obvious mechanism that "
+                    "maps from a far field onto the theme; near 0 = no genuine shared mechanism (Anomaly). "
+                    "Note: if the structure seems to match ONLY because the paper studies the theme's same "
+                    "phenomenon in an adjacent field, that similarity belongs in surface_overlap (raise it), "
+                    "not in a claimed distant structural analogy.\n"
                     "- connection_label: concise Japanese label (8-20 chars) naming the single structural connection.\n"
                     "- connection_rationale: one Japanese sentence naming the shared relational structure.\n"
                     "Return a JSON array: [{id, surface_overlap, structure_match, connection_label, connection_rationale}]"
@@ -279,9 +274,10 @@ def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> O
                 "content": (
                     f"研究テーマ: {theme.theme_overview[:300]}\n"
                     f"目的: {theme.goal}\n"
-                    f"分野: {theme.scope.field}\n\n"
+                    f"テーマの分野（near の基準）: {theme.scope.field}\n"
+                    f"テーマのキーワード（near の表層マーカー）: {', '.join(theme.keywords.include) or '（なし）'}\n\n"
                     f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
-                    "各論文をスコアリングしてJSON配列のみ返してください。"
+                    "上記テーマの分野・キーワードを near の基準として、各論文をスコアリングしてJSON配列のみ返してください。"
                 ),
             },
         ],
@@ -362,15 +358,6 @@ def select_track_b(
         surface = s["surface_overlap"]
         if structure < _STRUCTURE_MIN:   # Anomaly: no genuine structural link
             continue
-        # Adjacent-domain correction: papers from conceptually close domains (education,
-        # gamification, etc.) share the behavioral phenomenon at surface level.  The LLM
-        # tends to under-estimate their surface_overlap, inflating distance scores.
-        # Bump surface toward its true Goldilocks position before gating.
-        work = id_to_work[wid]
-        work_text = f"{work.title} {work.abstract or ''}".lower()
-        if any(term in work_text for term in _ADJACENT_DOMAIN_TERMS):
-            surface = min(1.0, surface + _ADJACENT_SURFACE_BUMP)
-            s = {**s, "surface_overlap": surface}
         if surface > _SURFACE_MAX:        # too close: myopia / literal similarity
             continue
         distance = 1.0 - surface
