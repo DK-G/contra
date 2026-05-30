@@ -27,6 +27,9 @@
 
 ## 完了 (Done)
 
+### 2026-05-30 Git公開準備
+*   生成済み `output/` を Git 管理対象から外し、今後の実行結果が公開差分に混ざらないよう `.gitignore` に追加。
+
 ### インフラ（再利用可能・変更不要）
 *   入力仕様の最小セットを確定（`docs/input_min_spec.md`）
 *   入力→内部表現のスキーマ定義（`src/core/input_schema.py`, `src/core/models.py`）
