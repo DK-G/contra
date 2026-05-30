@@ -229,6 +229,19 @@ _STRUCTURE_MIN = 0.35   # below this = Anomaly (no shared relational structure) 
 _SURFACE_MAX = 0.60     # above this = too close (myopia / literal similarity) -> reject
 _SERENDIPITY_GATE = 0.25  # quality gate on (structure x distance)
 
+# Adjacent-domain correction (Step 8).
+# These domains are conceptually close to game-engagement / behavioral-retention themes even when
+# the application context differs (classroom vs. game).  Papers that mention these terms share the
+# same behavioral phenomenon at the surface level and should NOT score near 0 for surface_overlap.
+# Adding _ADJACENT_SURFACE_BUMP pulls their distance down toward the Goldilocks mid-range and
+# prevents spuriously high serendipity scores caused by LLM under-estimating surface similarity.
+_ADJACENT_DOMAIN_TERMS: frozenset[str] = frozenset({
+    "education", "educational", "e-learning", "gamification",
+    "educational technology", "learning engagement", "academic achievement",
+    "instructional", "pedagogy", "classroom", "student motivation",
+})
+_ADJACENT_SURFACE_BUMP = 0.25  # added to surface_overlap before gating
+
 
 _SCORE_CHUNK_SIZE = 12   # papers per LLM call (keeps each request under the API timeout)
 _SCORE_MAX_CANDIDATES = 60  # cap total candidates scored (cost/latency bound)
@@ -242,9 +255,17 @@ def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> O
                 "role": "system",
                 "content": (
                     "You score papers for serendipitous cross-domain analogy with a research theme, "
-                    "using Gentner's structure-mapping distinction. For each paper return: \n"
-                    "- surface_overlap (0.0-1.0): shared surface features (same field/keywords/objects). "
-                    "High = same domain as theme.\n"
+                    "using Gentner's structure-mapping distinction. For each paper return:\n"
+                    "- surface_overlap (0.0-1.0): how much the paper shares surface-level features with the "
+                    "theme — application domain, research population, studied phenomenon/behavior name, or "
+                    "shared vocabulary. Calibration: "
+                    "0.0-0.2 = entirely different phenomenon and population (materials science, climate, finance); "
+                    "0.3-0.5 = adjacent domain studying the same behavioral/psychological phenomenon "
+                    "(e.g., user engagement, retention, motivation) in a different application context "
+                    "(education, healthcare, sports — NOT game players but sharing the phenomenon name); "
+                    "0.6-0.8 = partially overlapping field (mobile apps, digital behavior, HCI); "
+                    "0.9-1.0 = essentially the same domain. "
+                    "Do NOT score adjacent behavioral domains near 0.0 just because the application context differs.\n"
                     "- structure_match (0.0-1.0): shared RELATIONAL structure (e.g. a feedback loop, "
                     "recovery-from-failure mechanism, difficulty-progression curve), independent of surface. "
                     "High = a real transferable analogy; near 0 = no genuine structural link (Anomaly).\n"
@@ -341,6 +362,15 @@ def select_track_b(
         surface = s["surface_overlap"]
         if structure < _STRUCTURE_MIN:   # Anomaly: no genuine structural link
             continue
+        # Adjacent-domain correction: papers from conceptually close domains (education,
+        # gamification, etc.) share the behavioral phenomenon at surface level.  The LLM
+        # tends to under-estimate their surface_overlap, inflating distance scores.
+        # Bump surface toward its true Goldilocks position before gating.
+        work = id_to_work[wid]
+        work_text = f"{work.title} {work.abstract or ''}".lower()
+        if any(term in work_text for term in _ADJACENT_DOMAIN_TERMS):
+            surface = min(1.0, surface + _ADJACENT_SURFACE_BUMP)
+            s = {**s, "surface_overlap": surface}
         if surface > _SURFACE_MAX:        # too close: myopia / literal similarity
             continue
         distance = 1.0 - surface
