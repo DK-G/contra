@@ -124,6 +124,16 @@
 - `2026-05-28` 500本収集→20本レポート形式（Track A/B）に方針変更。Track A：関係グラデーション10本（関係軸ラベル付き）、Track B：接続点フィーチャー10本（接続点タイプ別ラベル付き）。却下した案：500本のまま品質を上げる→ユーザーが消費できる量を超えていた。
 - `2026-05-29` Track B の収集方式を修正: Track Aと同じ候補プールから残りを選ぶ方式を廃止。Track Bは別ドメイン・別クエリで独立収集することで「意外性」を担保する。接続点タイプの固定リストも廃止しLLMが自由発見する方式に変更。
 - `2026-05-29` テーマ別履歴保存を追加: 採用論文20本のIDをテーマハッシュキーで管理。Phase 1はローカルJSONファイル（`data/history/{theme_hash}.json`）、Phase 2以降はDB移行。収集候補から既使用IDを除外することで同一論文の再利用を防ぐ。
+- `2026-05-30` **Step 8 距離スコア較正（テーマ非依存化）**: ★重要な設計原則の確立。
+  - **原則: near/far はテーマごとに変わる相対量であり、特定ドメイン語をグローバル定数でハードコードしてはならない**（contra は多岐にわたるテーマを対象とするため）。「教育」はゲームテーマには近接だが、エネルギーテーマには遠方になりうる。near の基準は常に「テーマ自身の field・keywords」から実行時に導く。
+  - `_score_b_chunk`（選別）: surface_overlap をテーマの field・keywords を基準にLLMが較正する方式へ書き換え。「テーマと同じ現象/課題を別の応用分野で扱う論文は隣接（0.3-0.5）で、near 0 にしない」と明示。structure_match には Gentner の literal-vs-analogy 区別を追加し、隣接ゆえの見かけの構造一致は surface 側へ寄せるよう指示。乗算 `structure×(1-surface)` は surface が正しく測れれば近接を自動降格する（NotebookLM の Nooteboom 最適認知距離・Goldilocks で裏付け済み）。
+  - `generate_track_b_queries`（収集）: グローバル定数 `_EXCLUDED_TRACK_B_DOMAINS`（education/gamification 固定）を撤廃。「テーマと同じ現象/課題を扱う隣接分野は obvious connection を生むので除外」という判断基準＋テーマの field・keywords を渡し、LLM がテーマごとに近接ドメインを避ける方式へ。
+  - `_llm_generate_track_b_text`（提示）: ユーザープロンプトを「論文先頭・テーマ後置」に再構成し、hypothesis に Abstract 固有の数値・発見の引用を必須化、テーマの不安点の言い換えを禁止。
+  - **却下した案**: (1) ゲームテーマ由来の隣接ドメイン語リスト（`_ADJACENT_DOMAIN_TERMS`）に surface バンプ +0.25 を加える応急処置→他テーマで誤作動するため Step 8 内で破棄。(2) surface_overlap を数値閾値でハードカット→LLMスコアのバラツキに脆弱。いずれも特定テーマへの依存を残すため、テーマ相対のプロンプト較正に一本化した。
+  - 検証: casual_puzzle（0.7×0.6=0.42）/ energy（0.5×0.6=0.3）の2テーマで距離が中距離帯に収まり、旧来の0.9過大評価が再現しないことを確認。
+  - `_score_work`（Track A プリランキング）: `_DOMAIN_PENALTY_TERMS`（multiplayer/esport 等ゲームサブジャンル語の固定減点）を撤廃。オフトピック判定は `theme.keywords.exclude` に一元化し、exclude に weight 2（`_EXCLUDE_WEIGHT`）を適用してユーザー宣言を強い降格信号とした。Track A は既定 0・`--single` で常に省略のため影響小。
+  - 残課題（Step 9）: energy で選出論文がやや近接寄り（距離0.5）。質ゲート水準・候補プールの遠さ確保を要調整。
+
 - `2026-05-30` **方針を再定義（contrarian 中核化）**: プロジェクトの核を「思考の狭窄に抗い、遠いが構造的に接続する論文を対置して視座を広げる」ことに据え直し。NotebookLM Deep Research（66ソース）でセレンディピティ発生条件を調査し [`docs/research/serendipity_conditions.md`](docs/research/serendipity_conditions.md) に一次資料化。主要決定:
   - **MVP を「20本レポート」から「Track B の良質な1本」へ**。本数は質ゲートの閾値超え数（出力であって入力でない）。却下案: 本数先行→近接/Anomaly混入で質が崩れた（2026-05-29の実行で実証）。
   - **Track B を中核、Track A はアンカー（任意）**に再配置。旧 A:10/B:10 対等を廃止。

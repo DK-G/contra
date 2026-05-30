@@ -18,12 +18,6 @@
 
 > 2026-05-30 のMVP E2E成功後に判明した較正・検証タスク。詳細は [`plan.md`](plan.md) §6。
 
-### Step 8 (A): 距離スコアの較正
-*   `surface_overlap` 判定が緩く、隣接ドメイン（例: technology enhanced learning）に距離0.9が付く問題を是正
-*   中距離（0.5〜0.7）を適正評価するようプロンプト/スコア定義を調整
-*   除外ドメイン（education/gamification）を選別段階にも効かせる（収集の掛け合わせで漏れる分の補完）
-*   `usefulness_hypothesis` が論文固有の発見を起点にするようプロンプトを強化（テーマの不安点をなぞらない）
-
 ### Step 9 (B): 複数本モードの挙動検証
 *   `--track-b-count 10` 等で質ゲート通過数を確認し、「20本程度」のボリュームが質を保てるか検証
 *   閾値 `--serendipity-gate` の妥当な水準を複数テーマで探る
@@ -56,6 +50,15 @@
 *   Track Bを中核・Track Aをアンカーに再配置、選別を距離×構造の乗算に、出力を4部構成に復活
 *   `plan.md`・`spec.md`・`roadmap.md`・`task.md` を新方針に全面更新
 *   実装済み: 撤回論文フィルタ、Track B複数ドメインクエリ、assumptionsクエリ、ドメインペナルティ（旧20本構造上での先行修正）
+
+### Step 8 (A): 距離スコアの較正（2026-05-30 完了・テーマ非依存化）
+*   **near/far はテーマ相対量**という原則を確立。特定ドメイン語のハードコードリスト（ゲームテーマ由来）を全廃し、テーマ自身の field・keywords を near の基準点として LLM に渡す方式へ統一。多岐にわたるテーマで誤作動しない設計に。
+*   `_score_b_chunk` プロンプトを書き換え: surface_overlap をテーマの field・keywords 基準で較正（「テーマと同じ現象/課題を別の応用分野で扱う論文は隣接=0.3-0.5、near 0 にしない」）。structure_match に Gentner の literal-vs-analogy 区別を追加（隣接ゆえの見かけの構造一致は surface 側へ寄せる）。
+*   `collect.py generate_track_b_queries`: グローバル定数 `_EXCLUDED_TRACK_B_DOMAINS`（education/gamification 固定）を撤廃。「テーマと同じ現象/課題を扱う隣接分野は除外」という判断基準＋テーマの field・keywords を LLM に渡す方式へ（テーマごとに near が変わる問題を解消）。
+*   `_llm_generate_track_b_text` のユーザープロンプトを「論文先頭・テーマ後置」に再構成し、Abstract固有の数値・発見引用を必須化（テーマの不安点の言い換え禁止を明示）。
+*   検証: `--single` で casual_puzzle（距離0.7×構造0.6=0.42）と energy（距離0.5×構造0.6=0.3）の2テーマ実行。旧来の距離0.9過大評価は再現せず中距離帯に収まることを確認。hypothesis は論文固有のメカニズムを起点にしている。
+*   `classify.py _DOMAIN_PENALTY_TERMS`（Track A・ゲームサブジャンル語固定）も撤廃。何をオフトピックとするかは `theme.keywords.exclude`（ユーザー宣言）に依拠し、exclude は単一 include より強い降格信号として weight 2 を適用（`_EXCLUDE_WEIGHT`）。Track A は `--single` で常に省略・既定でも 0 のため影響範囲は小だが、テーマ依存の解消として整理。
+*   補足（Step 9 へ）: energy 試行で選出論文がやや近接寄り（距離0.5）。質ゲート水準と候補プールの遠さ確保は Step 9 で調整。
 
 ### 2026-05-30 MVP実装（Step 2〜6 完了・E2E成功）
 *   Step 2: `collect.py` の Track Bクエリを「別ドメイン概念 × テーマ核心語」の掛け合わせ式に（`generate_track_b_queries`, `_theme_anchor`）

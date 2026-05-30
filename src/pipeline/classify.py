@@ -13,20 +13,17 @@ _RELATIONSHIP_LEVELS = ["高", "中高", "中", "中低", "低"]
 _LEVEL_RANK = {level: i for i, level in enumerate(_RELATIONSHIP_LEVELS)}
 _DEFAULT_AXES = ["手法の参照", "前提条件の検証", "反証・対立仮説", "測定手法の転用", "制約条件の対比", "理論的基盤"]
 
-# Domain keywords that indicate a poor structural match for casual solo puzzle games.
-# Matched works receive a score penalty to push them below more relevant papers.
-_DOMAIN_PENALTY_TERMS = [
-    "multiplayer", "competitive", "esport", "console", "first-person", "shooter",
-    "mmorpg", "battle royale", "pvp", "real-time strategy", "rts",
-]
-_DOMAIN_PENALTY_WEIGHT = 2
+# A user-declared exclude term is a stronger "demote this" signal than a single matched
+# include term, so exclusions are weighted more heavily in the Track A keyword pre-ranking.
+# What counts as off-topic is theme-specific and comes from theme.keywords.exclude — never
+# from a hardcoded domain list (see spec.md §7 decision 2026-05-30 Step 8: near/far is relative).
+_EXCLUDE_WEIGHT = 2
 
 
 def _score_work(work: Work, include: Sequence[str], exclude: Sequence[str]) -> int:
     text = f"{work.title} {work.abstract or ''}".lower()
     score = sum(1 for t in include if t and t.lower() in text)
-    score -= sum(1 for t in exclude if t and t.lower() in text)
-    score -= _DOMAIN_PENALTY_WEIGHT * sum(1 for t in _DOMAIN_PENALTY_TERMS if t in text)
+    score -= _EXCLUDE_WEIGHT * sum(1 for t in exclude if t and t.lower() in text)
     return score
 
 
@@ -242,12 +239,28 @@ def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> O
                 "role": "system",
                 "content": (
                     "You score papers for serendipitous cross-domain analogy with a research theme, "
-                    "using Gentner's structure-mapping distinction. For each paper return: \n"
-                    "- surface_overlap (0.0-1.0): shared surface features (same field/keywords/objects). "
-                    "High = same domain as theme.\n"
-                    "- structure_match (0.0-1.0): shared RELATIONAL structure (e.g. a feedback loop, "
-                    "recovery-from-failure mechanism, difficulty-progression curve), independent of surface. "
-                    "High = a real transferable analogy; near 0 = no genuine structural link (Anomaly).\n"
+                    "using Gentner's structure-mapping distinction. Judge every score RELATIVE TO THE "
+                    "THEME's own field and keywords given below — never against a fixed list of domains. "
+                    "For each paper return:\n"
+                    "- surface_overlap (0.0-1.0): how much the paper shares the THEME'S OWN surface markers "
+                    "— its home field, its keywords, and the named phenomenon / problem / population it "
+                    "studies. Use the theme's field and keywords as the reference for what counts as 'near'. "
+                    "Calibration:\n"
+                    "  0.0-0.2 = different field AND a different phenomenon/problem from the theme;\n"
+                    "  0.3-0.5 = a DIFFERENT applied field, but it studies the SAME phenomenon/problem the "
+                    "theme names (the theme's keyword concepts appear, just in another application context). "
+                    "This is ADJACENT, not far — score it here, NOT near 0;\n"
+                    "  0.6-0.8 = field that partly overlaps the theme's field;\n"
+                    "  0.9-1.0 = essentially the theme's own field.\n"
+                    "  Key rule: a paper that tackles the theme's same problem in a neighboring applied field "
+                    "is adjacent (0.3-0.5), so do not give it a near-0 surface just because the field label differs.\n"
+                    "- structure_match (0.0-1.0): shared RELATIONAL structure (a causal mechanism, feedback "
+                    "loop, recovery-from-failure dynamic, difficulty-progression curve) that TRANSFERS across "
+                    "different surface domains, independent of surface. High = a non-obvious mechanism that "
+                    "maps from a far field onto the theme; near 0 = no genuine shared mechanism (Anomaly). "
+                    "Note: if the structure seems to match ONLY because the paper studies the theme's same "
+                    "phenomenon in an adjacent field, that similarity belongs in surface_overlap (raise it), "
+                    "not in a claimed distant structural analogy.\n"
                     "- connection_label: concise Japanese label (8-20 chars) naming the single structural connection.\n"
                     "- connection_rationale: one Japanese sentence naming the shared relational structure.\n"
                     "Return a JSON array: [{id, surface_overlap, structure_match, connection_label, connection_rationale}]"
@@ -258,9 +271,10 @@ def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> O
                 "content": (
                     f"研究テーマ: {theme.theme_overview[:300]}\n"
                     f"目的: {theme.goal}\n"
-                    f"分野: {theme.scope.field}\n\n"
+                    f"テーマの分野（near の基準）: {theme.scope.field}\n"
+                    f"テーマのキーワード（near の表層マーカー）: {', '.join(theme.keywords.include) or '（なし）'}\n\n"
                     f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
-                    "各論文をスコアリングしてJSON配列のみ返してください。"
+                    "上記テーマの分野・キーワードを near の基準として、各論文をスコアリングしてJSON配列のみ返してください。"
                 ),
             },
         ],
