@@ -30,22 +30,32 @@ def load_history(theme_hash: str, history_dir: Path = _HISTORY_DIR) -> ThemeHist
         theme_hash=data.get("theme_hash", theme_hash),
         used_ids=data.get("used_ids", []),
         generated_at=data.get("generated_at", ""),
+        used_titles=data.get("used_titles", []),
+        used_dois=data.get("used_dois", []),
     )
 
 
 def save_history(
     history: ThemeHistory,
     new_ids: list,
+    new_titles: list | None = None,
+    new_dois: list | None = None,
     history_dir: Path = _HISTORY_DIR,
 ) -> None:
     history_dir.mkdir(parents=True, exist_ok=True)
     path = history_dir / f"{history.theme_hash}.json"
     existing = load_history(history.theme_hash, history_dir)
-    merged_ids = list(dict.fromkeys(existing.used_ids + new_ids))
+
+    def _merge(old: list, new: list | None) -> list:
+        # dedup-preserving merge; drop empty strings (e.g. a paper with no DOI)
+        return [x for x in dict.fromkeys(old + [v for v in (new or []) if v])]
+
     updated = ThemeHistory(
         theme_hash=history.theme_hash,
-        used_ids=merged_ids,
+        used_ids=_merge(existing.used_ids, new_ids),
         generated_at=datetime.now().isoformat(),
+        used_titles=_merge(existing.used_titles, new_titles),
+        used_dois=_merge(existing.used_dois, new_dois),
     )
     path.write_text(
         json.dumps(asdict(updated), ensure_ascii=False, indent=2), encoding="utf-8"

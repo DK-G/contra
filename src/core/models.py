@@ -96,3 +96,8 @@ class ThemeHistory:
     theme_hash: str
     used_ids: List[str]
     generated_at: str
+    # Cross-run near-duplicate guard: a paper can recur under a DIFFERENT OpenAlex id
+    # (preprint vs published), so we also remember normalized titles and DOIs of adopted
+    # papers and exclude on any of id / norm_title / doi (non-breaking; default empty).
+    used_titles: List[str] = field(default_factory=list)
+    used_dois: List[str] = field(default_factory=list)

@@ -17,6 +17,8 @@ from src.pipeline.classify import classify_stub, classify_track_a, classify_trac
 from src.pipeline.collect import (
     CollectConfig,
     Collector,
+    _norm_doi,
+    _norm_title,
     collect_and_filter,
     collect_track_b,
     filter_by_used_ids,
@@ -238,12 +240,16 @@ def main(argv: list[str]) -> int:
 
     theme_hash = compute_theme_hash(theme.theme_overview)
     used_ids: set = set()
+    used_titles: set = set()
+    used_dois: set = set()
     history = None
     if not args.no_history:
         history = load_history(theme_hash, history_dir)
         used_ids = set(history.used_ids)
+        used_titles = set(history.used_titles)
+        used_dois = set(history.used_dois)
         if used_ids:
-            print(f"[info] history: {len(used_ids)} used IDs will be excluded")
+            print(f"[info] history: {len(used_ids)} used IDs / {len(used_titles)} titles / {len(used_dois)} DOIs will be excluded")
 
     gen_mode = args.gen_mode
     if gen_mode == "plan_a":
@@ -264,7 +270,7 @@ def main(argv: list[str]) -> int:
         if track_a_target > 0:
             print("[info] collecting Track A (anchor) candidates...")
             track_a_works = collect_and_filter(theme, config, max_count=200, require_abstract=True)
-            track_a_works = filter_by_used_ids(track_a_works, used_ids)
+            track_a_works = filter_by_used_ids(track_a_works, used_ids, used_titles, used_dois)
             print(f"[ok] Track A candidates: {len(track_a_works)}")
 
         print("[info] collecting Track B candidates (distant domain x theme anchor)...")
@@ -273,6 +279,8 @@ def main(argv: list[str]) -> int:
             config,
             model=args.llm_model,
             used_ids=used_ids,
+            used_titles=used_titles,
+            used_dois=used_dois,
         )
         print(f"[ok] Track B candidates: {len(track_b_works)}")
     except (OpenAlexError, OpenAlexParseError) as exc:
@@ -352,10 +360,15 @@ def main(argv: list[str]) -> int:
     materials_path = _write_gemini_materials(out_dir, theme, track_a_entries, track_b_entries)
 
     if not args.no_history:
-        adopted_ids = [e.work.id for e in track_a_entries + track_b_entries]
+        adopted = track_a_entries + track_b_entries
+        adopted_ids = [e.work.id for e in adopted]
+        adopted_titles = [_norm_title(e.work.title) for e in adopted]
+        adopted_dois = [_norm_doi(e.work.doi) for e in adopted]
         save_history(
             history or ThemeHistory(theme_hash=theme_hash, used_ids=[], generated_at=""),
             adopted_ids,
+            adopted_titles,
+            adopted_dois,
             history_dir,
         )
         print(f"[ok] saved history: {len(adopted_ids)} IDs → {history_dir}/{theme_hash}.json")

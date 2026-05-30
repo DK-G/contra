@@ -113,8 +113,27 @@ def collect_and_filter(
     return limit_count(collected, max_count)
 
 
-def filter_by_used_ids(works: List[Work], used_ids: Set[str]) -> List[Work]:
-    return [w for w in works if w.id not in used_ids]
+def filter_by_used_ids(
+    works: List[Work],
+    used_ids: Set[str],
+    used_titles: Optional[Set[str]] = None,
+    used_dois: Optional[Set[str]] = None,
+) -> List[Work]:
+    """Drop works already surfaced in a prior run, matching on id OR norm_title OR DOI."""
+    titles = used_titles or set()
+    dois = used_dois or set()
+    out: List[Work] = []
+    for w in works:
+        if w.id in used_ids:
+            continue
+        nt = _norm_title(w.title)
+        if nt and nt in titles:
+            continue
+        nd = _norm_doi(w.doi)
+        if nd and nd in dois:
+            continue
+        out.append(w)
+    return out
 
 
 _TRACK_B_DOMAIN_COUNT = 5
@@ -150,6 +169,17 @@ def _norm_title(title: Optional[str]) -> str:
     """
     t = (title or "").lower().split(":")[0]
     return " ".join(t.split())
+
+
+def _norm_doi(doi: Optional[str]) -> str:
+    """Normalise a DOI for cross-run dedup: lowercase, strip the resolver URL prefix."""
+    if not doi:
+        return ""
+    d = doi.strip().lower()
+    for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "doi:"):
+        if d.startswith(prefix):
+            return d[len(prefix):]
+    return d
 
 
 def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: int = _TRACK_B_DOMAIN_COUNT) -> List[str]:
@@ -278,14 +308,21 @@ def collect_track_b(
     *,
     max_count: int = 60,
     used_ids: Optional[Set[str]] = None,
+    used_titles: Optional[Set[str]] = None,
+    used_dois: Optional[Set[str]] = None,
 ) -> List[Work]:
-    """Collect Track B candidates from multiple distinct domains using LLM-generated queries."""
+    """Collect Track B candidates from multiple distinct domains using LLM-generated queries.
+
+    Excludes papers already surfaced in a prior run on id / norm_title / DOI (the title and
+    DOI sets, seeded from history, catch the same paper recurring under a different OpenAlex id).
+    """
     cfg = config or CollectConfig()
     queries = generate_track_b_queries(theme, model)
     collector = Collector(cfg)
     works: List[Work] = []
     seen_ids: Set[str] = set(used_ids or set())
-    seen_titles: Set[str] = set()
+    seen_titles: Set[str] = set(used_titles or set())
+    seen_dois: Set[str] = set(used_dois or set())
     per_query = max(max_count // len(queries), 5)
     for query in queries:
         count = 0
@@ -295,10 +332,15 @@ def collect_track_b(
             )
             for w in filter_retracted(normalize_results(payload)):
                 norm_title = _norm_title(w.title)
-                if w.id not in seen_ids and norm_title not in seen_titles and w.abstract:
+                norm_doi = _norm_doi(w.doi)
+                if (w.id not in seen_ids and w.abstract
+                        and not (norm_title and norm_title in seen_titles)
+                        and not (norm_doi and norm_doi in seen_dois)):
                     seen_ids.add(w.id)
                     if norm_title:
                         seen_titles.add(norm_title)
+                    if norm_doi:
+                        seen_dois.add(norm_doi)
                     works.append(w)
                     count += 1
             if count >= per_query:
