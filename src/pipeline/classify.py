@@ -246,7 +246,9 @@ _NEAR_DOMAIN_MECH_CAP = 0.5  # mechanism_dist cap for same-L0/L1-domain papers (
 _SERENDIPITY_GATE = 0.20  # absolute floor for the percentile gate (never pass below this)
 _FALLBACK_FLOOR = 0.10    # relaxed floor for single-best fallback when nothing passes gate
 
-_SCORE_CHUNK_SIZE = 12   # papers per LLM call (keeps each request under the API timeout)
+_SCORE_CHUNK_SIZE = 8    # papers per LLM call. Smaller chunk = more per-paper attention
+# (fewer dropped connection_label/serendipity_rationale fields) and keeps each request
+# under the API timeout now that abstracts are sent at 500 chars (Step 9 Phase 2).
 _SCORE_MAX_CANDIDATES = 60  # cap total candidates scored (cost/latency bound)
 
 
@@ -365,13 +367,31 @@ def _score_b_chunk_pm(
                     "  How DIFFERENT is the paper's mechanism from the theme's?\n"
                     "  HIGH (0.7–1.0): Completely different domain/field/approach.\n"
                     "  LOW (0.0–0.3): Same field or very similar methodology.\n\n"
-                    "connection_label: 8–20 char Japanese label naming the structural "
-                    "bridge (not a category label — name the SPECIFIC mechanism that "
-                    "transfers).\n"
-                    "serendipity_rationale: one Japanese sentence. MUST cite a SPECIFIC "
-                    "finding or mechanism from the abstract. Phrases like 'both involve "
-                    "X' or 'both address Y risk' are FORBIDDEN — name the exact "
-                    "structural mechanism that maps.\n\n"
+                    "STEP 4 — Build the bridge FROM the paper_purpose / paper_mechanism "
+                    "you extracted in STEP 1. Identify the ONE specific variable on the "
+                    "paper side and the ONE specific variable on the theme side that map "
+                    "onto each other. Do NOT fall back to generic category words here.\n\n"
+                    "connection_label: 8–24 char Japanese chip for at-a-glance scanning. "
+                    "It MUST express a RELATIONSHIP or PROCESS (the mechanism that "
+                    "transfers), by either (i) containing a causal verb (律速する/分岐"
+                    "する/駆動する/選択する/抑制する/予兆する) or (ii) using a 「AによるB」 "
+                    "/ 「AがBを決める」 structure. Derive it by compressing your "
+                    "serendipity_rationale into a chip.\n"
+                    "  REJECTED (bare topic/field noun): 「情報の拡散」「交通予測」"
+                    "「細胞間シグナル解析」「リスク評価」\n"
+                    "  REQUIRED (relationship/process)  : 「対称性保存則が拡散速度を律速"
+                    "する」「難易度漸増による長期定着」「臨界遷移の早期警告が分岐を予兆」\n"
+                    "serendipity_rationale: ONE Japanese sentence stating the VARIABLE "
+                    "CORRESPONDENCE, in this form:\n"
+                    "  「論文の〈paper側の具体変数/機構〉は、テーマの〈theme側の局面〉に"
+                    "おける〈theme側の対応変数〉に相当する」\n"
+                    "  - The 〈paper側の具体変数〉 MUST come from the paper_purpose/"
+                    "paper_mechanism above, not a generic restatement.\n"
+                    "  - FORBIDDEN: 「両者とも○○に関わる」「○○という点で共通している」 "
+                    "— these state shared category membership, not a variable mapping.\n\n"
+                    "EVERY paper in the array MUST have ALL fields populated. "
+                    "connection_label and serendipity_rationale are REQUIRED and must "
+                    "NEVER be empty or omitted, even for low-scoring papers.\n\n"
                     "Return JSON array:\n"
                     '[{"id":"...","paper_purpose":"...","paper_mechanism":"...",'
                     '"purpose_sim":0.0,"mechanism_dist":0.0,'
@@ -409,7 +429,7 @@ def _score_b_candidates_pm(
     for start in range(0, len(pool), _SCORE_CHUNK_SIZE):
         chunk = pool[start:start + _SCORE_CHUNK_SIZE]
         papers_input = [
-            {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:350]}
+            {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:500]}
             for w in chunk
         ]
         items = _score_b_chunk_pm(papers_input, theme_schema, theme, model)

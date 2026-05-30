@@ -249,26 +249,35 @@ def _llm_generate_track_b_text(
                 "content": (
                     "Generate a 4-part Japanese writeup for a Track B paper from a DISTANT domain "
                     "that shares one transferable relational structure with the theme. "
+                    "You are given a pre-identified VARIABLE CORRESPONDENCE (接続の構造) between "
+                    "the paper and the theme — treat it as the SPINE of the hypothesis, and flesh "
+                    "it out with the paper's concrete findings from the abstract. "
                     "Return JSON: {summary, relationship, hypothesis, caution}"
                 ),
             },
             {
                 "role": "user",
                 "content": (
+                    f"【接続の構造】← この変数対応を仮説の背骨にせよ\n"
+                    f"{rationale or '（未指定：Abstractから構造的対応を自分で同定すること）'}\n"
+                    f"接続点ラベル: {label}\n\n"
                     f"【論文】\n"
                     f"タイトル: {work.title}\n"
                     f"Abstract: {(work.abstract or '')[:500]}\n\n"
-                    f"【接続情報】\n"
-                    f"接続点ラベル: {label}\n"
-                    f"接続の関係構造（参考）: {rationale or '（未指定）'}\n\n"
                     f"【テーマ】\n"
                     f"概要: {theme.theme_overview[:200]}\n"
                     f"目的: {theme.goal}\n"
                     f"不安点: {theme.concern or 'なし'}\n\n"
                     "以下の制約を守ってJSON形式で返してください。\n"
-                    "summary: abstractを自分の言葉で言い換えた2文。論文の主な発見（数値・効果量・実験条件があれば必ず含める）を含めること。\n"
+                    "summary: Abstractを忠実に日本語へ翻訳し2〜3文に凝縮する。言い換え・解釈・推測を加えず、"
+                    "原文の主張と具体的発見（数値・効果量・実験条件があれば保持）をそのまま訳すこと。"
+                    "原文にない情報を足さないこと。\n"
                     "relationship: 接続点ラベルが指す『関係構造』が、なぜ表層分野は違えどテーマと一致するのかを1文で。表層キーワードの一致でなく構造の一致を述べること。\n"
-                    f"hypothesis: ★中核。論文のAbstractに書かれた具体的な発見・数値・メカニズム・実験手法を最低1つ引用し、それをテーマのどの局面に転用できるかを1〜2文で述べること。課題の枠（テーマの問い）と解決の枠（論文の発見）を並置すること。テーマの不安点（{theme.concern or '上記不安点'}）を単に言い換えた文や、論文の具体的内容に言及しない汎用的な転用仮説は禁止。\n"
+                    f"hypothesis: ★中核。【接続の構造】に示された〈論文側の変数〉↔〈テーマ側の変数〉の対応を背骨とし、"
+                    "(1) その〈論文側の変数〉を、Abstractの具体的な発見・数値・効果量・実験手法のいずれかで肉付けして名指しし、"
+                    "(2) それがテーマの〈対応する局面〉に何を示唆するかを述べること（1〜2文）。"
+                    "Abstractに数値がなければ、論文の方法論的特徴（実験設計・比較条件・対象）を引用すること。"
+                    f"テーマの不安点（{theme.concern or '上記不安点'}）の言い換えや、論文の具体的内容に触れない汎用的転用仮説は禁止。\n"
                     "caution: この論文をテーマに転用する際に崩れる前提（対象母集団・実験条件・文化的文脈などの具体的な差異）を1文で指摘すること。「転用に注意」などの汎用文は禁止。\n"
                 ),
             },
