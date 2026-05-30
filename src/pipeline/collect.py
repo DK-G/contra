@@ -121,7 +121,7 @@ _TRACK_B_DOMAIN_COUNT = 5
 
 
 def _theme_anchor(theme: ThemeInput) -> str:
-    """The theme's core concept used to keep Track B queries 'distant but touchable'."""
+    """The theme's core concept, used only by the LLM-failure fallback queries."""
     if theme.keywords.include:
         return theme.keywords.include[0]
     if theme.goal:
@@ -129,36 +129,63 @@ def _theme_anchor(theme: ThemeInput) -> str:
     return theme.scope.field
 
 
-def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: int = _TRACK_B_DOMAIN_COUNT) -> List[str]:
-    """Generate N Track B queries, each = (distant domain concept) x (theme anchor term).
+def _clean_query(q: str) -> str:
+    """Strip quotes and the literal cross-product token ('x'/'X'/'×') the LLM may emit.
 
-    Pure distant-domain search returns generic top-cited reviews (the 'too far' failure
-    from the Goldilocks principle). Crossing each distant domain with a theme anchor term
-    keeps results in the moderate-distance band: distant in field, but structurally touchable.
+    The LLM sometimes verbalises 'combine (a) with (b)' as 'a x b'; that literal 'x'
+    leaks into the OpenAlex search and skews results, so remove it (Step 9 Phase 2, B-1a).
+    """
+    q = q.strip().strip('"').strip("'")
+    for sep in (" x ", " X ", " × "):
+        q = q.replace(sep, " ")
+    q = q.replace("×", " ")
+    return " ".join(q.split())
+
+
+def _norm_title(title: Optional[str]) -> str:
+    """Normalise a title for near-duplicate detection: lowercase, take text before ':'.
+
+    Catches conference/journal variants like 'COEVOLVE' vs 'COEVOLVE: a joint point
+    process model ...' that carry different OpenAlex IDs (Step 9 Phase 2, B-2).
+    """
+    t = (title or "").lower().split(":")[0]
+    return " ".join(t.split())
+
+
+def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: int = _TRACK_B_DOMAIN_COUNT) -> List[str]:
+    """Generate N Track B queries that target a STRUCTURAL analog, not the theme's topic.
+
+    The earlier design crossed each distant domain with the theme's surface keyword
+    (e.g. 'information diffusion'). But that keyword is the theme's OWN central
+    phenomenon, so OpenAlex full-text search dragged results back into the home domain
+    (or into generic papers sharing the polysemous word). Instead we ask the model to
+    first infer the theme's ABSTRACT RELATIONAL STRUCTURE (a bifurcation/threshold/
+    feedback/rate-limiting dynamic) and cross each distant domain with THAT structural
+    aspect — never with the theme's surface topic words (Step 9 Phase 2, B-1b).
+    Queries are plain keyword strings; any literal 'x'/'×' cross token is stripped.
     """
     from src.openai_client import OpenAIError, extract_output_text, responses_create
 
-    anchor = _theme_anchor(theme)
     payload = {
         "model": model,
         "input": [
             {
                 "role": "system",
                 "content": (
-                    f"You generate {n} OpenAlex academic search queries for finding papers that are in a "
-                    "DISTANT domain from the research theme but share a transferable RELATIONAL STRUCTURE "
-                    "(e.g. a feedback loop, a recovery-from-failure mechanism, a difficulty-progression curve) "
-                    "rather than surface keywords. "
-                    f"Each query MUST combine (a) a concept term from a distinct distant domain with "
-                    f"(b) an anchoring term tied to the theme's core (e.g. '{anchor}'), so results stay "
-                    "structurally connectable instead of generic. "
-                    f"Use {n} DIFFERENT distant domains. "
-                    "AVOID domains that are merely ADJACENT to the theme: any field that studies the SAME "
-                    "phenomenon, problem, or population the theme names (even in a different application "
-                    "context) is too near and yields obvious connections — do not use it. A genuinely "
-                    "distant domain shares only an abstract relational structure, not the theme's topic. "
-                    "Also avoid the theme's own field and keywords (given below). "
-                    "Each query is 3-5 keywords. "
+                    f"You generate {n} OpenAlex academic search queries for finding papers in a "
+                    "DISTANT domain that share a transferable RELATIONAL STRUCTURE with a research "
+                    "theme (a feedback loop, a branching/bifurcation condition, a threshold/contagion "
+                    "dynamic, a rate-limiting-under-constraints mechanism) — NOT surface keywords.\n"
+                    "STEP 1 (internal): infer the theme's ABSTRACT relational structure — the shape "
+                    "of its problem, stripped of its topic words.\n"
+                    f"STEP 2: write {n} queries, each combining (a) a concept from a DISTINCT distant "
+                    f"domain with (b) a term naming that abstract structural aspect. Use {n} DIFFERENT "
+                    "distant domains.\n"
+                    "HARD CONSTRAINTS:\n"
+                    "- NEVER put the theme's own field or surface keywords (given below) in any query.\n"
+                    "- Do NOT target the theme's own phenomenon or population — that is too near.\n"
+                    "- Each query is 3-5 plain keywords. Do NOT write a literal 'x', 'X', or '×' "
+                    "between terms — just separate keywords with spaces.\n"
                     f"Return exactly {n} lines, one query per line, no numbering or extra text."
                 ),
             },
@@ -166,12 +193,14 @@ def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: i
                 "role": "user",
                 "content": (
                     f"Research theme: {theme.theme_overview[:300]}\n"
+                    f"Theme's goal: {theme.goal}\n"
                     f"Theme's own field (too near, avoid): {theme.scope.field}\n"
-                    f"Theme's keywords / phenomenon (too near, avoid as domains): {', '.join(theme.keywords.include)}\n"
-                    f"Theme anchor term (use as the (b) cross term): {anchor}\n\n"
-                    f"Generate {n} cross-product queries (distant domain concept x theme anchor), "
-                    "each targeting a different distant domain that shares a relational structure with the theme "
-                    "but does NOT study the theme's own phenomenon. Do not repeat domains."
+                    f"Theme's surface keywords (too near, NEVER put in a query): "
+                    f"{', '.join(theme.keywords.include)}\n\n"
+                    f"Infer the theme's abstract relational structure, then generate {n} queries "
+                    "(distant domain concept + that structural aspect), each in a different distant "
+                    "domain that does NOT study the theme's own phenomenon. Plain keywords only, "
+                    "no 'x' token, do not repeat domains."
                 ),
             },
         ],
@@ -180,12 +209,13 @@ def generate_track_b_queries(theme: ThemeInput, model: str = "gpt-4o-mini", n: i
     try:
         response = responses_create(payload)
         text = extract_output_text(response).strip()
-        queries = [q.strip().strip('"').strip("'") for q in text.splitlines() if q.strip()]
+        queries = [_clean_query(q) for q in text.splitlines() if q.strip()]
         queries = [q for q in queries if q]
         if queries:
             return queries[:n]
     except OpenAIError:
         pass
+    anchor = _theme_anchor(theme)
     return [
         f"{anchor} feedback loop",
         f"{anchor} habit formation",
@@ -255,6 +285,7 @@ def collect_track_b(
     collector = Collector(cfg)
     works: List[Work] = []
     seen_ids: Set[str] = set(used_ids or set())
+    seen_titles: Set[str] = set()
     per_query = max(max_count // len(queries), 5)
     for query in queries:
         count = 0
@@ -263,8 +294,11 @@ def collect_track_b(
                 {"search": query, "per-page": cfg.per_page, "page": page}
             )
             for w in filter_retracted(normalize_results(payload)):
-                if w.id not in seen_ids and w.abstract:
+                norm_title = _norm_title(w.title)
+                if w.id not in seen_ids and norm_title not in seen_titles and w.abstract:
                     seen_ids.add(w.id)
+                    if norm_title:
+                        seen_titles.add(norm_title)
                     works.append(w)
                     count += 1
             if count >= per_query:
