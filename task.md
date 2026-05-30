@@ -18,12 +18,6 @@
 
 > 2026-05-30 のMVP E2E成功後に判明した較正・検証タスク。詳細は [`plan.md`](plan.md) §6。
 
-### Step 8 (A): 距離スコアの較正
-*   `surface_overlap` 判定が緩く、隣接ドメイン（例: technology enhanced learning）に距離0.9が付く問題を是正
-*   中距離（0.5〜0.7）を適正評価するようプロンプト/スコア定義を調整
-*   除外ドメイン（education/gamification）を選別段階にも効かせる（収集の掛け合わせで漏れる分の補完）
-*   `usefulness_hypothesis` が論文固有の発見を起点にするようプロンプトを強化（テーマの不安点をなぞらない）
-
 ### Step 9 (B): 複数本モードの挙動検証
 *   `--track-b-count 10` 等で質ゲート通過数を確認し、「20本程度」のボリュームが質を保てるか検証
 *   閾値 `--serendipity-gate` の妥当な水準を複数テーマで探る
@@ -56,6 +50,12 @@
 *   Track Bを中核・Track Aをアンカーに再配置、選別を距離×構造の乗算に、出力を4部構成に復活
 *   `plan.md`・`spec.md`・`roadmap.md`・`task.md` を新方針に全面更新
 *   実装済み: 撤回論文フィルタ、Track B複数ドメインクエリ、assumptionsクエリ、ドメインペナルティ（旧20本構造上での先行修正）
+
+### Step 8 (A): 距離スコアの較正（2026-05-30 完了）
+*   `_score_b_chunk` プロンプトに較正アンカーを追加し、隣接行動ドメイン（教育・gamification）が0.3-0.5にマッピングされるよう修正（旧来の距離0.9超えを解消）
+*   `select_track_b` に `_ADJACENT_DOMAIN_TERMS` × `_ADJACENT_SURFACE_BUMP(+0.25)` のペナルティを追加し、収集段階で漏れた隣接論文を選別段階でも除減
+*   `_llm_generate_track_b_text` のユーザープロンプトを「論文先頭・テーマ後置」に再構成し、Abstract固有の数値・発見引用を必須化（テーマの不安点の言い換え禁止を明示）
+*   `--single` にて casual_puzzle / energy の2テーマで改善を確認（距離0.6-0.7、energy論文で論文固有数値の引用を確認）
 
 ### 2026-05-30 MVP実装（Step 2〜6 完了・E2E成功）
 *   Step 2: `collect.py` の Track Bクエリを「別ドメイン概念 × テーマ核心語」の掛け合わせ式に（`generate_track_b_queries`, `_theme_anchor`）
