@@ -13,20 +13,17 @@ _RELATIONSHIP_LEVELS = ["高", "中高", "中", "中低", "低"]
 _LEVEL_RANK = {level: i for i, level in enumerate(_RELATIONSHIP_LEVELS)}
 _DEFAULT_AXES = ["手法の参照", "前提条件の検証", "反証・対立仮説", "測定手法の転用", "制約条件の対比", "理論的基盤"]
 
-# Domain keywords that indicate a poor structural match for casual solo puzzle games.
-# Matched works receive a score penalty to push them below more relevant papers.
-_DOMAIN_PENALTY_TERMS = [
-    "multiplayer", "competitive", "esport", "console", "first-person", "shooter",
-    "mmorpg", "battle royale", "pvp", "real-time strategy", "rts",
-]
-_DOMAIN_PENALTY_WEIGHT = 2
+# A user-declared exclude term is a stronger "demote this" signal than a single matched
+# include term, so exclusions are weighted more heavily in the Track A keyword pre-ranking.
+# What counts as off-topic is theme-specific and comes from theme.keywords.exclude — never
+# from a hardcoded domain list (see spec.md §7 decision 2026-05-30 Step 8: near/far is relative).
+_EXCLUDE_WEIGHT = 2
 
 
 def _score_work(work: Work, include: Sequence[str], exclude: Sequence[str]) -> int:
     text = f"{work.title} {work.abstract or ''}".lower()
     score = sum(1 for t in include if t and t.lower() in text)
-    score -= sum(1 for t in exclude if t and t.lower() in text)
-    score -= _DOMAIN_PENALTY_WEIGHT * sum(1 for t in _DOMAIN_PENALTY_TERMS if t in text)
+    score -= _EXCLUDE_WEIGHT * sum(1 for t in exclude if t and t.lower() in text)
     return score
 
 

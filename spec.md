@@ -131,7 +131,8 @@
   - `_llm_generate_track_b_text`（提示）: ユーザープロンプトを「論文先頭・テーマ後置」に再構成し、hypothesis に Abstract 固有の数値・発見の引用を必須化、テーマの不安点の言い換えを禁止。
   - **却下した案**: (1) ゲームテーマ由来の隣接ドメイン語リスト（`_ADJACENT_DOMAIN_TERMS`）に surface バンプ +0.25 を加える応急処置→他テーマで誤作動するため Step 8 内で破棄。(2) surface_overlap を数値閾値でハードカット→LLMスコアのバラツキに脆弱。いずれも特定テーマへの依存を残すため、テーマ相対のプロンプト較正に一本化した。
   - 検証: casual_puzzle（0.7×0.6=0.42）/ energy（0.5×0.6=0.3）の2テーマで距離が中距離帯に収まり、旧来の0.9過大評価が再現しないことを確認。
-  - 残課題（Step 9）: energy で選出論文がやや近接寄り（距離0.5）。質ゲート水準・候補プールの遠さ確保を要調整。`_DOMAIN_PENALTY_TERMS`（Track A・ゲーム語固定）も同種のテーマ依存が残存。
+  - `_score_work`（Track A プリランキング）: `_DOMAIN_PENALTY_TERMS`（multiplayer/esport 等ゲームサブジャンル語の固定減点）を撤廃。オフトピック判定は `theme.keywords.exclude` に一元化し、exclude に weight 2（`_EXCLUDE_WEIGHT`）を適用してユーザー宣言を強い降格信号とした。Track A は既定 0・`--single` で常に省略のため影響小。
+  - 残課題（Step 9）: energy で選出論文がやや近接寄り（距離0.5）。質ゲート水準・候補プールの遠さ確保を要調整。
 
 - `2026-05-30` **方針を再定義（contrarian 中核化）**: プロジェクトの核を「思考の狭窄に抗い、遠いが構造的に接続する論文を対置して視座を広げる」ことに据え直し。NotebookLM Deep Research（66ソース）でセレンディピティ発生条件を調査し [`docs/research/serendipity_conditions.md`](docs/research/serendipity_conditions.md) に一次資料化。主要決定:
   - **MVP を「20本レポート」から「Track B の良質な1本」へ**。本数は質ゲートの閾値超え数（出力であって入力でない）。却下案: 本数先行→近接/Anomaly混入で質が崩れた（2026-05-29の実行で実証）。
