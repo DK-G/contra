@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from src.core.models import OutputEntry, ThemeInput, Work
 from src.openai_client import OpenAIError, extract_output_text, responses_create
+from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
 
 _RELATIONSHIP_LEVELS = ["高", "中高", "中", "中低", "低"]
 _LEVEL_RANK = {level: i for i, level in enumerate(_RELATIONSHIP_LEVELS)}
@@ -40,6 +41,19 @@ def _parse_array(text: str) -> Optional[list]:
     if start >= 0 and end > start:
         try:
             return json.loads(text[start:end])
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def _parse_object(text: str) -> Optional[dict]:
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        try:
+            result = json.loads(text[start:end])
+            if isinstance(result, dict):
+                return result
         except json.JSONDecodeError:
             pass
     return None
@@ -219,17 +233,283 @@ def _classify_b_connections(
     return []
 
 
-# Serendipity selection thresholds (see plan.md §6.2 and docs/research/serendipity_conditions.md).
-# Gentner's 4 types: Analogy (low surface, high structure) is the target;
-# Anomaly (low surface, low structure) and literal/close similarity (high surface) are rejected.
-_STRUCTURE_MIN = 0.35   # below this = Anomaly (no shared relational structure) -> reject
-_SURFACE_MAX = 0.60     # above this = too close (myopia / literal similarity) -> reject
-_SERENDIPITY_GATE = 0.25  # quality gate on (structure x distance)
-
+# Serendipity selection thresholds (see plan.md §6.2, spec.md §7 Step 9 redesign).
+# SOLVENT framework: serendipity = purpose_sim * mechanism_dist.
+# purpose_sim  : how well the candidate's problem STRUCTURE maps onto the theme purpose.
+# mechanism_dist: how FAR the candidate's mechanism is from the theme mechanism.
+# Target = purpose_sim high AND mechanism_dist high (same problem, different approach).
+_PURPOSE_SIM_MIN = 0.40   # below this = no genuine problem-structure alignment -> reject
+# Raised 0.25 -> 0.40 (spec §7 Step 9): 0.25-0.39 range was dominated by abstract-
+# category matches ("both involve risk/energy/stability") not structural analogies.
+# True structural analogies show purpose_sim >= 0.5 in calibrated scoring. (2026-05-30)
+_NEAR_DOMAIN_MECH_CAP = 0.5  # mechanism_dist cap for same-L0/L1-domain papers (near_domain_signal)
+_SERENDIPITY_GATE = 0.20  # absolute floor for the percentile gate (never pass below this)
+_FALLBACK_FLOOR = 0.10    # relaxed floor for single-best fallback when nothing passes gate
 
 _SCORE_CHUNK_SIZE = 12   # papers per LLM call (keeps each request under the API timeout)
 _SCORE_MAX_CANDIDATES = 60  # cap total candidates scored (cost/latency bound)
 
+
+# ---------------------------------------------------------------------------
+# Phase 2: Theme schema extraction + analogy-poor detection (Step 9, element E)
+# ---------------------------------------------------------------------------
+
+def _extract_theme_schema(theme: ThemeInput, model: str) -> dict:
+    """Extract Purpose/Mechanism schema from the theme; detect analogy-poor themes.
+
+    Returns dict: {purpose, mechanism, is_analogy_poor, poor_reason}
+
+    Analogy-poor = understanding-oriented ("why does X happen naturally") or relies on
+    implicit physical phenomena — cross-domain analogies require a transferable mechanism.
+    System-building and design themes are NOT analogy-poor (spec §7 Step 9, element E).
+    On LLM failure, returns a safe fallback (is_analogy_poor=False).
+    """
+    text = _llm_call({
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Extract the structural Purpose and Mechanism from a research theme.\n"
+                    "- purpose: the abstract problem structure (e.g. 'optimize allocation under "
+                    "uncertainty', 'improve retention through progressive difficulty calibration').\n"
+                    "- mechanism: the intended solution approach / key lever "
+                    "(e.g. 'predictive model + safety margins', 'UX difficulty curve + onboarding').\n"
+                    "- is_analogy_poor: true ONLY IF the theme is purely UNDERSTANDING-ORIENTED "
+                    "('why/how does phenomenon X happen naturally') rather than problem-solving, "
+                    "OR if the mechanism is entirely implicit physical phenomena with no "
+                    "transferable logic. Design, engineering, and optimization themes are NOT poor.\n"
+                    "- poor_reason: brief Japanese explanation if is_analogy_poor; empty otherwise.\n"
+                    'Return JSON only: {"purpose": "...", "mechanism": "...", '
+                    '"is_analogy_poor": false, "poor_reason": ""}'
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"テーマ: {theme.theme_overview[:500]}\n"
+                    f"目的: {theme.goal}\n"
+                    f"分野: {theme.scope.field}\n"
+                    f"アプローチ種別: {theme.approach_type}"
+                ),
+            },
+        ],
+        "temperature": 0.1,
+    })
+    fallback = {
+        "purpose": theme.goal,
+        "mechanism": "",
+        "is_analogy_poor": False,
+        "poor_reason": "",
+    }
+    if not text:
+        return fallback
+    obj = _parse_object(text)
+    if not obj:
+        return fallback
+    return {
+        "purpose": str(obj.get("purpose") or theme.goal),
+        "mechanism": str(obj.get("mechanism") or ""),
+        "is_analogy_poor": bool(obj.get("is_analogy_poor", False)),
+        "poor_reason": str(obj.get("poor_reason") or ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Structure-abduction PM scoring (Step 9, element A)
+# ---------------------------------------------------------------------------
+
+def _score_b_chunk_pm(
+    papers_input: List[dict],
+    theme_schema: dict,
+    theme: ThemeInput,
+    model: str,
+) -> Optional[list]:
+    """Score papers via Purpose-Mechanism structure abduction (SOLVENT framework).
+
+    Each paper's P/M is extracted FIRST, then compared to the theme schema.
+    This avoids the LLM surface-keyword bias of one-shot similarity scoring.
+    Returns JSON list with purpose_sim, mechanism_dist, connection_label, serendipity_rationale.
+    """
+    text = _llm_call({
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Score research papers for serendipitous cross-domain analogy "
+                    "(SOLVENT / structure-abduction method).\n\n"
+                    f"THEME PURPOSE: {theme_schema['purpose']}\n"
+                    f"THEME MECHANISM: {theme_schema['mechanism']}\n\n"
+                    "STEP 1 — Extract for each paper:\n"
+                    "  paper_purpose: the SPECIFIC problem structure being solved. Be "
+                    "concrete (e.g., 'measure height-induced sensor bias in condition X' "
+                    "NOT just 'measure stability').\n"
+                    "  paper_mechanism: the SPECIFIC approach used (e.g., 'cross-validate "
+                    "3 indices via sensor array' NOT 'measurement study').\n\n"
+                    "STEP 2 — Score purpose_sim (0.0–1.0):\n"
+                    "  Does the paper's SPECIFIC causal/structural problem map "
+                    "ISOMORPHICALLY onto the theme's purpose?\n"
+                    "  HIGH (0.7–1.0): Same TYPE of structural challenge in a DIFFERENT "
+                    "DOMAIN. Same causal chain, constraint type, or failure mode — but in "
+                    "a field unrelated to the theme's field.\n"
+                    "  MEDIUM (0.4–0.6): Partial structural overlap; some mapping exists "
+                    "but is not isomorphic.\n"
+                    "  LOW (0.0–0.3): Shares only a broad category label ('energy', "
+                    "'risk', 'stability', 'optimization', 'performance'). Sharing an "
+                    "abstract category is NOT evidence of structural analogy.\n"
+                    "  IMPORTANT: If the paper is in the SAME FIELD as the theme, "
+                    "purpose_sim is typically LOW for serendipity — the problem "
+                    "structure is likely addressed with already-known methods.\n\n"
+                    "STEP 3 — Score mechanism_dist (0.0–1.0):\n"
+                    "  How DIFFERENT is the paper's mechanism from the theme's?\n"
+                    "  HIGH (0.7–1.0): Completely different domain/field/approach.\n"
+                    "  LOW (0.0–0.3): Same field or very similar methodology.\n\n"
+                    "connection_label: 8–20 char Japanese label naming the structural "
+                    "bridge (not a category label — name the SPECIFIC mechanism that "
+                    "transfers).\n"
+                    "serendipity_rationale: one Japanese sentence. MUST cite a SPECIFIC "
+                    "finding or mechanism from the abstract. Phrases like 'both involve "
+                    "X' or 'both address Y risk' are FORBIDDEN — name the exact "
+                    "structural mechanism that maps.\n\n"
+                    "Return JSON array:\n"
+                    '[{"id":"...","paper_purpose":"...","paper_mechanism":"...",'
+                    '"purpose_sim":0.0,"mechanism_dist":0.0,'
+                    '"connection_label":"...","serendipity_rationale":"..."}]'
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"テーマの分野（これと同じ分野の論文は purpose_sim が低くなりやすい）: "
+                    f"{theme.scope.field}\n\n"
+                    f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
+                    "各論文のPurpose/Mechanismを先に抽出し、テーマとの類推スコアをJSON配列のみで返してください。"
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    })
+    return _parse_array(text) if text else None
+
+
+def _score_b_candidates_pm(
+    candidates: List[Work],
+    theme_schema: dict,
+    theme: ThemeInput,
+    model: str,
+) -> Dict[str, dict]:
+    """Score Track B candidates via PM structure abduction, in chunks.
+
+    Returns dict: work_id -> {purpose_sim, mechanism_dist, connection_label,
+                               serendipity_rationale, paper_purpose, paper_mechanism}
+    """
+    scores: Dict[str, dict] = {}
+    pool = candidates[:_SCORE_MAX_CANDIDATES]
+    for start in range(0, len(pool), _SCORE_CHUNK_SIZE):
+        chunk = pool[start:start + _SCORE_CHUNK_SIZE]
+        papers_input = [
+            {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:350]}
+            for w in chunk
+        ]
+        items = _score_b_chunk_pm(papers_input, theme_schema, theme, model)
+        if not items:
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            wid = str(item.get("id") or "")
+            if not wid:
+                continue
+            try:
+                purpose_sim = float(item.get("purpose_sim", 0.0))
+                mechanism_dist = float(item.get("mechanism_dist", 0.0))
+            except (TypeError, ValueError):
+                continue
+            scores[wid] = {
+                "purpose_sim": max(0.0, min(1.0, purpose_sim)),
+                "mechanism_dist": max(0.0, min(1.0, mechanism_dist)),
+                "connection_label": str(item.get("connection_label") or "構造的接続"),
+                "serendipity_rationale": str(item.get("serendipity_rationale") or ""),
+                "paper_purpose": str(item.get("paper_purpose") or ""),
+                "paper_mechanism": str(item.get("paper_mechanism") or ""),
+            }
+    return scores
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a: Percentile gate helper (Step 9, element D)
+# ---------------------------------------------------------------------------
+
+def _percentile_gate(scores: List[float], top_pct: float = 0.30, floor: float = 0.20) -> float:
+    """Compute the quality gate as the top-top_pct percentile, never below floor.
+
+    Example: 10 scores sorted desc [0.50,0.45,0.40,...]; top 30% = top 3; gate = 0.40.
+    Combined with floor: max(0.40, 0.20) = 0.40.
+    """
+    if not scores:
+        return floor
+    sorted_desc = sorted(scores, reverse=True)
+    k = max(1, int(len(sorted_desc) * top_pct))
+    return max(sorted_desc[k - 1], floor)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4b: MMR diversity re-ranking (Step 9, element D)
+# ---------------------------------------------------------------------------
+
+def _concept_jaccard(w1: Work, w2: Work) -> float:
+    """Jaccard similarity of level-1+ concept names between two papers."""
+    n1 = {t.name for t in w1.concept_tags if t.level >= 1 and t.name}
+    n2 = {t.name for t in w2.concept_tags if t.level >= 1 and t.name}
+    if not n1 or not n2:
+        return 0.0
+    return len(n1 & n2) / len(n1 | n2)
+
+
+def _mmr_rerank(
+    scored: List[Tuple[float, str, dict]],
+    id_to_work: Dict[str, Work],
+    lam: float = 0.7,
+    count: int = 10,
+) -> List[Tuple[float, str, dict]]:
+    """MMR diversity re-ranking using concept Jaccard as the redundancy signal.
+
+    lam=0.7 slightly favours serendipity score over diversity.
+    At each step picks the candidate that maximises:
+      lam * serendipity  -  (1 - lam) * max_sim_to_selected
+    """
+    if len(scored) <= 1:
+        return scored[:count]
+
+    remaining = list(scored)
+    selected: List[Tuple[float, str, dict]] = []
+
+    while remaining and len(selected) < count:
+        if not selected:
+            best = max(remaining, key=lambda x: x[0])
+        else:
+            def _mmr_val(cand: Tuple[float, str, dict]) -> float:
+                ser = cand[0]
+                w = id_to_work.get(cand[1])
+                if w is None:
+                    return -1.0
+                max_sim = max(
+                    _concept_jaccard(w, id_to_work[s[1]])
+                    for s in selected
+                    if s[1] in id_to_work
+                ) if selected else 0.0
+                return lam * ser - (1.0 - lam) * max_sim
+            best = max(remaining, key=_mmr_val)
+        selected.append(best)
+        remaining.remove(best)
+
+    return selected
+
+
+# ---------------------------------------------------------------------------
+# (Legacy) original surface/structure scoring — retained for classify_track_b
+# ---------------------------------------------------------------------------
 
 def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> Optional[list]:
     text = _llm_call({
@@ -331,55 +611,144 @@ def select_track_b(
     count: int = 1,
     gate: float = _SERENDIPITY_GATE,
     use_llm: bool = True,
+    theme_profile: Optional[ThemeProfile] = None,
 ) -> List[OutputEntry]:
-    """Select Track B entries by serendipity score = structure x distance, with quality gate.
+    """Select Track B entries via Purpose-Mechanism analogy scoring (SOLVENT, spec §7 Step 9).
 
-    Rejects Anomaly (structure_match < _STRUCTURE_MIN) and too-close papers
-    (surface_overlap > _SURFACE_MAX). Returns up to `count` entries sorted by score.
-    For the MVP, count=1 yields the single best serendipity unit; raise count to expand
-    while the gate keeps quality (volume is an output, not an input).
+    Pipeline:
+    1. Theme schema extraction: Purpose + Mechanism + analogy-poor detection.
+       Analogy-poor themes (understanding-oriented / implicit physics) return [] with
+       an informational message — 0 is correct, not a bug (element E).
+    2. PM structure abduction: each candidate's P/M is extracted first, THEN compared
+       to the theme schema. Avoids LLM surface-keyword bias (element A).
+    3. serendipity = purpose_sim * effective_mechanism_dist
+       Same-domain papers (near_domain_signal) get mechanism_dist capped at
+       _NEAR_DOMAIN_MECH_CAP to prevent false-serendipity (element B).
+    4. Percentile gate: max(top-30% threshold, gate floor). Adaptive, few high-quality
+       outputs, never pads volume (element D / plan.md §5.2).
+    5. MMR diversity re-ranking for count > 1 (concept Jaccard, element D).
+    6. Fallback: if nothing passes the gate, returns the single best paper with
+       serendipity >= _FALLBACK_FLOOR with a "(fallback)" note (element D).
+
+    `gate` acts as the ABSOLUTE FLOOR; the percentile threshold is computed dynamically
+    from the scored distribution (so it adapts to each theme's candidate pool).
+    `theme_profile` (ThemeProfile from concept_distance) supplies the near_domain_signal.
     """
     if not candidates:
         return []
     if not use_llm:
         return classify_track_b(candidates, theme, model, count=count, use_llm=False)
 
+    # Step 1: Theme schema extraction + analogy-poor detection
+    print("[info] テーマのPurpose/Mechanismスキーマを抽出中...")
+    theme_schema = _extract_theme_schema(theme, model)
+    print(f"[info] purpose  : {theme_schema['purpose']}")
+    print(f"[info] mechanism: {theme_schema['mechanism']}")
+    if theme_schema["is_analogy_poor"]:
+        print(f"[warn] analogy-poor テーマ: {theme_schema['poor_reason']}")
+        print("[info] Track B: 0件（このテーマは構造的類推が生じにくい性質のため）")
+        return []
+
     id_to_work = {w.id: w for w in candidates}
-    scores = _score_b_candidates(candidates, theme, model)
 
-    scored: List[Tuple[float, str, dict]] = []
+    # Step 2: PM structure abduction scoring
+    capped = min(len(candidates), _SCORE_MAX_CANDIDATES)
+    print(f"[info] P/M structure abduction: {capped} 件をスコアリング中...")
+    scores = _score_b_candidates_pm(candidates, theme_schema, theme, model)
+    print(f"[info] スコア取得: {len(scores)} 件")
+
+    # Step 3: Compute serendipity = purpose_sim * mechanism_dist (with near-domain cap)
+    all_scored: List[Tuple[float, str, dict]] = []
+    anomaly_count = 0
     for wid, s in scores.items():
-        if wid not in id_to_work:
+        work = id_to_work.get(wid)
+        if work is None:
             continue
-        structure = s["structure_match"]
-        surface = s["surface_overlap"]
-        if structure < _STRUCTURE_MIN:   # Anomaly: no genuine structural link
-            continue
-        if surface > _SURFACE_MAX:        # too close: myopia / literal similarity
-            continue
-        distance = 1.0 - surface
-        serendipity = structure * distance
-        if serendipity < gate:
-            continue
-        scored.append((serendipity, wid, s))
+        purpose_sim = s["purpose_sim"]
+        mechanism_dist = s["mechanism_dist"]
 
-    scored.sort(key=lambda x: x[0], reverse=True)
+        # Anomaly filter: no genuine purpose-structure alignment
+        if purpose_sim < _PURPOSE_SIM_MIN:
+            anomaly_count += 1
+            continue
 
+        # Near-domain cap: same L0/L1 domain -> cap mechanism_dist to prevent false-serendipity
+        is_near = theme_profile is not None and near_domain_signal(work, theme_profile)
+        if is_near:
+            mechanism_dist = min(mechanism_dist, _NEAR_DOMAIN_MECH_CAP)
+
+        serendipity = purpose_sim * mechanism_dist
+        all_scored.append((serendipity, wid, s))
+
+    print(f"[info] Anomaly除外 (purpose_sim<{_PURPOSE_SIM_MIN}): {anomaly_count} 件")
+    print(f"[info] serendipity 候補: {len(all_scored)} 件")
+
+    if not all_scored:
+        print("[info] Track B: 0件（有効スコア候補なし）")
+        return []
+
+    # Step 4: Percentile gate (top-30% or absolute floor, whichever is higher)
+    ser_vals = [x[0] for x in all_scored]
+    effective_gate = _percentile_gate(ser_vals, top_pct=0.30, floor=gate)
+    passed = [(ser, wid, s) for ser, wid, s in all_scored if ser >= effective_gate]
+    print(
+        f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
+        f"-> 通過 {len(passed)}/{len(all_scored)} 件"
+    )
+
+    # Fallback when nothing passes the gate (query relaxation: single best)
+    if not passed:
+        fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
+        best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
+        if best_list:
+            ser, wid, s = best_list[0]
+            s = dict(s)
+            s["serendipity_rationale"] = f"（fallback）{s.get('serendipity_rationale', '')}"
+            work = id_to_work[wid]
+            mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) \
+                if theme_profile is not None and near_domain_signal(work, theme_profile) \
+                else s["mechanism_dist"]
+            print(f"[info] fallback: 1件返却 (ser={ser:.3f}, ゲート未満だが >= {_FALLBACK_FLOOR})")
+            return [OutputEntry(
+                work=work,
+                relationship="",
+                abstract_summary="",
+                caution="",
+                track="B",
+                label=f"【接続点: {s['connection_label']}（fallback）】",
+                relationship_level="",
+                distance_score=round(mech_dist, 2),
+                structure_score=round(s["purpose_sim"], 2),
+                serendipity_score=round(ser, 2),
+                usefulness_hypothesis=s["serendipity_rationale"],
+            )]
+        print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
+        return []
+
+    # Step 5: MMR diversity re-ranking for count > 1
+    if count > 1 and len(passed) > 1:
+        final = _mmr_rerank(passed, id_to_work, lam=0.7, count=count)
+    else:
+        final = sorted(passed, key=lambda x: x[0], reverse=True)[:count]
+
+    # Step 6: Build OutputEntry list
     result: List[OutputEntry] = []
-    for serendipity, wid, s in scored[:count]:
-        distance = 1.0 - s["surface_overlap"]
+    for serendipity, wid, s in final:
+        work = id_to_work[wid]
+        is_near = theme_profile is not None and near_domain_signal(work, theme_profile)
+        mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) if is_near else s["mechanism_dist"]
         result.append(OutputEntry(
-            work=id_to_work[wid],
+            work=work,
             relationship="",
             abstract_summary="",
             caution="",
             track="B",
             label=f"【接続点: {s['connection_label']}】",
             relationship_level="",
-            distance_score=round(distance, 2),
-            structure_score=round(s["structure_match"], 2),
+            distance_score=round(mech_dist, 2),
+            structure_score=round(s["purpose_sim"], 2),
             serendipity_score=round(serendipity, 2),
-            usefulness_hypothesis=s.get("connection_rationale", ""),
+            usefulness_hypothesis=s.get("serendipity_rationale", ""),
         ))
     return result
 

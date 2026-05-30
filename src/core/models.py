@@ -32,6 +32,14 @@ class ThemeInput:
 
 
 @dataclass
+class Concept:
+    """An OpenAlex concept tag with hierarchy level (0=root) and relevance score."""
+    name: str
+    level: int
+    score: float
+
+
+@dataclass
 class Work:
     id: str
     title: str
@@ -41,6 +49,9 @@ class Work:
     cited_by_count: int
     abstract: Optional[str]
     concepts: List[str] = field(default_factory=list)
+    # Structured concept tags (level/score) for objective domain-distance scoring.
+    # Non-breaking: `concepts` (display names) is retained for existing callers.
+    concept_tags: List[Concept] = field(default_factory=list)
     author_affiliations: List[str] = field(default_factory=list)
     publication_type: Optional[str] = None
     is_retracted: bool = False

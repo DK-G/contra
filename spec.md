@@ -140,6 +140,17 @@
   - **選別を距離スコア × 構造スコアの乗算**に。Gentnerの Analogy を狙い Anomaly を強制棄却、近接（マイオピア）も棄却。
   - **出力を4部構成に復活**（概要/関連性/役に立つ可能性の仮説/注意点）。旧3行構成では中核の「役に立つ可能性の仮説」が脱落していた。
   - 想定ユーザーを「作者自身が第一」と正直化。Web化・課金は plan.md §12「将来構想（任意）」へ分離。
+- `2026-05-30` **Step 9 複数本モードの品質再設計（SOLVENT Purpose-Mechanism 再構築）**:
+  - **選別スコア設計変更**: `structure × (1-surface)` → `purpose_sim × mechanism_dist` に変更（SOLVENT framework。Precision@1% 0.67→0.92 の最大レバレッジ）。`_score_b_chunk_pm` でstructure abduction（LLMに P/M を先抽出→比較）を実装し、表層バイアスを除去。
+  - **analogy-poor 検出**: `_extract_theme_schema` でテーマの Purpose/Mechanism を LLM 抽出し、understanding-oriented（「なぜ X が起きるか」）または暗黙物理特性依存テーマを `is_analogy_poor=True` と判定し 0件返却。system-building/experiment テーマは analogy-rich（wind/social 両テーマが実験測定テーマとして正しく analogy-rich 判定→量子情報拡散等の真の遠類推を発見）。
+  - **客観距離（要素B）**: `concept_distance.py` を Wu-Palmer 近似の **L0/L1 Jaccard 階層距離**に刷新（`ThemeProfile` dataclass。完全名一致cosineを廃棄）。`near_domain_signal` が L0/L1 Jaccard > 0.30 の論文で `mechanism_dist` を 0.5 にキャップし、同分野の false-serendipity を抑制。
+  - **質ゲート（要素D）**: 固定 0.25 → **テーマ別 percentile-top30%**（絶対下限 = `--serendipity-gate` CLI 引数、デフォルト 0.20）に変更。0件時は `_FALLBACK_FLOOR=0.10` で単一 best fallback。
+  - **多様性再ランキング**: count > 1 のとき concept Jaccard を redundancy 信号とする **MMR** (λ=0.7) を適用。
+  - **`_PURPOSE_SIM_MIN` 引き上げ**: 0.25 → **0.40**（検証で 0.25–0.39 が抽象カテゴリ一致のみで構造類推なし）。
+  - **検証結果（4テーマ）**: energy=Digital Twin / Climate Risk 選出（power-grid 近接なし ✓）、casual_puzzle=5件（複数本 ✓）、social=量子情報拡散（異常拡散・スクランブリング） serendipity=0.56（purpose_sim=0.7 × mechanism_dist=0.8）で真の遠類推 ✓、wind=海洋循環(AMOC)・気候経済（4件）。
+  - **却下した案**: (1) Step9 試行の objective concept band filter（_SHARED_MIN/MAX）→ complete-name cosine は false-far を生む根本問題があるため，L0/L1 Jaccard 階層距離に置換。(2) min(concept_distance, llm_distance) 結合→ 2信号の min は false-near/false-far を両方残す、cap 方式に変更。
+  - **残課題（Phase 2）**: 収集クエリが隣接ドメイン論文を引き込む問題（citation 2-hop / MAX-MIN多様化）。生成プロンプト（usefulness_hypothesis の具体的機構引用強化）。
+
 - `2026-05-29` Track A/B の詳細仕様を確定（Step 1完了）※一部は2026-05-30の再定義で更新:
   - 関係度表現: 5段階ラベル（高/中高/中/中低/低）を採用。数値は却下（LLMによる偽精度を避ける）。
   - 関係軸ラベル: LLMがテーマから広めの候補リストを生成し、各論文に最適なラベルを割り当てる方式を採用。固定語彙は却下（テーマごとに最適化され、複数回利用で多角的な視座が蓄積される設計）。

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from src.core.models import Work
+from src.core.models import Concept, Work
 
 
 class OpenAlexParseError(ValueError):
@@ -42,6 +42,29 @@ def _get_concepts(work: Dict[str, Any]) -> List[str]:
             if name:
                 names.append(str(name))
     return names
+
+
+def _get_concept_tags(work: Dict[str, Any]) -> List[Concept]:
+    """Build structured concept tags (name/level/score) for objective distance scoring."""
+    concepts = work.get("concepts") or []
+    tags: List[Concept] = []
+    if isinstance(concepts, list):
+        for item in concepts:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("display_name") or ""
+            if not name:
+                continue
+            try:
+                level = int(item.get("level") or 0)
+            except (TypeError, ValueError):
+                level = 0
+            try:
+                score = float(item.get("score") or 0.0)
+            except (TypeError, ValueError):
+                score = 0.0
+            tags.append(Concept(name=str(name), level=level, score=score))
+    return tags
 
 
 def _get_author_affiliations(work: Dict[str, Any]) -> List[str]:
@@ -83,6 +106,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
             abstract = restored if restored else None
         venue = _get_venue(work)
         concepts = _get_concepts(work)
+        concept_tags = _get_concept_tags(work)
         affiliations = _get_author_affiliations(work)
         publication_type = work.get("type") or work.get("type_crossref") or None
         is_retracted = bool(work.get("is_retracted") or False)
@@ -102,6 +126,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         cited_by_count=cited,
         abstract=abstract,
         concepts=concepts,
+        concept_tags=concept_tags,
         author_affiliations=affiliations,
         publication_type=str(publication_type) if publication_type else None,
         is_retracted=is_retracted,

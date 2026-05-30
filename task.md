@@ -6,26 +6,26 @@
 
 ## 作業中 (In Progress)
 
-### Step 7: サンプル生成・品質評価
-*   複数テーマで実行し、「遠いが構造一致」の1本が出るか評価
-*   Anomaly（無意味接続）・近接（マイオピア）が混入しないことを確認
-*   「役に立つ可能性の仮説」が論文固有で汎用文になっていないか確認
-*   進捗: casual_puzzle テーマで `--single` のE2E成功（IDC theory「興味のループ」をスコア0.63で選出、4部構成出力を確認）
+（なし）
 
 ---
 
 ## 未着手 (To Do)
 
-> 2026-05-30 のMVP E2E成功後に判明した較正・検証タスク。詳細は [`plan.md`](plan.md) §6。
-
-### Step 9 (B): 複数本モードの挙動検証
-*   `--track-b-count 10` 等で質ゲート通過数を確認し、「20本程度」のボリュームが質を保てるか検証
-*   閾値 `--serendipity-gate` の妥当な水準を複数テーマで探る
-*   通過数が少なすぎ／多すぎる場合のゲート・チャンク上限（`_SCORE_MAX_CANDIDATES`）の調整
+（なし）
 
 ---
 
 ## 完了 (Done)
+
+### Step 9 (B): 複数本モードの品質再設計（2026-05-30 完了）
+*   Track B 選別を SOLVENT の Purpose-Mechanism スキーマで再構築。`_score_b_chunk_pm` で structure abduction（P/M先抽出→比較）を実装。
+*   serendipity = purpose_sim × mechanism_dist（乗算）に変更。テーマ別 analogy-poor 検出（`_extract_theme_schema`）を追加。
+*   `concept_distance.py` を Wu-Palmer 近似の L0/L1 Jaccard 階層距離に刷新（`ThemeProfile`）。near_domain_signal で同分野論文の mechanism_dist を 0.5 にキャップし false-serendipity を抑制。
+*   質ゲートを固定 0.25 → テーマ別 percentile-top30%（絶対下限 0.20）に変更。MMR 多様性再ランキング・0件 fallback を実装。
+*   `_PURPOSE_SIM_MIN` 0.25 → 0.40 に引き上げ（抽象カテゴリ一致の排除）。
+*   検証（4テーマ）: energy=Digital Twin 選出（power-grid 近接なし ✓）、casual=5件（複数本 ✓）、social=量子情報拡散 serendipity=0.56（最高品質の遠類推 ✓）、wind=海洋循環・気候経済（4件）。
+*   wind/social は analogy-poor でなく approach_type:experiment の測定テーマゆえ正しく analogy-rich と判定（前セッションの analogy-poor 予測は旧スコアリングのバグによる誤診と確認）。
 
 ### 2026-05-30 Git公開準備
 *   生成済み `output/` を Git 管理対象から外し、今後の実行結果が公開差分に混ざらないよう `.gitignore` に追加。

@@ -7,6 +7,7 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
+from typing import Optional
 
 from src.core.input_schema import InputValidationError, validate_and_normalize
 from src.core.models import OutputDocument, OutputSection, ThemeHistory
@@ -20,6 +21,7 @@ from src.pipeline.collect import (
     collect_track_b,
     filter_by_used_ids,
 )
+from src.pipeline.concept_distance import ThemeProfile, build_theme_profile
 from src.pipeline.export import export_markdown
 from src.pipeline.generate import GenerationConfig, fill_track_entries, generate_entries
 from src.pipeline.history import compute_theme_hash, load_history, save_history
@@ -283,12 +285,33 @@ def main(argv: list[str]) -> int:
         )
         print(f"[ok] Track A: {len(track_a_entries)} entries")
 
-    print("[info] selecting Track B (serendipity = structure x distance, gated)...")
+    # Build objective domain profile for near_domain_signal() in Track B selection.
+    # Reuse Track A near-field works when available; otherwise collect a small set.
+    theme_profile: Optional[ThemeProfile] = None
+    if use_llm:
+        profile_works = track_a_works if track_a_works else []
+        if not profile_works:
+            try:
+                print("[info] 近傍論文を収集してドメインプロファイルを構築中...")
+                profile_works = collect_and_filter(theme, config, max_count=20, require_abstract=True)
+            except (OpenAlexError, OpenAlexParseError) as exc:
+                print(f"[warn] domain profile collection failed: {exc}", file=sys.stderr)
+                profile_works = []
+        if profile_works:
+            theme_profile = build_theme_profile(profile_works)
+            if not theme_profile.is_empty():
+                print(
+                    f"[ok] ドメインプロファイル: L0/L1={len(theme_profile.l01)}概念, "
+                    f"L2-L4={len(theme_profile.l234)}概念 ({len(profile_works)}件から)"
+                )
+
+    print("[info] Track B 選別中 (serendipity = purpose × mechanism, gated)...")
     track_b_entries = select_track_b(
         track_b_works, theme, model=args.llm_model,
         count=track_b_target, gate=args.serendipity_gate, use_llm=use_llm,
+        theme_profile=theme_profile,
     )
-    print(f"[ok] Track B: {len(track_b_entries)} entries (gate={args.serendipity_gate})")
+    print(f"[ok] Track B: {len(track_b_entries)} 件 (gate={args.serendipity_gate})")
 
     gen_config = GenerationConfig(llm_model=args.llm_model, llm_max_items=args.llm_max_items)
 
