@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import statistics
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -57,6 +59,11 @@ def _parse_object(text: str) -> Optional[dict]:
         except json.JSONDecodeError:
             pass
     return None
+
+
+def _median(xs: Sequence[float]) -> float:
+    """Median of a numeric sequence (0.0 if empty). Robust aggregator for vote-K scoring."""
+    return float(statistics.median(xs)) if xs else 0.0
 
 
 def _generate_axis_labels(theme: ThemeInput, model: str) -> List[str]:
@@ -315,7 +322,7 @@ def _extract_theme_schema(theme: ThemeInput, model: str) -> dict:
                 ),
             },
         ],
-        "temperature": 0.1,
+        "temperature": 0.0,  # schema drives every candidate's score; determinize it (R5)
     })
     fallback = {
         "purpose": theme.goal,
@@ -459,50 +466,86 @@ def _score_b_chunk_pm(
     return _parse_array(text) if text else None
 
 
+def _score_one_chunk_complete(
+    papers_input: List[dict],
+    chunk_ids: List[str],
+    theme_schema: dict,
+    theme: ThemeInput,
+    model: str,
+) -> Dict[str, Tuple[dict, bool]]:
+    """Score one chunk once, with completeness-retry. Returns wid -> (row, is_complete).
+
+    gpt-4o-mini stochastically drops the later relational fields (connection_label/
+    serendipity_rationale/paper_finding) under the longer P/M+finding instruction.
+    Error-aware retry (STROT-style): name the offending ids/fields and ask the model to
+    fix them, keeping per paper the most complete row. Beats a blind re-roll for mini.
+    """
+    chunk_best: Dict[str, Tuple[dict, bool]] = {}
+    feedback = ""
+    for _ in range(_SCORE_PM_MAX_ATTEMPTS):
+        items = _score_b_chunk_pm(papers_input, theme_schema, theme, model, retry_feedback=feedback)
+        for wid, row, complete in _parse_pm_items(items):
+            if wid not in chunk_best or (complete and not chunk_best[wid][1]):
+                chunk_best[wid] = (row, complete)
+        missing = [wid for wid in chunk_ids if wid not in chunk_best or not chunk_best[wid][1]]
+        if not missing:
+            break
+        feedback = (
+            "PREVIOUS ATTEMPT WAS INCOMPLETE. These paper ids had empty/omitted "
+            "connection_label, serendipity_rationale, or paper_finding: "
+            f"{json.dumps(missing, ensure_ascii=False)}. Re-output the FULL JSON array for "
+            "ALL papers, and for these ids ensure paper_finding (concrete direction＋"
+            "magnitude), connection_label, and serendipity_rationale (with the finding "
+            "embedded in the variable correspondence) are ALL non-empty."
+        )
+    return chunk_best
+
+
 def _score_b_candidates_pm(
     candidates: List[Work],
     theme_schema: dict,
     theme: ThemeInput,
     model: str,
+    vote_k: int = 1,
 ) -> Dict[str, dict]:
     """Score Track B candidates via PM structure abduction, in chunks.
 
     Returns dict: work_id -> {purpose_sim, mechanism_dist, connection_label,
                                serendipity_rationale, paper_purpose, paper_mechanism}
+
+    vote_k > 1 enables self-consistency (R5): each chunk is scored vote_k times and the
+    numeric fields (purpose_sim/mechanism_dist) are reduced by MEDIAN, which damps the
+    rating jitter that flips borderline candidates across the output floor. Text fields are
+    taken from the most complete vote. vote_k=1 (default) keeps single-pass cost/behavior.
     """
     scores: Dict[str, dict] = {}
     pool = candidates[:_SCORE_MAX_CANDIDATES]
+    k = max(1, vote_k)
     for start in range(0, len(pool), _SCORE_CHUNK_SIZE):
         chunk = pool[start:start + _SCORE_CHUNK_SIZE]
         papers_input = [
             {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:500]}
             for w in chunk
         ]
-        # gpt-4o-mini stochastically drops the later relational fields (connection_label/
-        # serendipity_rationale/paper_finding) under the longer P/M+finding instruction.
-        # Error-aware retry (STROT-style): name the offending ids/fields and ask the model to
-        # fix them, keeping per paper the most complete row. Beats a blind re-roll for mini.
         chunk_ids = [w.id for w in chunk]
-        chunk_best: Dict[str, Tuple[dict, bool]] = {}
-        feedback = ""
-        for _ in range(_SCORE_PM_MAX_ATTEMPTS):
-            items = _score_b_chunk_pm(papers_input, theme_schema, theme, model, retry_feedback=feedback)
-            for wid, row, complete in _parse_pm_items(items):
-                if wid not in chunk_best or (complete and not chunk_best[wid][1]):
-                    chunk_best[wid] = (row, complete)
-            missing = [wid for wid in chunk_ids if wid not in chunk_best or not chunk_best[wid][1]]
-            if not missing:
-                break
-            feedback = (
-                "PREVIOUS ATTEMPT WAS INCOMPLETE. These paper ids had empty/omitted "
-                "connection_label, serendipity_rationale, or paper_finding: "
-                f"{json.dumps(missing, ensure_ascii=False)}. Re-output the FULL JSON array for "
-                "ALL papers, and for these ids ensure paper_finding (concrete direction＋"
-                "magnitude), connection_label, and serendipity_rationale (with the finding "
-                "embedded in the variable correspondence) are ALL non-empty."
-            )
-        for wid, (row, _complete) in chunk_best.items():
-            scores[wid] = row
+        if k == 1:
+            chunk_best = _score_one_chunk_complete(papers_input, chunk_ids, theme_schema, theme, model)
+            for wid, (row, _complete) in chunk_best.items():
+                scores[wid] = row
+            continue
+        # Self-consistency: aggregate k independent scorings by median of the numeric fields.
+        votes: Dict[str, dict] = defaultdict(lambda: {"purpose_sim": [], "mechanism_dist": [], "rows": []})
+        for _ in range(k):
+            chunk_best = _score_one_chunk_complete(papers_input, chunk_ids, theme_schema, theme, model)
+            for wid, (row, complete) in chunk_best.items():
+                votes[wid]["purpose_sim"].append(row["purpose_sim"])
+                votes[wid]["mechanism_dist"].append(row["mechanism_dist"])
+                votes[wid]["rows"].append((row, complete))
+        for wid, v in votes.items():
+            rep = dict(max(v["rows"], key=lambda rc: rc[1])[0])  # prefer a complete row for text
+            rep["purpose_sim"] = _median(v["purpose_sim"])
+            rep["mechanism_dist"] = _median(v["mechanism_dist"])
+            scores[wid] = rep
     return scores
 
 
@@ -543,33 +586,9 @@ def _parse_pm_items(items: Optional[list]) -> List[Tuple[str, dict, bool]]:
 # Phase 2 (R2): candidate-level hollow gate — Structural Depth judge
 # ---------------------------------------------------------------------------
 
-def _judge_b_candidates(
-    survivors: List[Tuple[Work, dict]],
-    theme_schema: dict,
-    theme: ThemeInput,
-    model: str,
-) -> Dict[str, dict]:
-    """Judge each surviving candidate for analogy QUALITY (a separate pass, not folded into
-    scoring — bynote H2: separate calls beat overloading one prompt for small models).
-
-    Scores Structural Depth (Gentner: are the object mappings deep & one-to-one, or a hollow
-    shared-category match?) and Applicability, and flags whether an explicit causal Purpose→
-    Mechanism link exists (false = observational/understanding-oriented or surface-attribute
-    mapping → hollow). Returns wid -> {structural_depth, applicability, has_causal_pm,
-    judge_reason} with scores normalized to 0-1. Empty dict on LLM failure (fail-open).
-    """
-    if not survivors:
-        return {}
-    judged_input = [
-        {
-            "id": w.id,
-            "paper_purpose": s.get("paper_purpose", ""),
-            "paper_mechanism": s.get("paper_mechanism", ""),
-            "paper_finding": s.get("paper_finding", ""),
-            "proposed_mapping": s.get("serendipity_rationale", ""),
-        }
-        for w, s in survivors[:_JUDGE_MAX_CANDIDATES]
-    ]
+def _judge_one_pass(judged_input: List[dict], theme_schema: dict, model: str) -> Dict[str, dict]:
+    """One judge call. Returns wid -> {structural_depth, applicability, has_causal_pm,
+    judge_reason} normalized to 0-1. Empty on LLM failure (fail-open)."""
     text = _llm_call({
         "model": model,
         "input": [
@@ -631,6 +650,64 @@ def _judge_b_candidates(
             "applicability": max(0.0, min(1.0, ap / 10.0)),
             "has_causal_pm": bool(item.get("has_causal_pm", True)),
             "judge_reason": str(item.get("judge_reason") or ""),
+        }
+    return result
+
+
+def _judge_b_candidates(
+    survivors: List[Tuple[Work, dict]],
+    theme_schema: dict,
+    theme: ThemeInput,
+    model: str,
+    vote_k: int = 1,
+) -> Dict[str, dict]:
+    """Judge each surviving candidate for analogy QUALITY (a separate pass, not folded into
+    scoring — bynote H2: separate calls beat overloading one prompt for small models).
+
+    Scores Structural Depth (Gentner: are the object mappings deep & one-to-one, or a hollow
+    shared-category match?) and Applicability, and flags whether an explicit causal Purpose→
+    Mechanism link exists (false = observational/understanding-oriented or surface-attribute
+    mapping → hollow). Returns wid -> {structural_depth, applicability, has_causal_pm,
+    judge_reason} with scores normalized to 0-1. Empty dict on LLM failure (fail-open).
+
+    vote_k > 1 enables self-consistency (R5): the judge is run vote_k times and structural_depth
+    /applicability are reduced by MEDIAN, has_causal_pm by MAJORITY (ties keep True = fail-open).
+    This stabilizes the hollow gate's hard threshold so borderline candidates stop flipping in/
+    out across runs. vote_k=1 (default) keeps single-call cost/behavior.
+    """
+    if not survivors:
+        return {}
+    judged_input = [
+        {
+            "id": w.id,
+            "paper_purpose": s.get("paper_purpose", ""),
+            "paper_mechanism": s.get("paper_mechanism", ""),
+            "paper_finding": s.get("paper_finding", ""),
+            "proposed_mapping": s.get("serendipity_rationale", ""),
+        }
+        for w, s in survivors[:_JUDGE_MAX_CANDIDATES]
+    ]
+    k = max(1, vote_k)
+    if k == 1:
+        return _judge_one_pass(judged_input, theme_schema, model)
+
+    agg: Dict[str, dict] = defaultdict(lambda: {"sd": [], "ap": [], "causal": [], "reason": []})
+    for _ in range(k):
+        for wid, r in _judge_one_pass(judged_input, theme_schema, model).items():
+            agg[wid]["sd"].append(r["structural_depth"])
+            agg[wid]["ap"].append(r["applicability"])
+            agg[wid]["causal"].append(bool(r["has_causal_pm"]))
+            if r["judge_reason"]:
+                agg[wid]["reason"].append(r["judge_reason"])
+    result: Dict[str, dict] = {}
+    for wid, a in agg.items():
+        n = len(a["causal"])
+        result[wid] = {
+            "structural_depth": _median(a["sd"]),
+            "applicability": _median(a["ap"]),
+            # majority vote; tie keeps True (fail-open — has_causal_pm=False only adds a caveat)
+            "has_causal_pm": sum(a["causal"]) * 2 >= n,
+            "judge_reason": a["reason"][0] if a["reason"] else "",
         }
     return result
 
@@ -812,6 +889,7 @@ def select_track_b(
     theme_profile: Optional[ThemeProfile] = None,
     struct_depth_gate: float = _STRUCT_DEPTH_GATE,
     output_floor: float = _OUTPUT_FLOOR,
+    vote_k: int = 1,
 ) -> List[OutputEntry]:
     """Select Track B entries via Purpose-Mechanism analogy scoring (SOLVENT, spec §7 Step 9).
 
@@ -853,8 +931,9 @@ def select_track_b(
 
     # Step 2: PM structure abduction scoring
     capped = min(len(candidates), _SCORE_MAX_CANDIDATES)
-    print(f"[info] P/M structure abduction: {capped} 件をスコアリング中...")
-    scores = _score_b_candidates_pm(candidates, theme_schema, theme, model)
+    vote_note = f" (self-consistency x{vote_k})" if vote_k > 1 else ""
+    print(f"[info] P/M structure abduction: {capped} 件をスコアリング中{vote_note}...")
+    scores = _score_b_candidates_pm(candidates, theme_schema, theme, model, vote_k=vote_k)
     print(f"[info] スコア取得: {len(scores)} 件")
 
     # Step 3: Compute serendipity = purpose_sim * mechanism_dist (with near-domain cap)
@@ -893,7 +972,8 @@ def select_track_b(
     # Fail-open: candidates the judge did not return a verdict for are kept.
     print(f"[info] hollow ゲート: {len(all_scored)} 件を judge 評価中 (structural depth)...")
     judged = _judge_b_candidates(
-        [(id_to_work[wid], s) for _, wid, s in all_scored], theme_schema, theme, model
+        [(id_to_work[wid], s) for _, wid, s in all_scored], theme_schema, theme, model,
+        vote_k=vote_k,
     )
     kept: List[Tuple[float, str, dict]] = []
     hollow_count = 0
