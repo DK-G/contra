@@ -742,6 +742,37 @@ def _concept_jaccard(w1: Work, w2: Work) -> float:
     return len(n1 & n2) / len(n1 | n2)
 
 
+def _maxmin_diversify(works: List[Work], k: int) -> List[Work]:
+    """Farthest-point (MAX-MIN) selection over concept space: pick k works that are mutually
+    most distant, where distance = 1 - concept Jaccard (level-1+ concept names).
+
+    The merged Track B pool (LLM keyword queries + citation 2-hop) can exceed the scoring
+    cap; truncating it by list order would drop the far citation candidates (appended last)
+    and spend the P/M budget on near-duplicate clusters. MAX-MIN instead spreads the budget
+    across distinct concept regions: it seeds with works[0] (stable input order -> deterministic,
+    R5) and greedily adds the work whose MINIMUM distance to the already-selected set is the
+    LARGEST. See collection research memo §具体設計 step 3.
+    """
+    if k <= 0:
+        return []
+    if len(works) <= k:
+        return list(works)
+    selected: List[Work] = [works[0]]
+    remaining: List[Work] = list(works[1:])
+    # Track each remaining work's HIGHEST similarity to any selected work (= its lowest distance).
+    max_sim: Dict[str, float] = {w.id: _concept_jaccard(w, selected[0]) for w in remaining}
+    while len(selected) < k and remaining:
+        # Pick the work with the lowest max-similarity (largest min-distance) to the selected set.
+        best = min(remaining, key=lambda w: max_sim[w.id])
+        selected.append(best)
+        remaining.remove(best)
+        for w in remaining:
+            sim = _concept_jaccard(w, best)
+            if sim > max_sim[w.id]:
+                max_sim[w.id] = sim
+    return selected
+
+
 def _mmr_rerank(
     scored: List[Tuple[float, str, dict]],
     id_to_work: Dict[str, Work],
@@ -926,6 +957,15 @@ def select_track_b(
         print(f"[warn] analogy-poor テーマ: {theme_schema['poor_reason']}")
         print("[info] Track B: 0件（このテーマは構造的類推が生じにくい性質のため）")
         return []
+
+    # Diversify before scoring: when the merged pool (keyword + citation 2-hop) exceeds the
+    # scoring cap, MAX-MIN concept-Jaccard selection picks the mutually most-distant subset so
+    # the P/M budget covers diverse domains instead of truncating by arbitrary list order — the
+    # far citation-2-hop candidates are appended last and would otherwise be cut (element D).
+    if len(candidates) > _SCORE_MAX_CANDIDATES:
+        before = len(candidates)
+        candidates = _maxmin_diversify(candidates, _SCORE_MAX_CANDIDATES)
+        print(f"[info] MAX-MIN 多様化: {before} -> {len(candidates)} 件 (concept-Jaccard 最遠選抜)")
 
     id_to_work = {w.id: w for w in candidates}
 
