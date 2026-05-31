@@ -247,6 +247,11 @@ _PURPOSE_SIM_MIN = 0.20   # below this = essentially no problem-structure alignm
 _NEAR_DOMAIN_MECH_CAP = 0.5  # mechanism_dist cap for same-L0/L1-domain papers (near_domain_signal)
 _SERENDIPITY_GATE = 0.20  # absolute floor for the percentile gate (never pass below this)
 _FALLBACK_FLOOR = 0.10    # relaxed floor for single-best fallback when nothing passes gate
+# Output-quality floor (spec: 本数は質ゲート超え数, NOT a fixed count). count is a MAX cap;
+# we emit only candidates clearing this absolute serendipity bar, so thin themes return a few
+# strong units instead of padding to count with weak 0.3-level seeds (2026-05-31 regression).
+# 0.35 ~= purpose_sim 0.5 (genuine structural alignment) x mechanism_dist 0.7 (far).
+_OUTPUT_FLOOR = 0.35
 
 _SCORE_CHUNK_SIZE = 8    # papers per LLM call. Smaller chunk = more per-paper attention
 # (fewer dropped connection_label/serendipity_rationale fields) and keeps each request
@@ -806,6 +811,7 @@ def select_track_b(
     use_llm: bool = True,
     theme_profile: Optional[ThemeProfile] = None,
     struct_depth_gate: float = _STRUCT_DEPTH_GATE,
+    output_floor: float = _OUTPUT_FLOOR,
 ) -> List[OutputEntry]:
     """Select Track B entries via Purpose-Mechanism analogy scoring (SOLVENT, spec §7 Step 9).
 
@@ -920,13 +926,17 @@ def select_track_b(
     ser_vals = [x[0] for x in all_scored]
     effective_gate = _percentile_gate(ser_vals, top_pct=0.30, floor=gate)
     passed = [(ser, wid, s) for ser, wid, s in all_scored if ser >= effective_gate]
+    # Output-quality bar: count is a MAX cap, not a fixed target. Emit only units clearing
+    # output_floor so thin themes return a few strong analogies, not 0.3-level padding.
+    qualified = [(ser, wid, s) for ser, wid, s in passed if ser >= output_floor]
     print(
         f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
-        f"-> 通過 {len(passed)}/{len(all_scored)} 件"
+        f"-> 通過 {len(passed)}/{len(all_scored)} 件; "
+        f"出力品質フロア{output_floor:.2f}超 {len(qualified)} 件 (上限{count})"
     )
 
-    # Fallback when nothing passes the gate (query relaxation: single best)
-    if not passed:
+    # Fallback when nothing clears the output-quality bar (query relaxation: single best)
+    if not qualified:
         fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
         best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
         if best_list:
@@ -954,11 +964,11 @@ def select_track_b(
         print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
         return []
 
-    # Step 5: MMR diversity re-ranking for count > 1
-    if count > 1 and len(passed) > 1:
-        final = _mmr_rerank(passed, id_to_work, lam=0.7, count=count)
+    # Step 5: MMR diversity re-ranking for count > 1 (over the output-qualified set; count = cap)
+    if count > 1 and len(qualified) > 1:
+        final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
     else:
-        final = sorted(passed, key=lambda x: x[0], reverse=True)[:count]
+        final = sorted(qualified, key=lambda x: x[0], reverse=True)[:count]
 
     # Step 6: Build OutputEntry list
     result: List[OutputEntry] = []
