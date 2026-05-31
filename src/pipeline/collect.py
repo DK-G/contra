@@ -301,6 +301,131 @@ def generate_assumption_queries(theme: ThemeInput, model: str = "gpt-4o-mini") -
         return []
 
 
+def _strip_openalex_id(raw: Optional[str]) -> str:
+    """Reduce a full OpenAlex id URL to its bare id ('https://openalex.org/C1' -> 'C1')."""
+    if not raw:
+        return ""
+    return str(raw).rsplit("/", 1)[-1]
+
+
+def _bridge_pool_from_seeds(seeds: List[Work], cap: int = 50) -> List[str]:
+    """Pick up to `cap` bridge works (the referenced_works of the near-field seeds).
+
+    Bridges are the shared references through which a 2-hop citation scan crosses field
+    boundaries. References cited by MULTIPLE seeds rank first (a stronger bridge); the
+    remaining refs are then taken round-robin across seeds so every seed contributes
+    bridges (diversity), instead of one reference-heavy seed dominating the pool.
+    """
+    counts: dict = {}
+    per_seed: List[List[str]] = []
+    first_seen: List[str] = []
+    fs_set: Set[str] = set()
+    for seed in seeds:
+        refs: List[str] = []
+        for r in (seed.referenced_works or []):
+            if r and r not in refs:  # dedupe within a single seed, keep order
+                refs.append(r)
+        per_seed.append(refs)
+        for r in refs:
+            counts[r] = counts.get(r, 0) + 1
+            if r not in fs_set:
+                fs_set.add(r)
+                first_seen.append(r)
+
+    selected: List[str] = []
+    seen: Set[str] = set()
+    # 1) shared refs first (cited by >=2 seeds), most-shared first, ties by first-seen order
+    for r in sorted((x for x in first_seen if counts[x] >= 2), key=lambda x: -counts[x]):
+        if len(selected) >= cap:
+            break
+        if r not in seen:
+            seen.add(r)
+            selected.append(r)
+    # 2) remaining refs round-robin across seeds
+    idxs = [0] * len(per_seed)
+    while len(selected) < cap:
+        progressed = False
+        for i, refs in enumerate(per_seed):
+            while idxs[i] < len(refs):
+                r = refs[idxs[i]]
+                idxs[i] += 1
+                if r not in seen:
+                    seen.add(r)
+                    selected.append(r)
+                    progressed = True
+                    break
+            if len(selected) >= cap:
+                break
+        if not progressed:
+            break
+    return selected
+
+
+def _seed_l0_concept_ids(seeds: List[Work]) -> List[str]:
+    """Bare L0 (root-domain) concept ids of the seeds, deduped — the home domain to exclude."""
+    out: List[str] = []
+    seen: Set[str] = set()
+    for seed in seeds:
+        for tag in seed.concept_tags:
+            if tag.level == 0:
+                cid = _strip_openalex_id(tag.id)
+                if cid and cid not in seen:
+                    seen.add(cid)
+                    out.append(cid)
+    return out
+
+
+def collect_citation_candidates(
+    seeds: List[Work],
+    config: Optional[CollectConfig] = None,
+    *,
+    max_count: int = 60,
+    used_ids: Optional[Set[str]] = None,
+    bridge_cap: int = 50,
+    max_refs: int = 100,
+) -> List[Work]:
+    """Citation 2-hop scan: papers citing the seeds' references but OUTSIDE the seeds' domain.
+
+    seed --cites--> bridge (shared reference) <--cites-- candidate. Candidates that cite the
+    same foundational works as the near-field seeds, yet carry none of the seeds' L0 root
+    concepts, are structurally linked yet cross-domain — exactly what surface keyword search
+    misses. `type:article` and `referenced_works_count:<max_refs` drop reviews / intro-citation
+    dumps (the false-bridge traps). Seeds and `used_ids` are never returned.
+    """
+    cfg = config or CollectConfig()
+    bridges = _bridge_pool_from_seeds(seeds, cap=bridge_cap)
+    if not bridges:
+        return []
+
+    exclude: Set[str] = {s.id for s in seeds} | set(used_ids or set())
+    filter_parts = ["cites:" + "|".join(bridges)]
+    for cid in _seed_l0_concept_ids(seeds):
+        filter_parts.append(f"concepts.id:!{cid}")
+    filter_parts.append("type:article")
+    filter_parts.append(f"referenced_works_count:<{max_refs}")
+    filter_str = ",".join(filter_parts)
+
+    collector = Collector(cfg)
+    out: List[Work] = []
+    seen: Set[str] = set()
+    for page in range(1, cfg.max_pages + 1):
+        payload = collector.client.get(
+            {"filter": filter_str, "per-page": cfg.per_page, "page": page}
+        )
+        new = 0
+        for w in filter_retracted(normalize_results(payload)):
+            if w.id in exclude or w.id in seen:
+                continue
+            seen.add(w.id)
+            out.append(w)
+            new += 1
+            if len(out) >= max_count:
+                return out
+        if new == 0:
+            break
+    return out
+
+
 def collect_track_b(
     theme: ThemeInput,
     config: Optional[CollectConfig] = None,
@@ -356,6 +481,7 @@ __all__ = [
     "collect_candidates",
     "collect_and_filter",
     "collect_track_b",
+    "collect_citation_candidates",
     "filter_by_used_ids",
     "generate_track_b_query",
     "generate_track_b_queries",

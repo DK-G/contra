@@ -33,10 +33,15 @@ class ThemeInput:
 
 @dataclass
 class Concept:
-    """An OpenAlex concept tag with hierarchy level (0=root) and relevance score."""
+    """An OpenAlex concept tag with hierarchy level (0=root) and relevance score.
+
+    `id` is the OpenAlex concept id (full URL or bare 'C...'); the citation 2-hop
+    collector uses the seeds' L0 ids to exclude their home domain via the API filter.
+    """
     name: str
     level: int
     score: float
+    id: str = ""
 
 
 @dataclass
@@ -55,6 +60,8 @@ class Work:
     author_affiliations: List[str] = field(default_factory=list)
     publication_type: Optional[str] = None
     is_retracted: bool = False
+    # OpenAlex ids of works this paper cites; seeds the citation 2-hop bridge pool.
+    referenced_works: List[str] = field(default_factory=list)
 
 
 @dataclass

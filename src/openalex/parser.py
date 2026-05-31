@@ -63,7 +63,8 @@ def _get_concept_tags(work: Dict[str, Any]) -> List[Concept]:
                 score = float(item.get("score") or 0.0)
             except (TypeError, ValueError):
                 score = 0.0
-            tags.append(Concept(name=str(name), level=level, score=score))
+            cid = item.get("id") or ""
+            tags.append(Concept(name=str(name), level=level, score=score, id=str(cid)))
     return tags
 
 
@@ -109,6 +110,8 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         concept_tags = _get_concept_tags(work)
         affiliations = _get_author_affiliations(work)
         publication_type = work.get("type") or work.get("type_crossref") or None
+        referenced = work.get("referenced_works") or []
+        referenced_works = [str(r) for r in referenced if r] if isinstance(referenced, list) else []
         is_retracted = bool(work.get("is_retracted") or False)
         title_str = str(title)
         if not is_retracted:
@@ -130,6 +133,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         author_affiliations=affiliations,
         publication_type=str(publication_type) if publication_type else None,
         is_retracted=is_retracted,
+        referenced_works=referenced_works,
     )
 
 

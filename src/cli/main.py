@@ -20,6 +20,7 @@ from src.pipeline.collect import (
     _norm_doi,
     _norm_title,
     collect_and_filter,
+    collect_citation_candidates,
     collect_track_b,
     filter_by_used_ids,
 )
@@ -314,6 +315,35 @@ def main(argv: list[str]) -> int:
                     f"[ok] ドメインプロファイル: L0/L1={len(theme_profile.l01)}概念, "
                     f"L2-L4={len(theme_profile.l234)}概念 ({len(profile_works)}件から)"
                 )
+
+        # Citation 2-hop: harvest cross-domain papers linked to the near-field seeds via shared
+        # references (bridges), excluding the seeds' L0 home domain. Merged into the Track B pool
+        # so downstream P/M scoring and gates stay unchanged (staged rollout step 1).
+        if profile_works:
+            try:
+                print("[info] citation 2-hop で遠ドメイン候補を収集中...")
+                cite_cands = collect_citation_candidates(
+                    profile_works, config, max_count=60, used_ids=used_ids
+                )
+                existing_ids = {w.id for w in track_b_works} | used_ids
+                existing_titles = {_norm_title(w.title) for w in track_b_works} | used_titles
+                existing_dois = {_norm_doi(w.doi) for w in track_b_works if w.doi} | used_dois
+                added = 0
+                for w in cite_cands:
+                    nt, nd = _norm_title(w.title), _norm_doi(w.doi)
+                    if (w.id not in existing_ids and w.abstract
+                            and not (nt and nt in existing_titles)
+                            and not (nd and nd in existing_dois)):
+                        existing_ids.add(w.id)
+                        if nt:
+                            existing_titles.add(nt)
+                        if nd:
+                            existing_dois.add(nd)
+                        track_b_works.append(w)
+                        added += 1
+                print(f"[ok] citation 2-hop: +{added} 件 (Track B 候補 {len(track_b_works)} 件に統合)")
+            except (OpenAlexError, OpenAlexParseError) as exc:
+                print(f"[warn] citation 2-hop collection failed: {exc}", file=sys.stderr)
 
     print("[info] Track B 選別中 (serendipity = purpose × mechanism, gated)...")
     track_b_entries = select_track_b(
