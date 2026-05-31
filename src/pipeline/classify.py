@@ -251,6 +251,13 @@ _PURPOSE_SIM_MIN = 0.20   # below this = essentially no problem-structure alignm
 # 0.40 floor was redundant DOUBLE-GATING that bisected borderline far candidates on rating
 # flipping-noise (bynote: hard floors fail under rater noise; rely on rank/percentile +
 # downstream judge). 0.20 only drops near-zero alignment; percentile gate + R2 judge select.
+# R3 (2026-05-31): purpose_sim is scored as a DISCRETE anchored level, not a free 0-1 float.
+# bynote (rater stability): a discrete ordinal scale + task-anchored criteria is the cheapest,
+# most effective de-jitter — it removes within-band sampling noise (the run-to-run 0.7<->0.0
+# flips seen on borderline far candidates) AND pins the "same-field -> low" calibration the
+# model used to ignore. The three levels map 1:1 onto the prior HIGH/MEDIUM/LOW float bands,
+# so the serendipity multiplication and the floors below are unchanged.
+_PURPOSE_LEVELS = {"none": 0.10, "partial": 0.45, "strong": 0.70}
 _NEAR_DOMAIN_MECH_CAP = 0.5  # mechanism_dist cap for same-L0/L1-domain papers (near_domain_signal)
 _SERENDIPITY_GATE = 0.20  # absolute floor for the percentile gate (never pass below this)
 _FALLBACK_FLOOR = 0.10    # relaxed floor for single-best fallback when nothing passes gate
@@ -358,7 +365,8 @@ def _score_b_chunk_pm(
 
     Each paper's P/M is extracted FIRST, then compared to the theme schema.
     This avoids the LLM surface-keyword bias of one-shot similarity scoring.
-    Returns JSON list with purpose_sim, mechanism_dist, connection_label, serendipity_rationale.
+    Returns JSON list with purpose_level (mapped to purpose_sim), mechanism_dist,
+    connection_label, serendipity_rationale.
 
     `retry_feedback` (error-aware retry, STROT-style): when a previous attempt dropped the
     relational spine fields, this names the offending ids/fields so the model fixes them,
@@ -380,20 +388,24 @@ def _score_b_chunk_pm(
                     "NOT just 'measure stability').\n"
                     "  paper_mechanism: the SPECIFIC approach used (e.g., 'cross-validate "
                     "3 indices via sensor array' NOT 'measurement study').\n\n"
-                    "STEP 2 — Score purpose_sim (0.0–1.0):\n"
-                    "  Does the paper's SPECIFIC causal/structural problem map "
-                    "ISOMORPHICALLY onto the theme's purpose?\n"
-                    "  HIGH (0.7–1.0): Same TYPE of structural challenge in a DIFFERENT "
-                    "DOMAIN. Same causal chain, constraint type, or failure mode — but in "
-                    "a field unrelated to the theme's field.\n"
-                    "  MEDIUM (0.4–0.6): Partial structural overlap; some mapping exists "
-                    "but is not isomorphic.\n"
-                    "  LOW (0.0–0.3): Shares only a broad category label ('energy', "
-                    "'risk', 'stability', 'optimization', 'performance'). Sharing an "
-                    "abstract category is NOT evidence of structural analogy.\n"
-                    "  IMPORTANT: If the paper is in the SAME FIELD as the theme, "
-                    "purpose_sim is typically LOW for serendipity — the problem "
-                    "structure is likely addressed with already-known methods.\n\n"
+                    "STEP 2 — Classify purpose structural alignment as a DISCRETE "
+                    "LEVEL (purpose_level). Judge the CAUSAL STRUCTURE, NOT the topic "
+                    "words. A coinciding topic word (e.g. both mention 'diffusion', "
+                    "'spread', 'network', 'risk') is by itself NEITHER alignment NOR a "
+                    "disqualifier — only the mapping of causal roles (what drives what) "
+                    "counts. Pick EXACTLY ONE label — do NOT output an in-between "
+                    "number:\n"
+                    "  \"strong\": the paper's SPECIFIC causal mechanism maps onto the "
+                    "theme's purpose — same causal chain, constraint type, or failure "
+                    "mode — AND the paper is from a DIFFERENT FIELD/discipline than the "
+                    "theme. The shared topic word may coincide; what makes it strong is "
+                    "the transferable causal correspondence across distant fields.\n"
+                    "  \"partial\": a real causal correspondence exists but is "
+                    "incomplete, one-directional, or only loosely isomorphic.\n"
+                    "  \"none\": NO transferable causal-role correspondence — the papers "
+                    "share only a broad category/topic word with no mapped mechanism; "
+                    "OR the paper is in the SAME FIELD/discipline as the theme (its "
+                    "problem is solved by already-known methods, so no serendipity).\n\n"
                     "STEP 3 — Score mechanism_dist (0.0–1.0):\n"
                     "  How DIFFERENT is the paper's mechanism from the theme's?\n"
                     "  HIGH (0.7–1.0): Completely different domain/field/approach.\n"
@@ -446,14 +458,15 @@ def _score_b_chunk_pm(
                     "NEVER be empty or omitted, even for low-scoring papers.\n\n"
                     "Return JSON array:\n"
                     '[{"id":"...","paper_purpose":"...","paper_mechanism":"...",'
-                    '"paper_finding":"...","purpose_sim":0.0,"mechanism_dist":0.0,'
+                    '"paper_finding":"...","purpose_level":"none|partial|strong",'
+                    '"mechanism_dist":0.0,'
                     '"connection_label":"...","serendipity_rationale":"..."}]'
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"テーマの分野（これと同じ分野の論文は purpose_sim が低くなりやすい）: "
+                    f"テーマの分野（これと同じ分野の論文は purpose_level が none になりやすい）: "
                     f"{theme.scope.field}\n\n"
                     f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
                     "各論文のPurpose/Mechanismを先に抽出し、テーマとの類推スコアをJSON配列のみで返してください。"
@@ -562,8 +575,16 @@ def _parse_pm_items(items: Optional[list]) -> List[Tuple[str, dict, bool]]:
         wid = str(item.get("id") or "")
         if not wid:
             continue
+        level = item.get("purpose_level")
+        if isinstance(level, str) and level.strip().lower() in _PURPOSE_LEVELS:
+            purpose_sim = _PURPOSE_LEVELS[level.strip().lower()]
+        else:
+            # backward-compat: a raw float purpose_sim is still accepted (older payloads / fallback)
+            try:
+                purpose_sim = float(item.get("purpose_sim", 0.0))
+            except (TypeError, ValueError):
+                purpose_sim = 0.0
         try:
-            purpose_sim = float(item.get("purpose_sim", 0.0))
             mechanism_dist = float(item.get("mechanism_dist", 0.0))
         except (TypeError, ValueError):
             continue
