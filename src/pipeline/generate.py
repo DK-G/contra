@@ -11,6 +11,13 @@ from src.core.models import OutputEntry, ThemeInput, Work
 from src.openai_client import OpenAIError, extract_output_text, responses_create
 
 
+# Abstract budget for the single-paper generation calls. Findings worth citing (rates,
+# effect sizes, the core mechanism) often sit mid/late in an abstract; the old 500-char
+# cut starved the hypothesis of exactly that material and forced hollow paraphrase. A
+# single-paper call has ample token headroom, so we feed (almost) the whole abstract.
+_GEN_ABSTRACT_CHARS = 2000
+
+
 @dataclass
 class GenerationConfig:
     relationship_stub: str = "テーマとの関連が示唆される。"
@@ -116,7 +123,7 @@ def _llm_generate_track_a_text(
                     f"テーマの不安点: {theme.concern or 'なし'}\n"
                     f"関係軸: {label}  関係度: {level}\n"
                     f"論文タイトル: {work.title}\n"
-                    f"Abstract: {(work.abstract or '')[:500]}\n\n"
+                    f"Abstract: {(work.abstract or '')[:_GEN_ABSTRACT_CHARS]}\n\n"
                     "以下の制約を守ってJSON形式で返してください。\n"
                     "summary: abstractを自分の言葉で言い換えた2文。数値や実験条件があれば含めること。\n"
                     "relationship: 関係軸と関係度を踏まえた1文（40-80字）。abstractの具体的な手法・対象・条件を1つ以上引用すること。\n"
@@ -181,7 +188,7 @@ def _llm_generate_track_b_text(
                         f"接続点ラベル: {label}\n\n"
                         f"【論文】\n"
                         f"タイトル: {work.title}\n"
-                        f"Abstract: {(work.abstract or '')[:500]}\n\n"
+                        f"Abstract: {(work.abstract or '')[:_GEN_ABSTRACT_CHARS]}\n\n"
                         f"【テーマ】\n"
                         f"概要: {theme.theme_overview[:200]}\n"
                         f"目的: {theme.goal}\n"
