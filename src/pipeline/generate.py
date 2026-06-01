@@ -172,18 +172,16 @@ def _llm_generate_track_b_text(
                 {
                     "role": "system",
                     "content": (
-                        "Generate a 4-part Japanese writeup for a Track B paper from a DISTANT domain "
-                        "that shares one transferable relational structure with the theme. "
-                        "You are given a pre-identified VARIABLE CORRESPONDENCE (接続の構造) between "
-                        "the paper and the theme — treat it as the SPINE of the hypothesis, and flesh "
-                        "it out with the paper's concrete findings from the abstract. "
-                        "Return JSON: {summary, relationship, hypothesis, caution}"
+                        "あなたは遠い分野の論文を『自分の研究テーマに転用できる関係構造はあるか』という視点で読む"
+                        "専門アナリストである。話題・分野の表層一致ではなく、機能・因果の関係構造を1対1で対応づけ、"
+                        "転用可能で検証可能な仮説と、その転用が破断する境界条件を出す。"
+                        "出力は JSON {summary, relationship, hypothesis, caution}（4キーのみ、日本語）。"
                     ),
                 },
                 {
                     "role": "user",
                     "content": (
-                        f"【接続の構造】← この変数対応を仮説の背骨にせよ\n"
+                        f"【接続の構造（事前同定された変数対応）】\n"
                         f"{rationale or '（未指定：Abstractから構造的対応を自分で同定すること）'}\n"
                         f"接続点ラベル: {label}\n\n"
                         f"【論文】\n"
@@ -193,20 +191,30 @@ def _llm_generate_track_b_text(
                         f"概要: {theme.theme_overview[:200]}\n"
                         f"目的: {theme.goal}\n"
                         f"不安点: {theme.concern or 'なし'}\n\n"
-                        "以下の制約を守ってJSON形式で返してください。\n"
+                        "■ 出力前に必ず内部で実行する手順（思考過程は出力しない）:\n"
+                        "S1 抽出: 論文側の中核 object と高次の因果/機構関係（例『AがBを生む』『CがDを抑える』）、"
+                        "およびテーマ側の object を取り出す。\n"
+                        "S2 写像: 論文側 object ↔ テーマ側 object を〈機能役割のみ〉で1対1対応させる"
+                        "（表層・属性・話題での対応は不可）。対応が成立しない要素は caution へ回す。\n"
+                        "S3 背骨命名: 両者に保存される因果/機構＝Shared Relational Structure を1つ命名する。\n\n"
+                        "■ 上記をもとに、次の4キーをJSONで返す:\n"
                         "summary: Abstractを忠実に日本語へ翻訳し2〜3文に凝縮する。言い換え・解釈・推測を加えず、"
-                        "原文の主張と具体的発見（数値・効果量・実験条件があれば保持）をそのまま訳すこと。"
-                        "原文にない情報を足さないこと。\n"
-                        "relationship: 接続点ラベルが指す『関係構造』が、なぜ表層分野は違えどテーマと一致するのかを1文で。表層キーワードの一致でなく構造の一致を述べること。\n"
-                        f"hypothesis: ★中核。【接続の構造】に示された〈論文側の変数〉↔〈テーマ側の変数〉の対応を背骨とし、"
-                        "(1) その〈論文側の変数〉を、Abstractの具体的な発見・数値・効果量・実験手法のいずれかで肉付けして名指しし、"
-                        "(2) それがテーマの〈対応する局面〉に何を示唆するかを述べること（1〜2文）。"
-                        "【接続の構造】に方向や数値・効果量・指数（例: 「多いほど遅くなる」「ln(t)/√t」）が含まれていれば、"
-                        "それを hypothesis 本文に明示的に引用すること（抽象化して落とさない）。"
-                        "数値はAbstractに逐語的に存在するものだけを引用し、Abstractに無い数値を創作しないこと。"
-                        "数値が無ければ方向性（増減・大小）と論文の方法論的特徴（実験設計・比較条件・対象）で述べること。\n"
-                        f"テーマの不安点（{theme.concern or '上記不安点'}）の言い換えや、論文の具体的内容に触れない汎用的転用仮説は禁止。\n"
-                        "caution: この論文をテーマに転用する際に崩れる前提（対象母集団・実験条件・文化的文脈などの具体的な差異）を1文で指摘すること。「転用に注意」などの汎用文は禁止。\n"
+                        "原文の主張と具体的発見（数値・効果量・実験条件があれば保持）をそのまま訳す。原文にない情報を足さない。\n"
+                        "relationship: S3 の Shared Relational Structure を1文で述べる。"
+                        "『論文側〈X〉とテーマ側〈Y〉が、同じ〈因果/機構の関係〉で対応する』形にすること。\n"
+                        "  禁止: 『両方とも〜を扱う/〜が重要』式のカテゴリ・話題一致の言い換え、表層キーワードの一致。\n"
+                        "hypothesis: ★中核。S2 の写像を背骨に、論文側の機構を Abstract の具体発見（数値・効果量・手法・方向）で"
+                        "名指しして肉付けし、テーマ側の対応局面へ candidate inference として射影する。次の3点を1〜2文に含める:"
+                        " [主張＝二値で検証可能な命題] / [因果連鎖＝論文機構→テーマ変数] / [測定可能な変数・指標]。"
+                        "【接続の構造】に方向・数値・効果量・指数（例『多いほど遅くなる』『ln(t)/√t』）があれば本文に明示引用する"
+                        "（抽象化して落とさない）。数値はAbstractに逐語的に存在するものだけを引用し創作しない；"
+                        "数値が無ければ方向性（増減・大小）と方法論的特徴（実験設計・比較条件・対象）で述べる。\n"
+                        "  禁止: 『〜の可能性がある/重要な要因となる』等の bloat、論文に無い能力の創作、"
+                        "『〜という手法群が役立つ』式のカテゴリ一般化（必ず当該論文固有の機構を名指す）、"
+                        f"テーマ不安点（{theme.concern or '上記不安点'}）の単なる言い換え。\n"
+                        "caution: 論文側機構の動作前提・制約・失敗モードを1つ抽出し、テーマ環境に照らして"
+                        "〈S2 のどの1対1対応が破断するか〉を具体的に1文で述べる。\n"
+                        "  禁止: 『対象母集団/文化的背景が違うため注意』『さらなる検証が必要』『データが必要』等の定型・紋切り型。\n"
                         + (f"\n{extra}" if extra else "")
                     ),
                 },
