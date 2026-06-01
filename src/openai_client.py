@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -14,10 +15,17 @@ class OpenAIError(RuntimeError):
     pass
 
 
+# HTTP status codes worth retrying (transient server/rate-limit conditions).
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
 @dataclass
 class OpenAIConfig:
     api_key: str
     base_url: str = "https://api.openai.com/v1"
+    timeout_sec: int = 60
+    max_retries: int = 3
+    backoff_base_sec: float = 1.0
 
 
 def _require_api_key() -> str:
@@ -34,14 +42,26 @@ def responses_create(payload: Dict[str, Any], config: OpenAIConfig | None = None
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Content-Type", "application/json")
     req.add_header("Authorization", f"Bearer {cfg.api_key}")
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise OpenAIError(f"openai http error: {exc.code} {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise OpenAIError(f"openai request failed: {exc}") from exc
+
+    last_err: Exception | None = None
+    for attempt in range(cfg.max_retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=cfg.timeout_sec) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            last_err = OpenAIError(f"openai http error: {exc.code} {detail}")
+            if exc.code not in _RETRYABLE_STATUS:
+                raise last_err from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            # Socket read timeouts surface as bare TimeoutError/OSError and are NOT
+            # wrapped in URLError, so they must be caught here or they escape OpenAIError.
+            last_err = OpenAIError(f"openai request failed: {exc}")
+
+        if attempt < cfg.max_retries:
+            time.sleep(cfg.backoff_base_sec * (2 ** attempt))
+
+    raise last_err if last_err is not None else OpenAIError("openai request failed")
 
 
 def extract_output_text(response: Dict[str, Any]) -> str:
