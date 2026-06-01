@@ -942,6 +942,8 @@ def select_track_b(
     struct_depth_gate: float = _STRUCT_DEPTH_GATE,
     output_floor: float = _OUTPUT_FLOOR,
     vote_k: int = 1,
+    emit_fallback: bool = True,
+    diag: Optional[dict] = None,
 ) -> List[OutputEntry]:
     """Select Track B entries via Purpose-Mechanism analogy scoring (SOLVENT, spec §7 Step 9).
 
@@ -964,9 +966,17 @@ def select_track_b(
     from the scored distribution (so it adapts to each theme's candidate pool).
     `theme_profile` (ThemeProfile from concept_distance) supplies the near_domain_signal.
     """
+    def _diag(**kw):
+        # M3 saturation telemetry: let the caller distinguish "no good NEW candidate this run"
+        # (theme saturated -> graceful note, no weak fallback report) from analogy-poor themes.
+        if diag is not None:
+            diag.update(kw)
+
     if not candidates:
+        _diag(status="empty_pool", scored=0, anomaly=0, hollow=0, passed=0, qualified=0)
         return []
     if not use_llm:
+        _diag(status="ok")
         return classify_track_b(candidates, theme, model, count=count, use_llm=False)
 
     # Step 1: Theme schema extraction + analogy-poor detection
@@ -977,6 +987,7 @@ def select_track_b(
     if theme_schema["is_analogy_poor"]:
         print(f"[warn] analogy-poor テーマ: {theme_schema['poor_reason']}")
         print("[info] Track B: 0件（このテーマは構造的類推が生じにくい性質のため）")
+        _diag(status="analogy_poor", scored=0, anomaly=0, hollow=0, passed=0, qualified=0)
         return []
 
     # Diversify before scoring: when the merged pool (keyword + citation 2-hop) exceeds the
@@ -1025,6 +1036,8 @@ def select_track_b(
 
     if not all_scored:
         print("[info] Track B: 0件（有効スコア候補なし）")
+        _diag(status="saturated", reason="all_anomaly", scored=len(scores),
+              anomaly=anomaly_count, hollow=0, passed=0, qualified=0)
         return []
 
     # Step 3.5 (R2): candidate-level hollow gate. A separate judge pass scores the survivors
@@ -1061,6 +1074,8 @@ def select_track_b(
     all_scored = kept
     if not all_scored:
         print("[info] Track B: 0件（全候補が hollow と判定）")
+        _diag(status="saturated", reason="all_hollow", scored=len(scores),
+              anomaly=anomaly_count, hollow=hollow_count, passed=0, qualified=0)
         return []
 
     # Step 4: Percentile gate (top-30% or absolute floor, whichever is higher)
@@ -1076,8 +1091,15 @@ def select_track_b(
         f"出力品質フロア{output_floor:.2f}超 {len(qualified)} 件 (上限{count})"
     )
 
-    # Fallback when nothing clears the output-quality bar (query relaxation: single best)
+    # Fallback when nothing clears the output-quality bar (query relaxation: single best).
+    # M3: when emit_fallback is off (saturation mode), suppress the weak single-best so a
+    # depleted run reports "saturated" instead of a misleadingly thin report.
     if not qualified:
+        if not emit_fallback:
+            print("[info] Track B: 0件（output_floor超え無し・fallback抑止＝飽和扱い）")
+            _diag(status="saturated", reason="no_qualified", scored=len(scores),
+                  anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
+            return []
         fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
         best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
         if best_list:
@@ -1089,6 +1111,8 @@ def select_track_b(
                 if theme_profile is not None and near_domain_signal(work, theme_profile) \
                 else s["mechanism_dist"]
             print(f"[info] fallback: 1件返却 (ser={ser:.3f}, ゲート未満だが >= {_FALLBACK_FLOOR})")
+            _diag(status="fallback", reason="weak_best", scored=len(scores),
+                  anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
             return [OutputEntry(
                 work=work,
                 relationship="",
@@ -1103,6 +1127,8 @@ def select_track_b(
                 usefulness_hypothesis=s["serendipity_rationale"],
             )]
         print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
+        _diag(status="saturated", reason="below_fallback_floor", scored=len(scores),
+              anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
         return []
 
     # Step 5: MMR diversity re-ranking for count > 1 (over the output-qualified set; count = cap)
@@ -1130,6 +1156,8 @@ def select_track_b(
             serendipity_score=round(serendipity, 2),
             usefulness_hypothesis=s.get("serendipity_rationale", ""),
         ))
+    _diag(status="ok", scored=len(scores), anomaly=anomaly_count, hollow=hollow_count,
+          passed=len(passed), qualified=len(qualified))
     return result
 
 

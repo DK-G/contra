@@ -170,6 +170,40 @@ def _write_gemini_materials(
     return out_path
 
 
+def _write_saturation_report(out_dir: Path, theme, track_b_works: list, diag: dict, args) -> int:
+    """M3: emit an explicit saturation note when no Track B unit cleared the output floor.
+
+    A depleted/saturated cycle should NOT pad the report with a single weak fallback paper —
+    that reads as a finding when it isn't. We instead leave a short, honest marker so a periodic
+    run is traceable, write no Gemini materials, and adopt nothing into history.
+    """
+    reason_label = {
+        "no_qualified": f"スコア候補はあったが output_floor({args.output_floor}) を超える接続点が無し",
+        "all_anomaly": "全候補が purpose 構造の整合を欠き棄却（有効スコア候補なし）",
+        "all_hollow": "全候補が hollow（構造対応が表層的）と判定",
+        "below_fallback_floor": "全候補がゲート未通過かつ fallback 閾値未満",
+    }.get(diag.get("reason", ""), diag.get("reason", "良候補乏しい"))
+    lines = [
+        "# Contra — 今回はテーマ飽和（新規良候補が乏しい回）",
+        "",
+        f"- テーマ: {theme.theme_overview[:120]}",
+        f"- 収集した Track B 候補: {len(track_b_works)} 件",
+        f"- 判定: **{reason_label}**",
+        f"- 内訳: scored={diag.get('scored', 0)} / anomaly={diag.get('anomaly', 0)} "
+        f"/ hollow={diag.get('hollow', 0)} / passed={diag.get('passed', 0)} / qualified=0",
+        "",
+        "今回の周期では、テーマと十分に遠く構造的に噛み合う新規論文が見つかりませんでした。",
+        "誤った弱い接続点で水増しレポートを出すことを避け、本回は **接続点 0 件** とします。",
+        "（履歴は更新していません。次回以降の収集多様化／最新性補充で井戸が再生すれば再び成立します。）",
+        "",
+    ]
+    md_path = out_dir / "brainstorm_output.md"
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("[info] M3: テーマ飽和と判定 → 飽和ノートを出力（弱fallback抑止・履歴不更新）")
+    print(f"[ok] wrote {md_path}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Contra CLI")
     parser.add_argument("--input", help="Path to input JSON")
@@ -196,6 +230,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
     parser.add_argument("--struct-depth-gate", type=float, default=0.30, help="Track B hollow gate: min judge structural_depth (0-1); only truly superficial (shared-category) candidates below it are rejected. Loose causal links are kept as thought-seeds")
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
+    parser.add_argument("--allow-weak-fallback", action="store_true", help="Track B saturation (M3): by default a run that yields NO unit above --output-floor reports 'テーマ飽和' instead of padding the report with a single weak fallback paper. Set this to restore the old single-best fallback behaviour")
     parser.add_argument("--score-votes", type=int, default=1, help="Track B self-consistency (R5): run the PM scoring + hollow judge K times and reduce by median/majority to stop borderline candidates flipping across the floor between runs. 1 = single pass (default); 3 = ~3x LLM cost for more stable scores")
     args = parser.parse_args(argv)
 
@@ -347,13 +382,21 @@ def main(argv: list[str]) -> int:
                 print(f"[warn] citation 2-hop collection failed: {exc}", file=sys.stderr)
 
     print("[info] Track B 選別中 (serendipity = purpose × mechanism, gated)...")
+    select_diag: dict = {}
     track_b_entries = select_track_b(
         track_b_works, theme, model=args.llm_model,
         count=track_b_target, gate=args.serendipity_gate, use_llm=use_llm,
         theme_profile=theme_profile, struct_depth_gate=args.struct_depth_gate,
         output_floor=args.output_floor, vote_k=args.score_votes,
+        emit_fallback=args.allow_weak_fallback, diag=select_diag,
     )
     print(f"[ok] Track B: {len(track_b_entries)} 件 (gate={args.serendipity_gate})")
+
+    # M3: graceful degradation. When the run produced no unit above the output-quality floor
+    # (theme saturated / no good NEW candidate this cycle), write an explicit saturation note
+    # instead of a misleadingly thin report, and skip Gemini materials + history adoption.
+    if not track_b_entries and select_diag.get("status") == "saturated":
+        return _write_saturation_report(out_dir, theme, track_b_works, select_diag, args)
 
     gen_config = GenerationConfig(llm_model=args.llm_model, llm_max_items=args.llm_max_items)
 
