@@ -6,7 +6,7 @@ import json
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from src.core.models import OutputEntry, ThemeInput, Work
 from src.openai_client import OpenAIError, extract_output_text, responses_create
@@ -834,100 +834,6 @@ def _mmr_rerank(
     return selected
 
 
-# ---------------------------------------------------------------------------
-# (Legacy) original surface/structure scoring — retained for classify_track_b
-# ---------------------------------------------------------------------------
-
-def _score_b_chunk(papers_input: List[dict], theme: ThemeInput, model: str) -> Optional[list]:
-    text = _llm_call({
-        "model": model,
-        "input": [
-            {
-                "role": "system",
-                "content": (
-                    "You score papers for serendipitous cross-domain analogy with a research theme, "
-                    "using Gentner's structure-mapping distinction. Judge every score RELATIVE TO THE "
-                    "THEME's own field and keywords given below — never against a fixed list of domains. "
-                    "For each paper return:\n"
-                    "- surface_overlap (0.0-1.0): how much the paper shares the THEME'S OWN surface markers "
-                    "— its home field, its keywords, and the named phenomenon / problem / population it "
-                    "studies. Use the theme's field and keywords as the reference for what counts as 'near'. "
-                    "Calibration:\n"
-                    "  0.0-0.2 = different field AND a different phenomenon/problem from the theme;\n"
-                    "  0.3-0.5 = a DIFFERENT applied field, but it studies the SAME phenomenon/problem the "
-                    "theme names (the theme's keyword concepts appear, just in another application context). "
-                    "This is ADJACENT, not far — score it here, NOT near 0;\n"
-                    "  0.6-0.8 = field that partly overlaps the theme's field;\n"
-                    "  0.9-1.0 = essentially the theme's own field.\n"
-                    "  Key rule: a paper that tackles the theme's same problem in a neighboring applied field "
-                    "is adjacent (0.3-0.5), so do not give it a near-0 surface just because the field label differs.\n"
-                    "- structure_match (0.0-1.0): shared RELATIONAL structure (a causal mechanism, feedback "
-                    "loop, recovery-from-failure dynamic, difficulty-progression curve) that TRANSFERS across "
-                    "different surface domains, independent of surface. High = a non-obvious mechanism that "
-                    "maps from a far field onto the theme; near 0 = no genuine shared mechanism (Anomaly). "
-                    "Note: if the structure seems to match ONLY because the paper studies the theme's same "
-                    "phenomenon in an adjacent field, that similarity belongs in surface_overlap (raise it), "
-                    "not in a claimed distant structural analogy.\n"
-                    "- connection_label: concise Japanese label (8-20 chars) naming the single structural connection.\n"
-                    "- connection_rationale: one Japanese sentence naming the shared relational structure.\n"
-                    "Return a JSON array: [{id, surface_overlap, structure_match, connection_label, connection_rationale}]"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"研究テーマ: {theme.theme_overview[:300]}\n"
-                    f"目的: {theme.goal}\n"
-                    f"テーマの分野（near の基準）: {theme.scope.field}\n"
-                    f"テーマのキーワード（near の表層マーカー）: {', '.join(theme.keywords.include) or '（なし）'}\n\n"
-                    f"論文:\n{json.dumps(papers_input, ensure_ascii=False)}\n\n"
-                    "上記テーマの分野・キーワードを near の基準として、各論文をスコアリングしてJSON配列のみ返してください。"
-                ),
-            },
-        ],
-        "temperature": 0.3,
-    })
-    return _parse_array(text) if text else None
-
-
-def _score_b_candidates(
-    candidates: List[Work],
-    theme: ThemeInput,
-    model: str,
-) -> Dict[str, dict]:
-    """Score each Track B candidate on surface_overlap and structure_match (Gentner).
-
-    Scores in chunks so each LLM request stays small and under the API read timeout.
-    """
-    scores: Dict[str, dict] = {}
-    pool = candidates[:_SCORE_MAX_CANDIDATES]
-    for start in range(0, len(pool), _SCORE_CHUNK_SIZE):
-        chunk = pool[start:start + _SCORE_CHUNK_SIZE]
-        papers_input = [
-            {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:300]}
-            for w in chunk
-        ]
-        items = _score_b_chunk(papers_input, theme, model)
-        if not items:
-            continue
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            wid = str(item.get("id", ""))
-            if not wid:
-                continue
-            try:
-                surface = float(item.get("surface_overlap", 0.5))
-                structure = float(item.get("structure_match", 0.0))
-            except (TypeError, ValueError):
-                continue
-            scores[wid] = {
-                "surface_overlap": max(0.0, min(1.0, surface)),
-                "structure_match": max(0.0, min(1.0, structure)),
-                "connection_label": str(item.get("connection_label", "接続点")),
-                "connection_rationale": str(item.get("connection_rationale", "")),
-            }
-    return scores
 
 
 def select_track_b(
@@ -1215,47 +1121,7 @@ def classify_track_b(
     return result[:count]
 
 
-# Legacy stub preserved for backward compatibility
-@dataclass
-class ClassifiedWorks:
-    related: list
-    broad: list
-    unrelated: list
-    unrelated_chapters: dict
-
-
-def classify_stub(
-    works: Iterable[Work],
-    include_keywords: Optional[Sequence[str]] = None,
-    exclude_keywords: Optional[Sequence[str]] = None,
-) -> ClassifiedWorks:
-    include = list(include_keywords or [])
-    exclude = list(exclude_keywords or [])
-    scored = [(work, _score_work(work, include, exclude)) for work in works]
-    scored.sort(key=lambda item: item[1], reverse=True)
-    ordered = [w for w, _ in scored]
-    total = len(ordered)
-    related_count = max(1, round(total * 0.6)) if total else 0
-    broad_count = max(0, round(total * 0.3))
-    related = ordered[:related_count]
-    broad = ordered[related_count: related_count + broad_count]
-    unrelated = ordered[related_count + broad_count:]
-    chapter_keys = ["反証・対立仮説", "測定・評価の地雷", "手法転用", "制約条件が真逆"]
-    unrelated_chapters: Dict[str, List[Work]] = {k: [] for k in chapter_keys}
-    for idx, work in enumerate(unrelated):
-        key = chapter_keys[idx % len(chapter_keys)]
-        unrelated_chapters[key].append(work)
-    return ClassifiedWorks(
-        related=related,
-        broad=broad,
-        unrelated=unrelated,
-        unrelated_chapters=unrelated_chapters,
-    )
-
-
 __all__ = [
-    "ClassifiedWorks",
-    "classify_stub",
     "classify_track_a",
     "classify_track_b",
     "select_track_b",

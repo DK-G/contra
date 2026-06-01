@@ -21,7 +21,7 @@
 | 言語 | Python | 3.10以上推奨 | 標準ライブラリのみで依存を最小化 |
 | フレームワーク | なし（CLI） | - | MVPはCLIで十分。Web化はPhase 2 |
 | 論文収集API | OpenAlex | v1（REST） | 無料・abstractあり・大規模。APIキー不要 |
-| LLM（3行生成） | OpenAI Responses API | gpt-4o-mini デフォルト | Responses APIを使用（Chat Completionsではない） |
+| LLM（4部構成生成） | OpenAI Responses API | gpt-4o-mini デフォルト | Responses APIを使用（Chat Completionsではない） |
 | LLM後処理 | GeminiCLI | 外部ツール | `gemini_materials.jsonl` を読み込んで仕上げ |
 | 外部ライブラリ | なし（stdlib のみ） | - | `urllib.request` で HTTP 通信。pip不要 |
 | ビルド/デプロイ | なし | - | Phase 1はローカルCLI実行のみ |
@@ -44,9 +44,11 @@
   /pipeline
     collect.py        # Collector: テーマ→クエリ生成→ページング収集
     filter.py         # abstractあり優先フィルタ・件数制限
-    classify.py       # classify_stub: キーワードスコアで分類（現在スタブ）
-    generate.py       # 3行生成（simple/structured/llm の3モード）
-    export.py         # OutputDocument → Markdownファイル書き出し
+    classify.py          # Track B 選別（select_track_b: SOLVENT purpose_sim × mechanism_dist）/ Track A 分類
+    generate.py          # 4部構成生成（fill_track_entries: llm/structured/simple モード）
+    export.py            # OutputDocument → Markdownファイル書き出し
+    concept_distance.py  # Wu-Palmer 近似 L0/L1 Jaccard 階層距離・近傍ドメイン判定
+    history.py           # テーマ別採用論文履歴（ハッシュ→JSON）
   /cli
     main.py           # CLIエントリポイント（argparse）
   openai_client.py    # OpenAI Responses API薄いラッパー
@@ -75,7 +77,7 @@
 **生成モード切り替え（--gen-mode）**
 - `simple`: キーワード一致スコア、abstract切り詰め（テスト用）
 - `structured`: テーマとの構造的関係・前提チェックをルールベースで生成
-- `llm` / `plan_b`: OpenAI Responses APIで3行生成（`--llm-max-items` 件まで）
+- `llm` / `plan_b`: OpenAI Responses API で4部構成生成（`--llm-max-items` 件まで）
 
 -----
 
@@ -86,7 +88,7 @@
 - **セキュリティ上の禁則**: `OPENAI_API_KEY` をコードやファイルに直書きしない（環境変数から読む）。APIキー・メールアドレスをoutputやgitにコミットしない。
 - **勝手にやってほしくないこと**:
   - `src/core/models.py` のデータクラス構造の変更（下流への影響が大きい）
-  - `classify_stub` をスタブから本実装に勝手に変更する（仕様確定前）
+  - `select_track_b` のスコア設計（purpose_sim × mechanism_dist、ゲート閾値）を仕様確認なく変更する
   - フォルダ構成の変更
   - `plan_a` モードの復活（廃止済み。`structured` モードに統合）
 - **変更前に必ず確認すること**:
@@ -108,9 +110,9 @@
 
 ## 6. 既知の落とし穴
 
-- **選別の乗算スコアが未実装**: 現状の `classify.py` はキーワードスコア＋ドメインペナルティ止まり。距離スコア(意外性) × 構造スコア(有用性) の乗算と、Anomaly（属性も関係も無一致）の強制棄却・質ゲートは未実装。
-- **生成が3行構成のまま**: `generate.py` は関係性/要約/注意点の3行。4部構成（概要/関連性/**役に立つ可能性の仮説**/注意点）への移行が必要。「役に立つ可能性の仮説」が中核フィールド。
-- **本数が固定（10/10）のまま**: `main.py` は Track A/B 各10本固定。質ゲート閾値超え数を出力する方式への移行が必要。MVP は Track B 最上位1本。
+- ~~**選別の乗算スコアが未実装**~~ → **実装済み** (Step 9): `select_track_b` で `serendipity = purpose_sim × mechanism_dist` (SOLVENT 方式)。Anomaly（`purpose_sim < 0.20`）強制棄却・hollow gate（Structural Depth judge）・percentile gate 実装済み。
+- ~~**生成が3行構成のまま**~~ → **実装済み** (Step 9): `fill_track_entries` で4部構成（概要/関連性/役に立つ可能性の仮説/注意点）を LLM 生成。数値捏造ガード付き。
+- ~~**本数が固定（10/10）のまま**~~ → **実装済み** (Step 9): 質ゲート方式（percentile-gate + `--output-floor`）。`--track-b-count` は上限キャップ。MVP は `--single` で Track B 最良1本。
 - **OpenAI Responses API を使用**: Chat Completions APIではない。`/v1/responses` エンドポイント。`extract_output_text()` でレスポンスを取り出す。
 - **`llm_max_items` のデフォルトが20**: LLMモードでも先頭20件しかLLM生成されない。残りは `structured` にフォールバックする。
 - **`--mailto` がないとOpenAlexの速度制限が厳しい**: politepool対象外になるので本番実行時は指定推奨。
@@ -146,10 +148,17 @@
   - **客観距離（要素B）**: `concept_distance.py` を Wu-Palmer 近似の **L0/L1 Jaccard 階層距離**に刷新（`ThemeProfile` dataclass。完全名一致cosineを廃棄）。`near_domain_signal` が L0/L1 Jaccard > 0.30 の論文で `mechanism_dist` を 0.5 にキャップし、同分野の false-serendipity を抑制。
   - **質ゲート（要素D）**: 固定 0.25 → **テーマ別 percentile-top30%**（絶対下限 = `--serendipity-gate` CLI 引数、デフォルト 0.20）に変更。0件時は `_FALLBACK_FLOOR=0.10` で単一 best fallback。
   - **多様性再ランキング**: count > 1 のとき concept Jaccard を redundancy 信号とする **MMR** (λ=0.7) を適用。
-  - **`_PURPOSE_SIM_MIN` 引き上げ**: 0.25 → **0.40**（検証で 0.25–0.39 が抽象カテゴリ一致のみで構造類推なし）。
+  - **`_PURPOSE_SIM_MIN` 一時引き上げ**: 0.25 → 0.40（検証で 0.25–0.39 が抽象カテゴリ一致のみで構造類推なし）。→ **後に R3 で 0.20 に緩和**（ディスクリートレベル化＋R2 judge gate と二重ゲートになっていたため）。
   - **検証結果（4テーマ）**: energy=Digital Twin / Climate Risk 選出（power-grid 近接なし ✓）、casual_puzzle=5件（複数本 ✓）、social=量子情報拡散（異常拡散・スクランブリング） serendipity=0.56（purpose_sim=0.7 × mechanism_dist=0.8）で真の遠類推 ✓、wind=海洋循環(AMOC)・気候経済（4件）。
   - **却下した案**: (1) Step9 試行の objective concept band filter（_SHARED_MIN/MAX）→ complete-name cosine は false-far を生む根本問題があるため，L0/L1 Jaccard 階層距離に置換。(2) min(concept_distance, llm_distance) 結合→ 2信号の min は false-near/false-far を両方残す、cap 方式に変更。
-  - **残課題（Phase 2）**: 収集クエリが隣接ドメイン論文を引き込む問題（citation 2-hop / MAX-MIN多様化）。生成プロンプト（usefulness_hypothesis の具体的機構引用強化）。
+
+- `2026-05-31` **R2: 候補レベル hollow ゲート追加**: `_judge_b_candidates` で候補ごとに Structural Depth（Gentner）と `has_causal_pm` を別パスで評価。`structural_depth < 0.30` の純粋 hollow（表層カテゴリ一致のみ）を棄却。`has_causal_pm=False`（観察的・理解志向）は棄却せず「構造対応ゆるめ・思考のタネ」キャビアを表示（ユーザー調整 2026-05-30: 遠くても genuine な類推をカットしないよう recall 重視）。
+
+- `2026-05-31` **R3: purpose_sim を離散レベルへ**: `purpose_level`（none/partial/strong）を導入し 0.10/0.45/0.70 の錨付き離散スケールにマップ（`_PURPOSE_LEVELS`）。free 0-1 float から変更しラター間ノイズ（run をまたいだ 0.7↔0.0 反転）を除去。`_PURPOSE_SIM_MIN` を 0.40 → **0.20** に緩和（R2 judge gate と二重ゲートになっていたため）。**現行値: `_PURPOSE_SIM_MIN=0.20`**。
+
+- `2026-05-31` **R5: self-consistency 投票（`--score-votes`）**: PM スコアリングと hollow judge を K 回実行し、数値フィールドを中央値・`has_causal_pm` を多数決で集約。スコアのノイズが output-floor を跨いで候補が in/out を繰り返す問題を抑制。デフォルト K=1（シングルパス・コスト不変）。K=3 で安定性向上（約3倍のLLMコスト）。採点タスクに `temperature=0.0` を適用。
+
+- `2026-05-31` **M3: テーマ飽和検知**: `output_floor` 超えが0件かつ `--allow-weak-fallback` 未指定の場合、弱い fallback を出力せず「飽和ノート」（`_write_saturation_report`）を書いて終了。採用なし=履歴不更新。誤った弱接続で水増しレポートを出さない設計。`diag` dict でステータスを呼び出し元に通知。
 
 - `2026-05-29` Track A/B の詳細仕様を確定（Step 1完了）※一部は2026-05-30の再定義で更新:
   - 関係度表現: 5段階ラベル（高/中高/中/中低/低）を採用。数値は却下（LLMによる偽精度を避ける）。
@@ -162,14 +171,21 @@
 
 ## 8. 未解決 / TODO（仕様レベル）
 
-- 選別スコアの設計確定: 距離スコア（意味的距離の測り方）・構造スコア（関係構造の一致をLLMにどう判定させるか）・乗算後の質ゲート閾値
-- Track B 用クエリ「別ドメイン概念 × テーマ核心語」の掛け合わせプロンプト設計（教育・gamification偏りの抑制を含む）
-- 4部構成の生成プロンプト設計（特に「役に立つ可能性の仮説」を慧眼の肩代わりとして書かせる指示）
-- GeminiCLI入力フォーマットを4部構成に合わせて更新
-- 履歴ファイルのスキーマ定義（`data/history/{theme_hash}.json` の構造）
-- Phase 1 の「Done」判断基準: 複数テーマで「遠いが構造一致」の1本が安定して出力でき、Anomaly・近接が混入しないこと
+以下は実装済みとなり解決した:
+
+- ~~選別スコアの設計確定~~ → 実装済み（Step 9: `select_track_b`、SOLVENT purpose_sim × mechanism_dist）
+- ~~Track B 用クエリ設計（別ドメイン偏り抑制）~~ → 実装済み（Step 9 Phase 2: 構造的側面クロス方式、`generate_track_b_queries`）
+- ~~4部構成の生成プロンプト設計~~ → 実装済み（Step 9: `_llm_generate_track_b_text`、変数対応背骨＋数値捏造ガード）
+- ~~GeminiCLI入力フォーマット更新~~ → 実装済み（`_write_gemini_materials` が Track A/B 4部構成対応）
+- ~~履歴ファイルのスキーマ定義~~ → 実装済み（`ThemeHistory` dataclass、id/title/doi 三重dedup）
+
+**現在未解決:**
+
+- **Phase 1「Done」判断**: 複数テーマで「遠いが構造一致」の1本が安定して出力でき、Anomaly・近接が混入しないことを品質評価（サンプル生成フェーズ）
+- **テスト補強**: LLMモックを使った `fill_track_entries` の統合テスト
 
 
 ## 検証ツール (Validation Tools)
 
-現在、プロジェクトに実装されている検証ツールは特にありません。
+- **ユニットテスト（`tests/`）**: 選別スコア / 収集 / 飽和検知 / purpose_level / MAX-MIN 多様化 / 数値捏造ガード / export レンダリング / input_schema / history（`python -m pytest tests/`）
+- **プローブスクリプト（`scripts/`）**: `depletion_probe.py` / `r1_model_probe.py` / `r2_judge_compare.py` / `r5_score_stability.py`（各チューニングラウンドの検証用）

@@ -72,41 +72,6 @@ def build_theme_profile(works: List[Work]) -> ThemeProfile:
     return ThemeProfile(l01=l01, l234=l234, weights=dict(top))
 
 
-def domain_distance(work: Work, profile: ThemeProfile) -> float:
-    """Wu-Palmer-inspired domain distance: 0=same domain, 1=far.
-
-    domain_sim  = L01_jaccard * 0.7 + L234_recall * 0.3
-    domain_dist = 1 - domain_sim
-
-    L0/L1 Jaccard fixes the false-far problem: a same-field paper with different
-    specific concept names still shares L0/L1 domain concepts, yielding low distance.
-    """
-    if profile.is_empty():
-        return 0.5  # no profile -> neutral
-
-    work_l01: Set[str] = set()
-    work_l234: Set[str] = set()
-    for tag in work.concept_tags:
-        if not tag.name:
-            continue
-        if tag.level <= 1:
-            work_l01.add(tag.name)
-        else:
-            work_l234.add(tag.name)
-
-    # L0/L1 Jaccard (broad domain overlap)
-    union_l01 = work_l01 | profile.l01
-    l01_jac = len(work_l01 & profile.l01) / len(union_l01) if union_l01 else 0.0
-
-    # L2/L3/L4 recall against the profile's topic set
-    l234_recall = (
-        len(work_l234 & profile.l234) / len(profile.l234)
-        if profile.l234 else 0.0
-    )
-
-    domain_sim = l01_jac * 0.7 + l234_recall * 0.3
-    return round(1.0 - domain_sim, 4)
-
 
 def near_domain_signal(work: Work, profile: ThemeProfile) -> bool:
     """True if the work is in the SAME BROAD DOMAIN as the theme (L0/L1 Jaccard > threshold).
@@ -127,6 +92,5 @@ def near_domain_signal(work: Work, profile: ThemeProfile) -> bool:
 __all__ = [
     "ThemeProfile",
     "build_theme_profile",
-    "domain_distance",
     "near_domain_signal",
 ]

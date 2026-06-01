@@ -38,40 +38,6 @@ def _lines_for_theme(theme: ThemeInput) -> List[str]:
     return lines
 
 
-def _mock_entry() -> OutputEntry:
-    work = Work(
-        id="mock-0001",
-        title="(モック) 施設間ドメインシフトが診断性能に与える影響",
-        year=2022,
-        venue="Mock Conference",
-        doi=None,
-        cited_by_count=0,
-        abstract="(モック) 施設間の分布差が性能劣化に与える影響を検証する。",
-    )
-    return OutputEntry(
-        work=work,
-        relationship="テーマの中心課題である分布差の影響を直接扱う仮想例。",
-        abstract_summary="施設間での性能差を比較し、主な劣化要因を抽出する。",
-        caution="評価指標の設計に依存する可能性がある。",
-    )
-
-
-def build_minimal_document(theme: ThemeInput, include_mock: bool = True) -> OutputDocument:
-    sections = [
-        OutputSection(title="関連度が高い論文（100本）"),
-        OutputSection(title="広域探索（200本）"),
-        OutputSection(title="無関係論文（200本）"),
-        OutputSection(title="無関係論文：反証・対立仮説（50本）"),
-        OutputSection(title="無関係論文：測定・評価の地雷（50本）"),
-        OutputSection(title="無関係論文：手法転用（50本）"),
-        OutputSection(title="無関係論文：制約条件が真逆（50本）"),
-    ]
-
-    if include_mock and sections:
-        sections[0].entries.append(_mock_entry())
-
-    return OutputDocument(theme=theme, sections=sections)
-
 
 def _link_for_work(work: Work) -> str:
     if work.doi:

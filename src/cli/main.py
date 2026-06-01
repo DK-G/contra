@@ -13,7 +13,7 @@ from src.core.input_schema import InputValidationError, validate_and_normalize
 from src.core.models import OutputDocument, OutputSection, ThemeHistory
 from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
 from src.openalex.parser import OpenAlexParseError, normalize_results
-from src.pipeline.classify import classify_stub, classify_track_a, classify_track_b, select_track_b
+from src.pipeline.classify import classify_track_a, classify_track_b, select_track_b
 from src.pipeline.collect import (
     CollectConfig,
     Collector,
@@ -26,7 +26,7 @@ from src.pipeline.collect import (
 )
 from src.pipeline.concept_distance import ThemeProfile, build_theme_profile
 from src.pipeline.export import export_markdown
-from src.pipeline.generate import GenerationConfig, fill_track_entries, generate_entries
+from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.history import compute_theme_hash, load_history, save_history
 
 

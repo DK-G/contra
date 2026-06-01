@@ -1,26 +1,78 @@
-# 論文ブレインストーミング支援Webサービス (Contra Project)
+# Contra
 
-このディレクトリは、研究・企画・プロダクト設計における「テーマ設定前後のブレインストーミング工程」を支援するWebサービスの各種ドキュメントとデータを管理します。
+研究テーマを入力すると、OpenAlexから論文を収集・選別し、「一見無関係だが構造的に接続しうる遠い論文」を4部構成のMarkdownで提示するCLIツール。
+
+**contra = contrarian**。思考の狭窄（マイオピア）に抗い、テーマに遠いが関係構造が一致する論文を対置することで、視座を広げる。
+
+## 特徴
+
+- **Track B 中核**: ドメインは遠いが Purpose/Mechanism 構造が一致する論文（Gentner の Analogy）を選出
+- **質ゲート方式**: 本数は固定でなく、質スコア閾値を超えた候補だけを出力（`serendipity = purpose_sim × mechanism_dist`）
+- **Anomaly/マイオピア棄却**: 無意味接続・近接を両方弾く
+- **4部構成出力**: 概要 / テーマとの関連性 / 役に立つ可能性の仮説（中核）/ 注意点
+- **テーマ別履歴管理**: 採用論文IDを記録し、次回実行時の重複を回避
+- **テーマ飽和検知（M3）**: 良候補がゼロのとき弱い論文で水増しせず「飽和ノート」を出力
+
+## 必要環境
+
+- Python 3.10+
+- 環境変数 `OPENAI_API_KEY`（選別・生成に使用）
+- OpenAlex API（APIキー不要）
+
+## 使い方
+
+```bash
+python -m src.cli.main \
+  --input data/samples/theme.json \
+  --out output/my_run \
+  --gen-mode llm
+```
+
+主要オプション:
+
+| オプション | 説明 | デフォルト |
+|---|---|---|
+| `--input` | テーマ入力 JSON | 必須 |
+| `--out` | 出力ディレクトリ | 必須 |
+| `--single` | MVP モード: Track B 最良1本のみ | off |
+| `--track-b-count` | Track B 最大本数（上限。質ゲートで減る） | 10 |
+| `--track-a-count` | Track A アンカー本数（0=省略） | 0 |
+| `--gen-mode` | 生成モード（llm / structured / simple） | llm |
+| `--no-history` | 履歴除外をスキップ | off |
+| `--score-votes` | 自己一貫性投票数（1=単発、3=安定重視） | 1 |
+| `--serendipity-gate` | Track B 絶対下限スコア | 0.25 |
+| `--output-floor` | 出力品質フロア（これ未満は飽和扱い） | 0.35 |
 
 ## ディレクトリ構成
-- `docs/`
-  - `specs/`: 入出力フォーマットの仕様やAPI（OpenAlex等）の調査メモ
-  - `agent_rules/`: サブタスク用のAIエージェントの挙動ルールなど
-  - `archive/`: 過去の構成案 (`first.md` など)
-- `src/`: ソースコード
-- `data/`: 関連データ
-- `scripts/`: スクリプト類
 
-## コアファイル (エージェントワークフロー関連)
-開発・レビュー作業を中心としたファイル群は、ルート階層で管理されています。AIエージェント（Antigravity / Codex等）の運用フローとして、これらのドキュメントを使用します。
-- `plan.md`: プロジェクトの全体計画・仕様が記述されたマスタードキュメント。
-- `roadmap.md`: 開発の大まかなロードマップ。
-- `task.md`: 現在進行中および次に実行する作業タスクリスト。
-- `memo.md`: エラーログの記録や、調査モードにおける思考の書き出し用ファイル。
-- `inspection-list.md`: セルフレビューの確認項目。
+```
+src/
+  core/          データモデル・入力バリデーション・出力Markdown仕様
+  openalex/      OpenAlex HTTPクライアント・レスポンスパーサー
+  pipeline/      収集 / 選別 / 生成 / エクスポート / 履歴 / 距離計算
+  cli/           CLI エントリポイント (main.py)
+data/
+  samples/       テーマ入力サンプル JSON
+  history/       テーマ別採用論文履歴（実行後に生成、git 追跡対象外）
+output/          生成結果（実行後に生成、git 追跡対象外）
+scripts/         検証・プローブスクリプト
+docs/            仕様メモ・調査資料
+tests/           ユニットテスト
+```
 
-## 使用方法 (開発フローの概要)
-本プロジェクトの開発フローはポートフォリオ標準の `docs/AI_AGENT_WORKFLOW.md` に従います：
-1. `task.md` から指示を読み取り、作業を行います。
-2. 作業中やエラー調査時は、適宜 `memo.md` に事象と改善案を記録しながら進めます。
-3. `inspection-list.md` でセルフレビューを実施し、問題がないか確認します。
+## 仕様書
+
+- [`plan.md`](plan.md) — マスター仕様書（目的・設計原則・パイプライン設計・出力仕様）
+- [`spec.md`](spec.md) — AI向け開発仕様書（技術スタック・決定ログ・禁則事項）
+- [`roadmap.md`](roadmap.md) — 開発ロードマップ・残作業
+
+## 開発状況
+
+Phase 1 CLI 実装中（`main` ブランチ）。
+
+主要実装済み:
+- Track B 選別: SOLVENT Purpose-Mechanism 構造類推スコアリング（`select_track_b`）
+- citation 2-hop 収集・MAX-MIN 多様化
+- hollow gate（Structural Depth judge）・percentile gate・output floor
+- 4部構成生成・数値捏造ガード
+- テーマ飽和検知（M3）・自己一貫性投票（R5）
