@@ -4,6 +4,32 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-02 — LLM モデル/プロバイダ方針：マルチプロバイダ化＋品質ランは Claude Haiku 4.5
+
+**決定**: `openai_client` をマルチプロバイダ化し（OpenAI Responses + Anthropic Messages、`--llm-model` でゼロコード切替）、運用は **既定 gpt-4o-mini（激安・探索用）／「本気の1本」は claude-haiku-4-5（最良コスパ）／プレミアムは claude-sonnet-4-6** とする。コード既定は gpt-4o-mini 据え置き（モデルは実行時フラグで選択）。
+
+**根拠（A/B 実測, social 1ラン, ¥150/$, 価格要確認）**:
+
+| モデル | ¥/run | 質 |
+|---|---|---|
+| gpt-4o-mini | ¥1.8 | 弱い（浅い写像・数値捏造気味） |
+| **claude-haiku-4-5** | **¥24** | 優秀 |
+| o4-mini | ¥45 | 優秀 |
+| claude-sonnet-4-6 | ¥69 | 優秀（僅差で最上） |
+
+- 強3モデル（Haiku/o4-mini/Sonnet）は全て目標品質（深い構造写像・操作化された検証可能仮説・破断点 caution）をクリア。spine 品質の天井は gpt-4o-mini の構造アブダクション限界であり、推論/上位モデルで解消するという R1 調査結論を実証。
+- コスパは Haiku 4.5 が最良。1ラン別論文ゆえ強3モデルの質の優劣は統計分離不能（コスト順は信頼可）。
+
+**確認した非結果 / 訂正**:
+- prompt caching は両 Claude run で cached_input=0（system ブロックが Anthropic 最小キャッシュ閾値 ~1024tok 未満の可能性）。「caching でコスト相殺」仮説は不成立 → Claude コストは素の値。
+- 副次バグ修正: main.py の `--struct-depth-gate default=0.30` が校正値 0.50 を上書きしていた（commit b693223 で定数連動に修正）。
+
+**ローカルLLM却下**: RTX 3060 Ti / VRAM 8GB では、速く動く 7–8B は gpt-4o-mini 以下、効きうる 32B 推論distillは VRAM に乗らず CPU 退避で実用速度が出ない。質の天井対策にはならず却下。
+
+**可逆性**: プロバイダ切替は実行時フラグ、選別ロジック不変。
+
+---
+
 ## 2026-06-01 — Track B 生成3部の hollow 対策：転用読みの定石に基づく多段プロンプト化
 
 **決定**: Track B の4部生成のうち②関連性・③仮説・④注意点を、「遠い論文を自テーマへ転用する読み」の確立手順（構造写像/LBD/bisociation/概念ブレンディング/知識ブローカリング/Reading-for-Relevance/情報採餌に共通の4ムーブ）に沿って**多段構造化**し、各部に**FORBIDリスト**を明記する。summary は実Abstract援用で充足済みのため変更しない。
