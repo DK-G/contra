@@ -63,13 +63,19 @@
 
 ```
 入力JSON (data/theme.json)
-  ↓ validate_and_normalize()         # ThemeInput に変換・バリデーション
-  ↓ collect (collect.py)             # 別ドメイン概念 × テーマ核心語 でOpenAlex収集／撤回論文除外
-  ↓ select  (classify.py)            # 距離スコア(意外性) × 構造スコア(有用性) を乗算、両端棄却。Anomaly強制棄却
-  ↓ generate (generate.py)           # 4部構成生成（概要/関連性/役に立つ可能性の仮説/注意点）
-  ↓ export_markdown()                # 出力Markdownを書き出し（質ゲート通過分）
-  ↓ _write_gemini_materials()        # gemini_materials.jsonl を書き出し
-                                      ↓ GeminiCLI（外部）で後処理
+  ↓ validate_and_normalize()          # ThemeInput に変換・バリデーション
+  ↓ collect (collect.py)              # Track B: 別ドメイン概念 × テーマ核心語でOpenAlex収集
+  ↓ build_theme_profile()             # 近傍論文から L0/L1 Jaccard ドメインプロファイル構築
+  ↓ collect_citation_candidates()     # citation 2-hop: 近傍論文の引用ネットワークから遠ドメイン候補を追加
+  ↓ select_track_b (classify.py)      # purpose_sim × mechanism_dist (SOLVENT) で選別
+                                       #   → Anomaly (purpose_sim < 0.20) 強制棄却
+                                       #   → hollow judge (R2) で structural_depth 確認
+                                       #   → percentile-gate + output-floor で品質絞り込み
+  ↓ [M3 飽和判定] output-floor 超え0件 → _write_saturation_report() で飽和ノート出力・終了
+  ↓ generate (generate.py)            # 4部構成生成（概要/関連性/役に立つ可能性の仮説/注意点）
+  ↓ export_markdown()                 # 出力Markdownを書き出し
+  ↓ _write_gemini_materials()         # gemini_materials.jsonl を書き出し
+                                       ↓ GeminiCLI（外部）で後処理
 ```
 
 3段階（収集／選別／提示）の各段に効くセレンディピティ知見の対応は [`plan.md`](plan.md) §6 と [`docs/research/serendipity_conditions.md`](docs/research/serendipity_conditions.md) §7 を参照。
@@ -160,12 +166,11 @@
 
 - `2026-05-31` **M3: テーマ飽和検知**: `output_floor` 超えが0件かつ `--allow-weak-fallback` 未指定の場合、弱い fallback を出力せず「飽和ノート」（`_write_saturation_report`）を書いて終了。採用なし=履歴不更新。誤った弱接続で水増しレポートを出さない設計。`diag` dict でステータスを呼び出し元に通知。
 
-- `2026-05-29` Track A/B の詳細仕様を確定（Step 1完了）※一部は2026-05-30の再定義で更新:
-  - 関係度表現: 5段階ラベル（高/中高/中/中低/低）を採用。数値は却下（LLMによる偽精度を避ける）。
-  - 関係軸ラベル: LLMがテーマから広めの候補リストを生成し、各論文に最適なラベルを割り当てる方式を採用。固定語彙は却下（テーマごとに最適化され、複数回利用で多角的な視座が蓄積される設計）。
-  - Track AとTrack Bは同じ候補プールを共有する。Track Aが上位10本を選出後、残りからTrack Bが「1点だけ関係ある」論文をLLMが発見する。
-  - Track B 補充ルール: 単一接続点のある論文が足りなければランダムで補充。接続点タイプの固定リストは設けない（LLMが発見した接続点をラベル化する）。
-  - classify実装方針: Track A はキーワードスコアリングで候補を絞り込み、LLMが関係軸ラベルを割り当て。Track B はLLMが残り候補から「1点だけ関係ある」論文を識別。ハイブリッド方式を採用。
+- `2026-05-29` ~~Track A/B の初期詳細仕様を確定（Step 1完了）~~ → **以下の項目は後続の決定（2026-05-29〜05-31）で大幅に更新済み。参照のみ**:
+  - 関係度表現: 5段階ラベル（高/中高/中/中低/低）を採用（現在も有効）。
+  - ~~Track AとTrack Bは同じ候補プールを共有~~ → **廃止**（2026-05-29の別エントリで独立収集方式に変更）。
+  - ~~Track B 補充ルール: ランダム補充~~ → **廃止**（Step 9 で SOLVENT 選別・quality gate に変更）。
+  - ~~classify実装方針: Track B はLLMが「1点だけ関係ある」論文を識別~~ → **廃止**（Step 9 で purpose_sim × mechanism_dist に変更）。
 
 -----
 
