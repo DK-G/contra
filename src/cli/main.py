@@ -456,4 +456,15 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    code = main(sys.argv[1:])
+    try:
+        from src.openai_client import get_usage
+        u = get_usage()
+        if u["calls"]:
+            print(
+                f"[usage] LLM calls={u['calls']} input_tokens={u['input_tokens']} "
+                f"output_tokens={u['output_tokens']} (reasoning={u['reasoning_tokens']})"
+            )
+    except Exception:
+        pass
+    raise SystemExit(code)
