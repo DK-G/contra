@@ -13,7 +13,12 @@ from src.core.input_schema import InputValidationError, validate_and_normalize
 from src.core.models import OutputDocument, OutputSection, ThemeHistory
 from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
 from src.openalex.parser import OpenAlexParseError, normalize_results
-from src.pipeline.classify import classify_track_a, classify_track_b, select_track_b
+from src.pipeline.classify import (
+    _STRUCT_DEPTH_GATE,
+    classify_track_a,
+    classify_track_b,
+    select_track_b,
+)
 from src.pipeline.collect import (
     CollectConfig,
     Collector,
@@ -228,7 +233,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
     parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
-    parser.add_argument("--struct-depth-gate", type=float, default=0.30, help="Track B hollow gate: min judge structural_depth (0-1); only truly superficial (shared-category) candidates below it are rejected. Loose causal links are kept as thought-seeds")
+    parser.add_argument("--struct-depth-gate", type=float, default=_STRUCT_DEPTH_GATE, help="Track B hollow gate: min judge structural_depth (0-1); candidates below it are rejected as hollow (shared-category/lacks-systematicity). Default tracks the calibrated _STRUCT_DEPTH_GATE")
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
     parser.add_argument("--allow-weak-fallback", action="store_true", help="Track B saturation (M3): by default a run that yields NO unit above --output-floor reports 'テーマ飽和' instead of padding the report with a single weak fallback paper. Set this to restore the old single-best fallback behaviour")
     parser.add_argument("--score-votes", type=int, default=1, help="Track B self-consistency (R5): run the PM scoring + hollow judge K times and reduce by median/majority to stop borderline candidates flipping across the floor between runs. 1 = single pass (default); 3 = ~3x LLM cost for more stable scores")
@@ -463,7 +468,8 @@ if __name__ == "__main__":
         if u["calls"]:
             print(
                 f"[usage] LLM calls={u['calls']} input_tokens={u['input_tokens']} "
-                f"output_tokens={u['output_tokens']} (reasoning={u['reasoning_tokens']})"
+                f"output_tokens={u['output_tokens']} (reasoning={u['reasoning_tokens']}, "
+                f"cached_input={u['cached_input_tokens']})"
             )
     except Exception:
         pass
