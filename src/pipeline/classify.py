@@ -281,7 +281,12 @@ _SCORE_PM_MAX_ATTEMPTS = 2  # retry a chunk if gpt-4o-mini drops the relational 
 # Only TRULY hollow (pure shared-category/lexical, structural_depth < gate) are cut; a loose
 # causal link (has_causal_pm=False) is recorded/surfaced as a caveat but does NOT reject —
 # otherwise far-but-genuine analogies (e.g. quantum subdiffusion) get over-pruned.
-_STRUCT_DEPTH_GATE = 0.30   # reject structural_depth (0-1, =judge 0-10/10) BELOW this only
+_STRUCT_DEPTH_GATE = 0.50   # reject structural_depth (0-1, =judge 0-10/10) BELOW this. Raised
+# 0.30->0.50 after a 3-point sweep (0.30/0.50/0.70) over 5 themes: 0.30 let the judge's 3-6
+# "lacks-systematicity" category-matches through; 0.70 saturated ALL themes (gpt-4o-mini rarely
+# awards >=7); 0.50 keeps the ~2/5 emit rate of 0.30 while cutting 60-75% of candidates as hollow,
+# so survivors carry a genuine causal mechanism. Saturated themes are covered by re-runs (history
+# dedup), per the quality-first policy. CLI-tunable via --struct-depth-gate.
 _JUDGE_MAX_CANDIDATES = 20  # cap survivors sent to the judge (cost bound; survivors are few)
 
 
@@ -624,10 +629,13 @@ def _judge_one_pass(judged_input: List[dict], theme_schema: dict, model: str) ->
                     f"THEME PURPOSE: {theme_schema['purpose']}\n"
                     f"THEME MECHANISM: {theme_schema['mechanism']}\n\n"
                     "- structural_depth (0–10): how well-defined and meaningful is the object-"
-                    "to-object mapping? 0 = vague/superficial/HOLLOW — rests on a shared "
-                    "CATEGORY or attribute ('both involve diffusion/risk/networks') with little "
-                    "explanatory power. 10 = deep one-to-one correspondence of FUNCTIONAL ROLES "
-                    "with a transferable mechanism.\n"
+                    "to-object mapping? Calibrated bands: 0-2 = vague/superficial/HOLLOW, rests "
+                    "on a shared CATEGORY or attribute ('both involve diffusion/risk/networks') "
+                    "with little explanatory power. 3-6 = individual objects map plausibly but it "
+                    "LACKS SYSTEMATICITY — no connected higher-order causal relation is carried "
+                    "over (a category match dressed up). 7-9 = the causal MECHANISMS of both "
+                    "domains are aligned. 10 = deep one-to-one parallel connectivity of FUNCTIONAL "
+                    "ROLES with a transferable mechanism.\n"
                     "- applicability (0–10): how concretely could this analogy inform the theme? "
                     "0 = misleading/unhelpful; 10 = directly enables a concrete, testable "
                     "hypothesis for the theme.\n"
