@@ -73,7 +73,7 @@ def test_transient_timeout_then_success(monkeypatch):
         [TimeoutError("t"), b'{"output_text": "ok"}'],
     )
     result = responses_create({"x": 1}, _cfg(max_retries=2))
-    assert result == {"output_text": "ok"}
+    assert result["output_text"] == "ok"  # normalized response carries output_text
     assert calls["n"] == 2
 
 
@@ -83,7 +83,7 @@ def test_retryable_http_status_is_retried(monkeypatch):
         [_http_error(429), _http_error(503), b'{"ok": true}'],
     )
     result = responses_create({"x": 1}, _cfg(max_retries=3))
-    assert result == {"ok": True}
+    assert result.get("ok") is True  # normalization adds a usage block but preserves the body
     assert calls["n"] == 3
 
 
