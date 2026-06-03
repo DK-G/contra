@@ -6,17 +6,36 @@
 
 ## 作業中 (In Progress)
 
-（なし）
+- [/] Track A Git実用アンカー設計
+    - [ ] 研究テーマに直接関連する OSS / GitHub repository を検索・収集する条件を定義する
+    - [ ] Track A を「近接論文アンカー」だけでなく「直接使える実装・制約・失敗パターンのアンカー」として再定義する
+    - [ ] Git 由来情報の信頼性評価（stars / activity / license / issue quality / last commit / README completeness）を設計する
+    - [ ] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
+    - [ ] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる
+- [/] Phase 1 Done 判断: Track B 品質評価
+    - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
+    - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する
+    - [ ] 「役に立つ可能性の仮説」が論文固有の発見に基づいているか確認する
+    - [ ] 飽和ノート発生時に弱い候補で水増しされないことを確認する
+    - [ ] 品質評価結果を `docs/quality_eval.md` または `memo.md` に追記する
 
 ---
 
 ## 未着手 (To Do)
 
-（なし）
+- [ ] LLMモックを使った `fill_track_entries` の統合テストを追加する
+- [ ] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
+- [ ] Web化・課金は現時点では実装しない。必要になったら Phase 2 として再評価する
 
 ---
 
 ## 完了 (Done)
+
+### 2026-06-03 タスク整理
+*   `spec.md` §8 の現在未解決に合わせ、作業中を「Phase 1 Done 判断: Track B 品質評価」に更新。
+*   次の未着手として LLMモック統合テストと roadmap 現況同期を明示。
+*   Web化・課金は `plan.md` §12 の将来構想扱いのため、現時点の実装対象外として維持。
+*   Git を検索元にした Track A 実用アンカーは予定タスクとして作業中へ追加。まずは設計から進める。
 
 ### Step 9 (B): 複数本モードの品質再設計（2026-05-30 完了）
 *   Track B 選別を SOLVENT の Purpose-Mechanism スキーマで再構築。`_score_b_chunk_pm` で structure abduction（P/M先抽出→比較）を実装。
