@@ -23,13 +23,19 @@
 
 ## 未着手 (To Do)
 
-- [ ] LLMモックを使った `fill_track_entries` の統合テストを追加する
-- [ ] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
+- [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
+- [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
 - [ ] Web化・課金は現時点では実装しない。必要になったら Phase 2 として再評価する
 
 ---
 
 ## 完了 (Done)
+
+### 2026-06-07 fill_track_entries 統合テストと roadmap 同期
+*   `tests/test_fill_track_entries.py` を追加し、`fill_track_entries` が Track A / Track B の LLM 生成境界をモック経由で呼び分け、結果を `OutputEntry` に反映することを検証。
+*   LLM 生成が `None` を返した場合に、既存の構造化 fallback（relationship / summary / hypothesis / caution）へ落ちることを検証。
+*   `roadmap.md` の Phase 1 現況を 2026-06-07 時点へ更新し、Step 9 / R2 / R3 / R5 / M3 を実装済みとして同期。
+*   確認: Codex 同梱 Python で新規テストの direct runner と `compileall` が成功。PATH に `python` / `py` と pytest が無いため `python -m pytest tests/ -q` は未実行。
 
 ### 2026-06-03 タスク整理
 *   `spec.md` §8 の現在未解決に合わせ、作業中を「Phase 1 Done 判断: Track B 品質評価」に更新。
