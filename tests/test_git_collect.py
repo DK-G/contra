@@ -33,12 +33,11 @@ def _theme() -> ThemeInput:
 def test_build_track_a_git_query_includes_theme_and_exclude_terms():
     query = build_track_a_git_query(_theme())
     assert "digital twin" in query
-    assert "power grid" in query
-    assert "benchmark" in query
-    assert "implementation" in query
-    assert "-gamification" in query
+    assert "NOT gamification" in query
     assert "demo in:readme" in query
     assert "pushed:>2025-01-01" in query
+
+
 
 
 def test_decode_readme_handles_base64_payload():

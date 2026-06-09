@@ -20,6 +20,8 @@
 | **`byjules`** | 最適化・磨き | 課題抽出 -> `byjules` 実行 -> 性能検証 |
 | **`bysearch`** | 技術調査 | `search_web` -> `firecrawl` -> `RESEARCH_NOTES.md` |
 | **`bygit`** | 引継ぎ・同期 | Commit `[agent]` -> `task.md` 更新 -> `walkthrough.md` |
+| **`byrepo`** | Track A Git practical anchors | GitHub Search -> README / issue 観測 -> Reliability Score -> Track A |
+| **`byserendipity`** | Track B 構造類推 | distant queries -> OpenAlex -> serendipity gate -> 4-part generation |
 
 ## 3. Git 運用ルール
 

@@ -105,13 +105,15 @@ def _llm_generate_track_a_text(
     model: str,
 ) -> Optional[tuple]:
     """Return 4-part (relationship, summary, hypothesis, caution) for a Track A paper."""
+    source_kind = "GitHubリポジトリ" if work.publication_type == "github_repository" else "研究論文"
+    source_body = (work.abstract or "")[:_GEN_ABSTRACT_CHARS]
     payload = {
         "model": model,
         "input": [
             {
                 "role": "system",
                 "content": (
-                    "Generate a 4-part Japanese writeup for a Track A research paper. "
+                    f"Generate a 4-part Japanese writeup for a Track A {source_kind}. "
                     "Return JSON: {summary, relationship, hypothesis, caution}"
                 ),
             },
@@ -122,13 +124,13 @@ def _llm_generate_track_a_text(
                     f"テーマの仮説: {'; '.join(theme.assumptions)}\n"
                     f"テーマの不安点: {theme.concern or 'なし'}\n"
                     f"関係軸: {label}  関係度: {level}\n"
-                    f"論文タイトル: {work.title}\n"
-                    f"Abstract: {(work.abstract or '')[:_GEN_ABSTRACT_CHARS]}\n\n"
+                    f"{source_kind}名: {work.title}\n"
+                    f"内容: {source_body}\n\n"
                     "以下の制約を守ってJSON形式で返してください。\n"
-                    "summary: abstractを自分の言葉で言い換えた2文。数値や実験条件があれば含めること。\n"
-                    "relationship: 関係軸と関係度を踏まえた1文（40-80字）。abstractの具体的な手法・対象・条件を1つ以上引用すること。\n"
-                    "hypothesis: この論文の知見をあなたのテーマにどう持ち込めるか、具体的な転用仮説を1〜2文で。論文固有の内容に基づくこと。\n"
-                    "caution: テーマの仮説または不安点のうち、この論文の前提条件と食い違う点を具体的に1文で指摘すること。「初期体験が重要」などの汎用文は禁止。\n"
+                    f"summary: この{source_kind}の目的・機能・前提を自分の言葉で2文に要約する。数値や環境条件があれば含めること。\n"
+                    f"relationship: 関係軸と関係度を踏まえた1文（40-80字）。この{source_kind}の具体的な手法・対象・制約を1つ以上引用すること。\n"
+                    f"hypothesis: この{source_kind}の知見や実装をあなたのテーマにどう持ち込めるか、具体的な転用仮説を1〜2文で。固有の機能や制約に基づくこと。\n"
+                    f"caution: テーマの仮説または不安点のうち、この{source_kind}の前提条件と食い違う点を具体的に1文で指摘すること。「初期体験が重要」などの汎用文は禁止。\n"
                 ),
             },
         ],

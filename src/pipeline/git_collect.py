@@ -43,37 +43,50 @@ class GitCollectConfig:
 
 def _clean_token(token: str) -> str:
     text = token.strip().strip('"').strip("'")
+    if ":" in text or ">" in text or "<" in text:
+        return text
     return f'"{text}"' if " " in text else text
 
 
 def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> str:
     tokens: List[str] = []
-    tokens.extend(theme.keywords.include[:3])
-    if not tokens and theme.scope.field:
+    # To avoid 0 hits due to too many AND terms, only use the first include keyword
+    if theme.keywords.include:
+        tokens.append(theme.keywords.include[0])
+    elif theme.scope.field:
         tokens.append(theme.scope.field)
-    if theme.goal and _is_ascii_text(theme.goal):
+        
+    # Limit goal text in query to avoid overly specific queries
+    if theme.goal and _is_ascii_text(theme.goal) and len(theme.goal) < 60:
         tokens.append(theme.goal)
-    tokens.extend(_RESEARCH_TASK_TERMS[:2])
-    tokens.extend(_IMPLEMENTATION_TERMS[:2])
-    
+        
     # Discovery Scoping: target demos/examples in README
     tokens.append("demo in:readme")
     
     if extra_terms:
         tokens.extend(extra_terms)
 
-    exclude = [f"-{token.strip()}" for token in theme.keywords.exclude if token.strip()]
-    unique: List[str] = []
+    unique_tokens: List[str] = []
     seen = set()
-    for token in tokens + exclude:
+    for token in tokens:
         cleaned = _clean_token(token)
         if cleaned and cleaned not in seen:
             seen.add(cleaned)
-            unique.append(cleaned)
+            unique_tokens.append(cleaned)
+            
+    exclude_tokens: List[str] = []
+    for token in theme.keywords.exclude:
+        if token.strip():
+            cleaned = _clean_token(token.strip())
+            if cleaned:
+                exclude_tokens.append(f"NOT {cleaned}")
             
     # Activity filtering: target repos pushed since 2025-01-01 to avoid stale code bases
-    unique.append("pushed:>2025-01-01")
-    return " ".join(unique)
+    all_parts = unique_tokens + exclude_tokens
+    all_parts.append("pushed:>2025-01-01")
+    return " ".join(all_parts)
+
+
 
 
 def _decode_readme(payload: dict) -> str:

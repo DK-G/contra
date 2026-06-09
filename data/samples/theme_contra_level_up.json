@@ -1,0 +1,22 @@
+{
+  "theme_overview": "論文などの学術文献から構造的な因果関係や解決策（Mechanism）を抽出し、全く異なる応用分野（Purpose）へと類推・転用するアイディア生成・視座拡張システム（Design-by-Analogy / 構造類推）。本テーマでは、異なる領域同士の概念間の認定的・意味的距離を定量化し、中距離〜遠距離でありながら構造的に噛み合う最適な類推（セレンディピティ）を安定的かつ高精度に抽出する。また、表層的な単語の一致や、単なる類似カテゴリの素通り（hollow analogy）、無意味な接続（anomaly）を効率的に棄却する評価アルゴリズムと検証手法を確立する。",
+  "goal": "異ドメイン間の構造類推やアナロジーマイニングにおいて、セレンディピティ（中遠距離かつ深い構造一致）を定量・評価し、hollow analogyを棄却するモデルを設計する",
+  "why_problem": "単純なLLM生成では表層の類似語に引きずられたhollowな類推や、逆に全く因果関係のない無意味な接続が多発し、アイディア生成の信頼性が低いため",
+  "approach_type": "application",
+  "assumptions": [
+    "概念や知識グラフの構造的な整列が可能である",
+    "LLM-as-a-judge によって構造の深さ（GentnerのSME等）を多次元評価できる",
+    "ドメイン間の距離は Wu-Palmer 等の階層関係や概念ベクトル距離で定量化できる"
+  ],
+  "scope": {
+    "field": "Design by Analogy",
+    "scale": "small",
+    "time_range": "last_10_years"
+  },
+  "keywords": {
+    "include": ["analogy", "design by analogy", "analogy mining", "structure mapping", "serendipity algorithm"],
+    "exclude": ["metaphor generation"]
+  },
+
+  "concern": "構造対応 of analogy that fails to yield practical hypotheses or falls into mere superficial associations"
+}

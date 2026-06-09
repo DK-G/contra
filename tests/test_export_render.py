@@ -62,6 +62,37 @@ def test_render_track_a_entry():
     assert "関係度" in md
 
 
+def test_render_track_a_github_entry():
+    work = Work(
+        id="https://github.com/acme/grid-twin",
+        title="acme/grid-twin",
+        year=2026,
+        venue="GitHub",
+        doi=None,
+        cited_by_count=120,
+        abstract="repo summary",
+        publication_type="github_repository",
+        source_meta={
+            "reliability_score": 72,
+            "license_name": "MIT",
+            "issue_signal_summary": "issues 2件 / open 1 / closed 1",
+        },
+    )
+    entry = OutputEntry(
+        work=work, relationship="関連性", abstract_summary="概要",
+        caution="注意点", usefulness_hypothesis="仮説テキスト",
+        track="A", label="実装アンカー", relationship_level="高",
+    )
+    section = OutputSection(title="Track A: Practical Anchors（1件）", track="A", entries=[entry])
+    doc = OutputDocument(theme=_theme(), sections=[section])
+    md = render_markdown(doc)
+    assert "acme/grid-twin" in md
+    assert "stars: 120" in md
+    assert "GitHub" in md
+    assert "Reliability Score: 72" in md
+    assert "issues 2件 / open 1 / closed 1" in md
+
+
 def test_render_empty_section_shows_placeholder():
     section = OutputSection(title="Track B: 接続点フィーチャー（0本）", track="B", entries=[])
     doc = OutputDocument(theme=_theme(), sections=[section])

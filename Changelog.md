@@ -7,6 +7,188 @@
 
 ---
 
+## 2026-06-09（CL-0073） named flow 追加（byrepo / byserendipity）
+
+### 概要
+* Track A と Track B の回し方を `byrepo` / `byserendipity` として named flow 化した。
+
+### 関連タスク
+* Task: named flow の整備
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+Track A と Track B の回し方を named flow として独立定義し、bynote のように呼び出し名で扱えるようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: docs/agent_rules/byrepo.md, docs/agent_rules/byserendipity.md, AGENT_COORDINATION.md, task.md, diff.md, Changelog.md
+Track A 用 byrepo と Track B 用 byserendipity を追加し、named flow 一覧へ登録した。
+
+# 3. 確認方法 (必須)
+Get-Content -Raw docs/agent_rules/byrepo.md
+Get-Content -Raw docs/agent_rules/byserendipity.md
+Get-Content -Raw AGENT_COORDINATION.md
+
+# 4. 既知の課題・リスク (必須)
+現時点では named flow の定義追加であり、自動ディスパッチ機構そのものは実装していない。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-09（CL-0072） Track A Reliability Score と issue 観測の追加
+
+### 概要
+* Track A Git practical anchors に issue signal と Reliability Score を追加し、Markdown 出力へ反映した。
+
+### 関連タスク
+* Task: Track A Git practical anchors の issue 観測と Reliability Score 実装
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+Track A Git practical anchors の信頼性評価を実装し、issue 観測と Reliability Score を表示できるようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/core/models.py, src/pipeline/git_collect.py, src/core/output_spec.py, tests/test_git_collect.py, tests/test_export_render.py, task.md, diff.md, Changelog.md
+issue サンプル取得、Reliability Score 算出、Work.source_meta への保持、Track A Markdown への score / issue signal 表示を追加した。
+
+# 3. 確認方法 (必須)
+& 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m compileall src\core\models.py src\pipeline\git_collect.py src\core\output_spec.py tests\test_git_collect.py tests\test_export_render.py
+$env:PYTHONPATH='.'; & 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tests\test_git_collect.py
+$env:PYTHONPATH='.'; & 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tests\test_export_render.py
+
+# 4. 既知の課題・リスク (必須)
+GitHub discussion 観測は未実装。
+Reliability Score は暫定配点であり、人手で重み調整が必要な可能性がある。
+compileall は Windows 上の既存 __pycache__ 置換で PermissionError が出る場合があるが、テスト実行自体は成功している。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-09（CL-0071） Track A Git collector の Track A パイプライン接続
+
+### 概要
+* GitHub repository を `Work` に正規化し、Track A の既存分類・生成・Markdown 出力へ接続した。
+
+### 関連タスク
+* Task: Track A Git practical anchors の Track A パイプライン接続
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+Track A の Git collector を既存の Track A 分類・生成・出力パイプラインへ接続する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/pipeline/generate.py, src/core/output_spec.py, src/cli/main.py, tests/test_git_collect.py, tests/test_export_render.py, task.md, diff.md, Changelog.md
+GitHub repository を Work に正規化して Track A 既存パイプラインへ流し込み、CLI 収集元と Track A 表示を Git practical anchor 前提へ更新した。
+
+# 3. 確認方法 (必須)
+& 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m compileall src\cli\main.py src\core\output_spec.py src\pipeline\generate.py src\pipeline\git_collect.py tests\test_git_collect.py tests\test_export_render.py
+$env:PYTHONPATH='.'; & 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tests\test_git_collect.py
+$env:PYTHONPATH='.'; & 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tests\test_export_render.py
+
+# 4. 既知の課題・リスク (必須)
+GitHub API の rate limit 回避や issue / discussion 観測は未実装。
+Reliability Score はまだ算出しておらず、現時点では stars 等を生値表示している。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-09（CL-0070） Track A Git collector の最小実装
+
+### 概要
+* `GitRepository` モデルと GitHub API 最小クライアントを追加し、Track A Git 実用アンカー向けの repository / README 取得 collector を実装した。
+
+### 関連タスク
+* Task: Track A Git実用アンカーの最小 collector 実装
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+Track A の Git 実用アンカー化に向けて、GitHub から repository 候補と README を取得する最小 collector を追加する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/core/models.py, src/github/client.py, src/pipeline/git_collect.py, tests/test_git_collect.py, task.md, diff.md, Changelog.md
+GitRepository データモデル、GitHub REST API 最小クライアント、Track A Git collector、モックテストを追加した。
+
+# 3. 確認方法 (必須)
+& 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m compileall src\github src\pipeline\git_collect.py tests\test_git_collect.py
+$env:PYTHONPATH='.'; & 'C:\Users\52hae\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tests\test_git_collect.py
+
+# 4. 既知の課題・リスク (必須)
+まだ Track A の既存分類・出力パイプラインには未接続。
+GitHub API の rate limit 回避や issue / discussion 観測は未実装。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-09（CL-0069） Track A Git実用アンカー設計メモの追加
+
+### 概要
+* `docs/specs/track_a_git_anchor_design.md` を追加し、Track A の Git 版を実用アンカーとして再定義した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+Track A の Git 実用アンカー設計を前に進めるため、検索条件・信頼性評価・出力区分を設計メモとして明文化する。
+
+# 2. 変更概要 (必須)
+変更ファイル: docs/specs/track_a_git_anchor_design.md, task.md, diff.md, Changelog.md
+Track A を Git 実用アンカーとして再定義する設計メモを追加し、task.md の設計タスク完了を反映した。
+
+# 3. 確認方法 (必須)
+Get-Content -Raw docs/specs/track_a_git_anchor_design.md
+Get-Content -Raw task.md
+
+# 4. 既知の課題・リスク (必須)
+まだ設計段階であり、GitHub 検索APIや README / issue 取得の実装方式、レート制限、認証要否は未確定。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
 ## 2026-02-11（CL-0068） Plan B+GeminiCLI方針の反映
 
 ### 概要

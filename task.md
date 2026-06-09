@@ -7,11 +7,11 @@
 ## 作業中 (In Progress)
 
 - [/] Track A Git実用アンカー設計
-    - [ ] 研究テーマに直接関連する OSS / GitHub repository を検索・収集する条件を定義する
-    - [ ] Track A を「近接論文アンカー」だけでなく「直接使える実装・制約・失敗パターンのアンカー」として再定義する
-    - [ ] Git 由来情報の信頼性評価（stars / activity / license / issue quality / last commit / README completeness）を設計する
-    - [ ] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
-    - [ ] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる
+    - [x] 研究テーマに直接関連する OSS / GitHub repository を検索・収集する条件を定義する
+    - [x] Track A を「近接論文アンカー」だけでなく「直接使える実装・制約・失敗パターンのアンカー」として再定義する
+    - [x] Git 由来情報の信頼性評価（stars / activity / license / issue quality / last commit / README completeness）を設計する
+    - [x] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
+    - [x] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる（`docs/specs/track_a_git_anchor_design.md`）
 - [/] Phase 1 Done 判断: Track B 品質評価
     - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
     - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する
@@ -23,6 +23,7 @@
 
 ## 未着手 (To Do)
 
+- [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
 - [ ] Web化・課金は現時点では実装しない。必要になったら Phase 2 として再評価する
@@ -30,6 +31,37 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-09 named flow 追加（byrepo / byserendipity）
+*   Track A Git practical anchors 用の named flow `byrepo` を `docs/agent_rules/byrepo.md` に追加。
+*   Track B 構造類推用の named flow `byserendipity` を `docs/agent_rules/byserendipity.md` に追加。
+*   `AGENT_COORDINATION.md` の Standard Named Flows に両者を登録し、`bynote` 系と同様に呼び出し名で扱えるよう整理。
+
+### 2026-06-09 Track A Reliability Score と issue 観測の追加
+*   GitHub issues を少数サンプル取得し、open / closed 件数、本文有無、label の有無を issue signal として評価する処理を追加。
+*   Theme Fit / Activity / Adoption / License / README / Issue / Research Linkage からなる暫定 Reliability Score を実装。
+*   repository 正規化時に score と issue signal を `Work.source_meta` へ保持し、Track A Markdown に表示するよう更新。
+*   `tests/test_git_collect.py` と `tests/test_export_render.py` を更新し、score 算出と出力反映を検証。
+
+### 2026-06-09 Track A Git collector の Track A パイプライン接続
+*   GitHub repository を `Work` へ正規化する変換を追加し、既存の Track A 分類・生成・履歴パイプラインへ接続。
+*   CLI の Track A 収集元を OpenAlex 近接論文から Git practical anchors へ切り替え。
+*   Track A の生成プロンプトを repository 前提でも破綻しないよう調整。
+*   Track A Markdown 表示を GitHub repository 向けに分岐し、`stars` / `GitHub` / 更新年を表示。
+*   `tests/test_git_collect.py` と `tests/test_export_render.py` で接続後の変換・表示を検証。
+
+### 2026-06-09 Track A Git実用アンカー collector の最小実装
+*   GitHub REST API を叩く最小クライアント `src/github/client.py` を追加。
+*   `src/pipeline/git_collect.py` に Track A 向け Git 検索クエリ生成、repository 検索、README base64 デコードを実装。
+*   `src/core/models.py` に GitHub repository メタデータを保持する `GitRepository` データクラスを追加。
+*   `tests/test_git_collect.py` でクエリ生成、README デコード、search + readme 取得フローをモック検証。
+*   まだ Track A の既存分類・Markdown 出力パイプラインには未接続。
+
+### 2026-06-09 Track A Git実用アンカー設計メモ
+*   Track A を「近接論文アンカー」から「実装・制約・失敗パターンを示す Git 実用アンカー」へ再定義する設計メモを追加。
+*   OSS / GitHub repository の収集条件、除外条件、Repository Reliability Score の暫定評価軸を整理。
+*   Track B の遠類推と混同しない表示区分として、Track A を `Practical Anchors` 系の補助セクションで扱う方針を明文化。
+*   実装に落とす際の最小単位を「検索 / メタデータ取得 / README要約 / 軽い issue 観測 / Markdown レンダリング」として整理。
 
 ### 2026-06-07 fill_track_entries 統合テストと roadmap 同期
 *   `tests/test_fill_track_entries.py` を追加し、`fill_track_entries` が Track A / Track B の LLM 生成境界をモック経由で呼び分け、結果を `OutputEntry` に反映することを検証。

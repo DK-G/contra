@@ -32,6 +32,7 @@ from src.pipeline.collect import (
 from src.pipeline.concept_distance import ThemeProfile, build_theme_profile
 from src.pipeline.export import export_markdown
 from src.pipeline.generate import GenerationConfig, fill_track_entries
+from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
 from src.pipeline.history import compute_theme_hash, load_history, save_history
 
 
@@ -302,6 +303,7 @@ def main(argv: list[str]) -> int:
     use_llm = gen_mode == "llm"
 
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
+    git_config = GitCollectConfig(per_page=max(args.track_a_count * 2, 10), max_repos=max(args.track_a_count * 2, 10))
 
     # MVP (--single): the single best Track B serendipity unit. Track A is an optional anchor.
     track_b_target = 1 if args.single else args.track_b_count
@@ -311,8 +313,8 @@ def main(argv: list[str]) -> int:
     track_a_entries: list = []
     try:
         if track_a_target > 0:
-            print("[info] collecting Track A (anchor) candidates...")
-            track_a_works = collect_and_filter(theme, config, max_count=200, require_abstract=True)
+            print("[info] collecting Track A Git practical anchors...")
+            track_a_works = collect_track_a_git_works(theme, git_config)
             track_a_works = filter_by_used_ids(track_a_works, used_ids, used_titles, used_dois)
             print(f"[ok] Track A candidates: {len(track_a_works)}")
 
@@ -328,6 +330,9 @@ def main(argv: list[str]) -> int:
         print(f"[ok] Track B candidates: {len(track_b_works)}")
     except (OpenAlexError, OpenAlexParseError) as exc:
         print(f"[error] openalex: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"[error] track-a git collect: {exc}", file=sys.stderr)
         return 1
 
     if track_a_target > 0:
@@ -421,7 +426,7 @@ def main(argv: list[str]) -> int:
     if track_a_entries:
         sections.append(
             OutputSection(
-                title=f"Track A: アンカー（{len(track_a_entries)}本）",
+                title=f"Track A: Practical Anchors（{len(track_a_entries)}件）",
                 track="A",
                 entries=track_a_entries,
             )
