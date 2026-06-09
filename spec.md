@@ -21,10 +21,17 @@
 | 言語 | Python | 3.10以上推奨 | 標準ライブラリのみで依存を最小化 |
 | フレームワーク | なし（CLI） | - | MVPはCLIで十分。Web化はPhase 2 |
 | 論文収集API | OpenAlex | v1（REST） | 無料・abstractあり・大規模。APIキー不要 |
+| 実装収集API | GitHub API | v3（REST） | Track A Git アンカーの収集に使用 |
 | LLM（4部構成生成） | OpenAI Responses API | gpt-4o-mini デフォルト | Responses APIを使用（Chat Completionsではない） |
 | LLM後処理 | GeminiCLI | 外部ツール | `gemini_materials.jsonl` を読み込んで仕上げ |
 | 外部ライブラリ | なし（stdlib のみ） | - | `urllib.request` で HTTP 通信。pip不要 |
 | ビルド/デプロイ | なし | - | Phase 1はローカルCLI実行のみ |
+
+### 2.1 将来的な追加技術要素（2026-06-09 導入決定）
+* **MCP (Model Context Protocol)**: Microsoftのサンプル等を参照し、エージェント環境（Claude Code等）とのツール統合を行う。
+* **Gensim/NumPy等 (GloVeコンセプト)**: 分散表現を用いた概念アライメント距離計算用。
+* **agentmemory (または独自のローカル持続メモリ)**: 探索履歴や失敗した接続の永続メモリ管理。
+
 
 -----
 
@@ -127,7 +134,13 @@
 
 ## 7. 決定ログ
 
+- `2026-06-09` **byrepo パイプラインの信頼性スコアリングの改善（4 Pillars実装）および次世代機能の導入決定**:
+  - Track A（Gitリポジトリ）の信頼性評価ロジックを、単純なスター数や更新日付から「マルチディメンショナルな100点満点スコア（4つのPillars）」にアップグレード。
+  - クエリ構築における、スペースを含む除外フレーズのマイナス記号指定（例：`"-metaphor generation"`）が GitHub API で検索結果を 0 件にしてしまうバグを修正。GitHub が公式にサポートする `NOT` 構文（例：`NOT "metaphor generation"`）を使用するように修正。さらに `poetry` ツール除外の競合問題も解消。
+  - レベルアップのインプット JSON `data/samples/theme_contra_level_up.json` を使った byrepo 探索に成功し、3つの有用なリポジトリ（MCP, GloVe, agentmemory）を発見。ライセンス調査（MIT, Apache-2.0）の結果、いずれも安全であることを確認し、Contra の将来のアーキテクチャ要素（MCPサーバー化、GloVeコンセプトの分散表現アライメント、agentmemoryの持続メモリ）として導入することを決定。
+
 - `2026-02-xx` OpenAI Responses APIを採用（Chat Completionsではない）。既存実装に合わせる。
+
 - `2026-02-xx` Plan A/B 並立を廃止。Plan B（LLM生成）＋ GeminiCLI後処理の二段階に一本化。`plan_a` CLIオプションは `structured` のエイリアスとして残存するが実質廃止。
 - `2026-05-28` 500本収集→20本レポート形式（Track A/B）に方針変更。Track A：関係グラデーション10本（関係軸ラベル付き）、Track B：接続点フィーチャー10本（接続点タイプ別ラベル付き）。却下した案：500本のまま品質を上げる→ユーザーが消費できる量を超えていた。
 - `2026-05-29` Track B の収集方式を修正: Track Aと同じ候補プールから残りを選ぶ方式を廃止。Track Bは別ドメイン・別クエリで独立収集することで「意外性」を担保する。接続点タイプの固定リストも廃止しLLMが自由発見する方式に変更。
