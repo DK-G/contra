@@ -1,4 +1,4 @@
-﻿"""Output markdown builder (Phase 1 minimal)."""
+"""Output markdown builder (Phase 1 minimal)."""
 
 from __future__ import annotations
 
@@ -47,6 +47,10 @@ def _link_for_work(work: Work) -> str:
     return "TBD"
 
 
+def _is_github_work(work: Work) -> bool:
+    return work.publication_type == "github_repository"
+
+
 def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
     """Render the shared 4-part body: 概要 / 関連性 / 役に立つ可能性の仮説 / 注意点."""
     lines = []
@@ -72,7 +76,24 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append("")
     lines.append(f"- **関係度**: {entry.relationship_level or '—'}")
     lines.append(f"- **関係軸**: {entry.label or '—'}")
-    lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
+    if _is_github_work(entry.work):
+        score = entry.work.source_meta.get("reliability_score", "—")
+        issue_signal = entry.work.source_meta.get("issue_signal_summary", "—")
+        license_name = entry.work.source_meta.get("license_name", "—")
+        impl_doc = entry.work.source_meta.get("impl_doc_score")
+        lma = entry.work.source_meta.get("lma_score")
+        comm = entry.work.source_meta.get("community_score")
+        sec = entry.work.source_meta.get("security_score")
+        lines.append(f"- 更新年: {entry.work.year or '—'}  |  種別: {entry.work.venue}  |  stars: {entry.work.cited_by_count}")
+        if impl_doc is not None and lma is not None and comm is not None and sec is not None:
+            lines.append(
+                f"- Reliability Score: {score} (Impl/Doc: {impl_doc}, LMA: {lma}, Comm: {comm}, Sec: {sec})  |  License: {license_name}"
+            )
+        else:
+            lines.append(f"- Reliability Score: {score}  |  License: {license_name}")
+        lines.append(f"- Issue Signal: {issue_signal}")
+    else:
+        lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")
     lines.append("")
     lines.extend(_render_4part_body(section_idx, entry_idx, entry))

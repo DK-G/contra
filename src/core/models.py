@@ -1,9 +1,9 @@
-﻿"""Core data models."""
+"""Core data models."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -60,8 +60,39 @@ class Work:
     author_affiliations: List[str] = field(default_factory=list)
     publication_type: Optional[str] = None
     is_retracted: bool = False
+    source_meta: Dict[str, Any] = field(default_factory=dict)
     # OpenAlex ids of works this paper cites; seeds the citation 2-hop bridge pool.
     referenced_works: List[str] = field(default_factory=list)
+
+
+@dataclass
+class GitRepository:
+    full_name: str
+    html_url: str
+    description: str = ""
+    stars: int = 0
+    forks: int = 0
+    watchers: int = 0
+    open_issues: int = 0
+    license_name: str = ""
+    default_branch: str = ""
+    updated_at: str = ""
+    pushed_at: str = ""
+    topics: List[str] = field(default_factory=list)
+    readme_text: str = ""
+    reliability_score: int = 0
+    theme_fit_score: int = 0
+    activity_score: int = 0
+    adoption_score: int = 0
+    license_score: int = 0
+    readme_score: int = 0
+    issue_score: int = 0
+    research_linkage_score: int = 0
+    impl_doc_score: int = 0
+    lma_score: int = 0
+    community_score: int = 0
+    security_score: int = 0
+    issue_signal_summary: str = ""
 
 
 @dataclass
