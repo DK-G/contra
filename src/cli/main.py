@@ -238,9 +238,16 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
     parser.add_argument("--allow-weak-fallback", action="store_true", help="Track B saturation (M3): by default a run that yields NO unit above --output-floor reports 'テーマ飽和' instead of padding the report with a single weak fallback paper. Set this to restore the old single-best fallback behaviour")
     parser.add_argument("--score-votes", type=int, default=1, help="Track B self-consistency (R5): run the PM scoring + hollow judge K times and reduce by median/majority to stop borderline candidates flipping across the floor between runs. 1 = single pass (default); 3 = ~3x LLM cost for more stable scores")
+    parser.add_argument("--mcp", action="store_true", help="Launch Stdio MCP Server")
     args = parser.parse_args(argv)
 
+    if args.mcp:
+        from src.mcp_server import run_mcp_server
+        run_mcp_server()
+        return 0
+
     if args.openalex_test:
+
         if not args.query:
             print("[error] --query is required with --openalex-test", file=sys.stderr)
             return 1
