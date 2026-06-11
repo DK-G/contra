@@ -41,6 +41,8 @@
 | R5 | 自己一貫性投票（score-votes） | **実装済み** |
 | M3 | テーマ飽和検知（output_floor / saturation report） | **実装済み** |
 | 10 | Phase 1 Done 判断: 複数テーマでの品質レビューと人間評価 | 未完了 |
+| A-RS1 | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | 未着手（DECISION_LOG 2026-06-12 参照） |
+| A-RS2 | byrepo Pillar 1 配点移行: README 成熟度 → 時間・他人系シグナル（CI実行履歴/リリース刻み/外部関与） | 未着手（同上、GITHUB_TOKEN 事実上必須化とセット） |
 
 **成果物**
 - CLIツール（テーマ入力→ Track B 1本、または質ゲート通過分のMarkdown出力）
@@ -58,6 +60,7 @@
 - 別ドメインクエリが教育・gamificationに偏る（掛け合わせと除外で抑制）
 - abstract欠損が多いと構造判定の精度が下がる
 - 履歴が積み重なるとOpenAlex候補が枯渇する
+- byrepo Reliability Score の構造的懸念: 完成した安定ライブラリの過小評価（Pillar 2）と README シグナルの時代劣化（Pillar 1）→ DECISION_LOG 2026-06-12
 
 ## Phase 2：Web化・非同期処理・決済
 
