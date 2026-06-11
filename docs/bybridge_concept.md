@@ -186,6 +186,24 @@ Swanson の「undiscovered public knowledge」研究（互いに引用関係の�
 
 ここで手応えがなければ②の設計に戻る。パイプライン全体の実装はその後。
 
+### 8.1 プローブ実装（着手済み）
+
+`scripts/bybridge_b0_probe.py` に B-0 ハーネスを実装済み（既存 `scripts/` の流儀に準拠）。
+
+- **共有構造の仮説生成プロンプト**（`_HYP_SYSTEM`）＝本方式の心臓部。抽象度較正を中心に据え、
+  「`a feedback loop`/`optimization under noise` のような何にでも当たる抽象は棄却（偽橋の源）」
+  「drum/conga が真の同型なのは『張った膜を叩く』機構レベルで一致するからで『どちらも音が出る』では不可」
+  「両テーマの表層語を含まず、かつ手法・法則を転用できる具体度」という狭い帯を明示。
+  各仮説に `abstraction_self_check`（right/too_abstract/too_concrete の自己採点）と中立語クエリを持たせる。
+- **ゴールドテスト2ペア**を full ThemeInput fixture 化（群れ↔風・乱流、株価↔弾道）。実パイプラインと同じ
+  `_extract_theme_schema` をそのまま流せる粒度で記述。
+- **bridge judge**（`_JUDGE_SYSTEM`）: A 側 / B 側の構造一致を別々に採点し、ゲート＝min（弱い橋脚で落ちる）・
+  ランキング＝積、表層のみの一致は `false_bridge` フラグで明示。
+- 実行: `OPENAI_API_KEY` を設定し repo root から `python scripts/bybridge_b0_probe.py`
+  （`--runs 3` で仮説生成の安定性、`--no-collect` で仮説まで、`--show-prompts` はオフラインでプロンプト確認）。
+- **実走による偽橋率の記録は未了**（着手コンテナに鍵・ネットワークが無いため）。鍵付き環境で実走し、
+  期待される橋（Toner–Tu／カルマン系）が浮上するか・偽橋がどの抽象度で混入するかを次に観察する。
+
 ---
 
 ## 9. 未決事項

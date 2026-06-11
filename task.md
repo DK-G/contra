@@ -24,9 +24,9 @@
 ## 未着手 (To Do)
 
 - [ ] bybridge（第3方式）B-0 偽橋率プローブ（前提: Phase 1 Done 判断。正本: `docs/bybridge_concept.md`）
-    - [ ] 共有構造の仮説生成プロンプトを書く（両テーマのスキーマ→トピック語を含まない抽象構造 2〜4 個）
-    - [ ] ゴールドテスト2ペア（群れの移動↔風・乱流 / 株価予測↔弾道推定）で仮説→クエリ→候補取得→簡易 judge を通す
-    - [ ] 期待される橋（Toner–Tu 系 / カルマン・状態空間系）が浮上するか、偽橋がどの抽象度で混入するかを記録する
+    - [x] 共有構造の仮説生成プロンプトを書く（両テーマのスキーマ→トピック語を含まない抽象構造 2〜4 個）→ `scripts/bybridge_b0_probe.py` の `_HYP_SYSTEM`（抽象度較正: drum/conga 同型を例に「両方音が出る」棄却・転用可能レベル明示）
+    - [x] ゴールドテスト2ペア（群れの移動↔風・乱流 / 株価予測↔弾道推定）を full ThemeInput fixture 化し、`_extract_theme_schema`→仮説生成→OpenAlex候補取得→bridge judge（A/B 別 match、min ゲート・積ランキング・false_bridge フラグ）まで通すハーネスを実装
+    - [ ] **実走で**期待される橋（Toner–Tu 系 / カルマン・状態空間系）が浮上するか、偽橋がどの抽象度で混入するかを記録する（要 `OPENAI_API_KEY`。`python scripts/bybridge_b0_probe.py --runs 3`。本コンテナは鍵・ネットワーク無しのため未実走）
     - [ ] 手応えがあれば roadmap.md Phase 1.5 の B-1 以降（入力スキーマ・収集・bridge score・提示）へ進む
 - [ ] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [ ] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
