@@ -1,4 +1,4 @@
-"""Stdio-based MCP Server for the entire "by" series (byrepo, byserendipity, bynote)."""
+"""Stdio-based MCP Server for the entire "by" series (byrepo, byserendipity, bynote, bybridge)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional
 from src.core.input_schema import validate_and_normalize
 from src.core.models import Keywords, Scope, ThemeInput
 from src.pipeline.classify import select_track_b
-from src.pipeline.collect import CollectConfig, collect_track_b
+from src.pipeline.collect import (
+    CollectConfig,
+    _bridge_pool_from_seeds,
+    collect_and_filter,
+    collect_citation_candidates,
+    collect_track_b,
+)
 from src.pipeline.concept_distance import build_theme_profile
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
@@ -46,7 +52,7 @@ def _build_theme_input(args: Dict[str, Any]) -> ThemeInput:
     scope_data = {
         "field": args.get("scope_field") or "",
         "scale": args.get("scope_scale") or "small",
-        "time_range": args.get("scope_time_range") or "recent"
+        "time_range": args.get("scope_time_range") or "last_10_years"
     }
     keywords_data = {
         "include": args.get("keywords_include") or [],
@@ -84,7 +90,7 @@ class StdinMcpServer:
                         "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
                         "scope_field": {"type": "string", "description": "Core field of study."},
                         "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
-                        "scope_time_range": {"type": "string", "description": "Time range.", "default": "recent"},
+                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
@@ -108,7 +114,7 @@ class StdinMcpServer:
                         "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
                         "scope_field": {"type": "string", "description": "Core field of study."},
                         "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
-                        "scope_time_range": {"type": "string", "description": "Time range.", "default": "recent"},
+                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
@@ -128,6 +134,32 @@ class StdinMcpServer:
                     },
                     "required": ["note_content"]
                 }
+            },
+            {
+                "name": "bybridge_collect",
+                "description": "Run the citation 2-hop bridge flow: collect near-field seed papers for the theme, build a bridge pool from their shared references, and return cross-domain papers that cite the same bridges but live outside the seeds' home (L0) domain.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "theme_overview": {"type": "string", "description": "Overview of the research theme (3-6 sentences)."},
+                        "goal": {"type": "string", "description": "What goal or output you want to achieve."},
+                        "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
+                        "approach_type": {"type": "string", "description": "Type of approach (e.g., theory, experiment, system-building, application).", "default": "application"},
+                        "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
+                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
+                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
+                        "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
+                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
+                        "concern": {"type": "string", "description": "Specific concern or failure mode."},
+                        "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
+                        "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
+                        "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
+                        "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
+                        "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0}
+                    },
+                    "required": ["theme_overview", "goal", "why_problem"]
+                }
             }
         ]
 
@@ -144,6 +176,8 @@ class StdinMcpServer:
                 result = self._execute_byrepo(args)
             elif name == "bynote_link_concepts":
                 result = self._execute_bynote(args)
+            elif name == "bybridge_collect":
+                result = self._execute_bybridge(args)
             else:
                 raise ValueError(f"Unknown tool: {name}")
             
@@ -310,6 +344,87 @@ class StdinMcpServer:
                     "text": output_text
                 }
             ],
+            "isError": False
+        }
+
+    def _execute_bybridge(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        theme = _build_theme_input(args)
+        model = args.get("llm_model") or "gpt-4o-mini"
+        target_count = args.get("bridge_count") or 3
+        seed_count = args.get("seed_count") or 20
+        raw_only = bool(args.get("raw_only"))
+        output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.0
+
+        _log("Bybridge: collecting near-field seed papers...")
+        seeds = collect_and_filter(theme, CollectConfig(), max_count=seed_count, require_abstract=True)
+        if not seeds:
+            return {
+                "content": [{"type": "text", "text": "近傍シード論文が見つからず、bridge プールを構築できませんでした。キーワードを見直してください。"}],
+                "isError": False
+            }
+
+        bridges = set(_bridge_pool_from_seeds(seeds, cap=50))
+
+        _log("Bybridge: running citation 2-hop scan across the bridge pool...")
+        cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60)
+        if not cands:
+            return {
+                "content": [{"type": "text", "text": f"citation 2-hop で交差候補が見つかりませんでした（シード {len(seeds)} 件 / bridge {len(bridges)} 本。ホームドメイン除外で全滅した可能性があります）。"}],
+                "isError": False
+            }
+
+        def shared_bridge_count(work) -> int:
+            return sum(1 for r in (work.referenced_works or []) if r in bridges)
+
+        diag_line = f"収集診断: シード {len(seeds)} 件 / bridge プール {len(bridges)} 本 / 交差候補 {len(cands)} 件"
+
+        if raw_only:
+            lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
+            ranked = sorted(cands, key=shared_bridge_count, reverse=True)
+            for i, w in enumerate(ranked[:max(target_count, 10)], 1):
+                lines.append(f"{i}. {w.title}")
+                lines.append(f"   - 共有bridge: {shared_bridge_count(w)}本 | 年: {w.year} | 掲載: {w.venue} | 被引用: {w.cited_by_count}")
+                lines.append(f"   - リンク: {w.id}")
+            return {
+                "content": [{"type": "text", "text": "\n".join(lines)}],
+                "isError": False
+            }
+
+        _log("Bybridge: selecting bridge-derived candidates (purpose x mechanism)...")
+        theme_profile = build_theme_profile(seeds)
+        select_diag: dict = {}
+        entries = select_track_b(
+            cands, theme, model=model, count=target_count,
+            gate=0.0, use_llm=True, theme_profile=theme_profile,
+            struct_depth_gate=0.0, output_floor=output_floor,
+            vote_k=1, emit_fallback=True, diag=select_diag
+        )
+        if not entries:
+            return {
+                "content": [{"type": "text", "text": f"{diag_line}\n\nbridge 経由の交差候補はありましたが、選別ゲートを通過するものがありませんでした。raw_only=true で候補リストを直接確認できます。"}],
+                "isError": False
+            }
+
+        _log("Bybridge: generating text for entries...")
+        entries = fill_track_entries(entries, GenerationConfig(llm_model=model), theme=theme, mode="llm")
+
+        lines = [diag_line, ""]
+        for i, entry in enumerate(entries, 1):
+            lines.append(f"### {i}. {entry.work.title}")
+            lines.append(f"- **接続点**: {entry.label}")
+            lines.append(f"- **共有bridge**: {shared_bridge_count(entry.work)}本")
+            lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 構造: {entry.structure_score:.2f})")
+            lines.append(f"- 年: {entry.work.year} | 掲載: {entry.work.venue} | 被引用: {entry.work.cited_by_count}")
+            lines.append(f"- リンク: {entry.work.id}")
+            lines.append("")
+            lines.append(f"1) 概要: {entry.abstract_summary}")
+            lines.append(f"2) 関連性: {entry.relationship}")
+            lines.append(f"3) 役に立つ可能性の仮説: {entry.usefulness_hypothesis}")
+            lines.append(f"4) 注意点: {entry.caution}")
+            lines.append("")
+
+        return {
+            "content": [{"type": "text", "text": "\n".join(lines)}],
             "isError": False
         }
 
