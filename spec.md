@@ -179,6 +179,12 @@
 
 - `2026-05-31` **M3: テーマ飽和検知**: `output_floor` 超えが0件かつ `--allow-weak-fallback` 未指定の場合、弱い fallback を出力せず「飽和ノート」（`_write_saturation_report`）を書いて終了。採用なし=履歴不更新。誤った弱接続で水増しレポートを出さない設計。`diag` dict でステータスを呼び出し元に通知。
 
+- `2026-06-11` **第3方式 bybridge を構想確定**: ユーザーが2テーマ（研究テーマ＋つなげたいテーマ）を指定し、両者を構造的に媒介する「橋」論文を第3ドメイン含め探す指向型モード。正本は [`docs/bybridge_concept.md`](docs/bybridge_concept.md)。主要決定:
+  - 「またがる」の定義は **(b) 構造的な橋**（A・B 双方に構造類推が成り立つ論文。第3ドメイン可）。却下案: (a) 文字どおりの交差（A∩B）→ 確立済み学際分野を引き当て意外性が低く、両側クエリは多義語罠を悪化させる。
+  - **Track B の転置**と整理: Track B = `purpose_sim × mechanism_dist`（目的同じ・メカニズム遠い）に対し、bybridge = **mechanism_sim（両テーマへの構造一致）× domain_dist**。`select_track_b` は流用不可、bridge score（min ゲート＋積ランキング＋両側 surface ペナルティ）を新設する。
+  - 実装前に**偽橋率プローブ**（共有構造の仮説生成プロンプト＋ゴールドテスト2ペア: 群れ↔流体→Toner–Tu、株価↔弾道→カルマン系）で較正する。answer-known 検証ができるのは bybridge 固有の利点。
+  - 着手は Phase 1（Track B 品質確立）Done 後。roadmap.md Phase 1.5 に Step B-0〜B-5 を定義。
+
 - `2026-05-29` ~~Track A/B の初期詳細仕様を確定（Step 1完了）~~ → **以下の項目は後続の決定（2026-05-29〜05-31）で大幅に更新済み。参照のみ**:
   - 関係度表現: 5段階ラベル（高/中高/中/中低/低）を採用（現在も有効）。
   - ~~Track AとTrack Bは同じ候補プールを共有~~ → **廃止**（2026-05-29の別エントリで独立収集方式に変更）。
@@ -201,6 +207,7 @@
 
 - **Phase 1「Done」判断**: 複数テーマで「遠いが構造一致」の1本が安定して出力でき、Anomaly・近接が混入しないことを品質評価（サンプル生成フェーズ）
 - **テスト補強**: LLMモックを使った `fill_track_entries` の統合テスト
+- **bybridge（第3方式）の偽橋率プローブ**: Phase 1 Done 後に着手。仮説生成プロンプト＋ゴールドテスト2ペアで較正してから本実装（[`docs/bybridge_concept.md`](docs/bybridge_concept.md) §8、roadmap.md Phase 1.5 B-0）
 
 
 ## 検証ツール (Validation Tools)
