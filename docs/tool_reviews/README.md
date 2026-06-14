@@ -34,6 +34,7 @@
 | Papernity (papernity.com) | [`papernity_review.md`](papernity_review.md) | **不採用**: 論文代筆SaaS。目的が代筆で逆、かつAI検出回避を訴求(整合性赤信号)。学ぶものなし |
 | ResearchRabbit (researchrabbit.ai) | [`researchrabbit_review.md`](researchrabbit_review.md) | 検索先にならず。価値は4接続タイプ(引用/結合/共著/意味類似)でcontraを座標化。共著=避ける近傍軸、結合/類似は遠さへ反転 |
 | Litmaps (litmaps.com) | [`litmaps_review.md`](litmaps_review.md) | 可視化系3例目。唯一の新軸=モニタリング(継続発見)→履歴/M3を土台にした"contra watchモード"の着想。時系列軸は軽い可視化改良 |
+| scite (scite.ai) | [`scite_review.md`](scite_review.md) | 支持/反論/言及の態度分類。bybridgeはS2 intent(無料)が上位で不要。固有は「反論引用→出力『注意点』」だが希少+有料で優先度低 |
 
 ## 横断的な示唆（8件調査後の総括）
 
