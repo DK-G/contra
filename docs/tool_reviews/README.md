@@ -27,6 +27,7 @@
 | Consensus (consensus.app) | [`consensus_review.md`](consensus_review.md) | 名前ごと contra の対極（合意=収束）。OpenAlex 再販で検索先にならず。価値は同一性の対照例 |
 | Connected Papers (connectedpapers.com) | [`connected_papers_review.md`](connected_papers_review.md) | bybridge と同系統手法（bibliographic coupling）を収束方向に回した双子。妥当性裏づけ＋co-citation拡張＋可視化設計図 |
 | Semantic Scholar (semanticscholar.org) | [`semantic_scholar_review.md`](semantic_scholar_review.md) | OpenAlexは据え置きつつ加算する3レイヤー（SPECTER2/推薦/引用インテント）。引用インテントが bybridge の偽bridge除去を原理化 |
+| SciSpace (scispace.com) | [`scispace_review.md`](scispace_review.md) | 収束型SaaS 3例目。固有価値は「遠い論文を門外漢へ翻訳」=生成段(関連性/仮説)の語り口の手本 |
 
 ## 横断的な示唆（現時点）
 
