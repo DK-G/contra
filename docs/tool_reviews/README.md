@@ -26,6 +26,7 @@
 | Elicit (elicit.com) | [`elicit_review.md`](elicit_review.md) | 製品は contra の対極（収束型）。実利は基盤の Semantic Scholar = SPECTER2 埋め込み（初の有力な追加コーパス／距離軸強化） |
 | Consensus (consensus.app) | [`consensus_review.md`](consensus_review.md) | 名前ごと contra の対極（合意=収束）。OpenAlex 再販で検索先にならず。価値は同一性の対照例 |
 | Connected Papers (connectedpapers.com) | [`connected_papers_review.md`](connected_papers_review.md) | bybridge と同系統手法（bibliographic coupling）を収束方向に回した双子。妥当性裏づけ＋co-citation拡張＋可視化設計図 |
+| Semantic Scholar (semanticscholar.org) | [`semantic_scholar_review.md`](semantic_scholar_review.md) | OpenAlexは据え置きつつ加算する3レイヤー（SPECTER2/推薦/引用インテント）。引用インテントが bybridge の偽bridge除去を原理化 |
 
 ## 横断的な示唆（現時点）
 
