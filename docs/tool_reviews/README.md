@@ -36,6 +36,7 @@
 | Litmaps (litmaps.com) | [`litmaps_review.md`](litmaps_review.md) | 可視化系3例目。唯一の新軸=モニタリング(継続発見)→履歴/M3を土台にした"contra watchモード"の着想。時系列軸は軽い可視化改良 |
 | scite (scite.ai) | [`scite_review.md`](scite_review.md) | 支持/反論/言及の態度分類。bybridgeはS2 intent(無料)が上位で不要。固有は「反論引用→出力『注意点』」だが希少+有料で優先度低 |
 | CORE (core.ac.uk) | [`core_review.md`](core_review.md) | **採用候補**: 合法・無料・最大のOA全文層(API v3)。「abstractが薄い」課題をbyserendipity/bybridgeで全文補強。Anna's Archiveの合法本命 |
+| arXiv (arxiv.org) | [`arxiv_review.md`](arxiv_review.md) | **採用候補(provider層)**: 発見は不適(STEM限定で遠さを縮める)。全文provider層の筆頭=キー不要+クリーンなLaTeXソース。preprint=注意点フラグ |
 
 ## 横断的な示唆（8件調査後の総括）
 
@@ -75,8 +76,9 @@ Track B の `select_track_b` 構造判定にだけは外部シグナル（埋め
 
 ### 6. 「全文補強」が確たる実装スレッドに昇格
 byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」課題に対し、複数レポートが同じ解に収束:
-**OpenAlex(`oa_url`) → Unpaywall / CORE / IA Scholar の優先順で OA 全文を解決する差し替え可能な provider 層**。
-違法経路（Anna's Archive）は恒久不採用。→ **byrepo Web Pass と並ぶ、第2の有力な最初の一手**。
+**arXiv（arXiv-id 最優先・キー不要・LaTeX クリーン）→ Unpaywall → CORE → IA Scholar の順で OA 全文を解決する
+差し替え可能な provider 層**（発見は OpenAlex 据え置き）。違法経路（Anna's Archive）は恒久不採用。
+→ **byrepo Web Pass と並ぶ、第2の有力な最初の一手**。**arXiv は導入摩擦が最小で provider 層の着手点**。
 
 ### 7. 新しい設計アイデア（核ではないが記録）
 - **watch / monitor モード**（Litmaps）: テーマ定期再実行＋履歴 diff で新着 bridge を surface（優先度中）。
