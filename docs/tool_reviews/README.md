@@ -30,7 +30,8 @@
 | SciSpace (scispace.com) | [`scispace_review.md`](scispace_review.md) | 収束型SaaS 3例目。固有価値は「遠い論文を門外漢へ翻訳」=生成段(関連性/仮説)の語り口の手本 |
 | Phind (phind.com) | [`phind_review.md`](phind_review.md) | 開発者版の収束ツール。唯一その収束マインドが Track A(byrepo)と整合。Web Pass の到達点(docs/issues/SOで制約・失敗パターン) |
 | Anna's Archive (annas-archive.org) | [`annas_archive_review.md`](annas_archive_review.md) | **採用不可**: 著作権侵害シャドウライブラリ($322M判決/差止)。全文は合法OA(CORE/Unpaywall/IA Scholar)で代替 |
-| Google Scholar (scholar.google.com) | [`google_scholar_review.md`](google_scholar_review.md) | **採用不可**: 公式APIなし・ToS禁止・CAPTCHA。広いが触れない。OpenAlex+S2+COREで代替 |
+| Google Scholar (scholar.google.com) | [`google_scholar_review.md`](google_scholar_review.md) | **採用不可**: 公式APIなし・ToS禁止・CAPTCHA。広いが触れない。OpenAlex+S2+COREで代替（他Googleツール経由もScholarデータは不可） |
+| Papernity (papernity.com) | [`papernity_review.md`](papernity_review.md) | **不採用**: 論文代筆SaaS。目的が代筆で逆、かつAI検出回避を訴求(整合性赤信号)。学ぶものなし |
 
 ## 横断的な示唆（8件調査後の総括）
 
