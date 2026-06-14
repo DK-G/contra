@@ -4,7 +4,7 @@
 > contra に取り込める要素があるかを判定した記録である。
 > 調査手段: GitHub リポジトリの直接確認（SPEC.md / README / ソースツリー）＋ contra 側コード読解。調査日: 2026-06-14。
 > 対象: <https://github.com/GoogleCloudPlatform/knowledge-catalog>（Apache 2.0 / *Not an official Google product*）
-> 関連: [`byrepo_improvement_strategy.md`](byrepo_improvement_strategy.md), [`serendipity_conditions.md`](serendipity_conditions.md)
+> 関連: [`byrepo_improvement_strategy.md`](../research/byrepo_improvement_strategy.md), [`serendipity_conditions.md`](../research/serendipity_conditions.md)
 
 ---
 

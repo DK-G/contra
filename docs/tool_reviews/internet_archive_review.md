@@ -4,7 +4,7 @@
 > contra に取り込める要素があるかを判定した記録である。
 > 調査手段: archive.org / scholar.archive.org / Wayback API ドキュメント＋ Web 調査。調査日: 2026-06-14。
 > 対象: <https://archive.org/>（米国の非営利デジタル図書館）
-> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md), [`byrepo_improvement_strategy.md`](byrepo_improvement_strategy.md)
+> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md), [`byrepo_improvement_strategy.md`](../research/byrepo_improvement_strategy.md)
 
 ---
 
