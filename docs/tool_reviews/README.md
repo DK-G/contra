@@ -36,7 +36,7 @@
 | Litmaps (litmaps.com) | [`litmaps_review.md`](litmaps_review.md) | 可視化系3例目。唯一の新軸=モニタリング(継続発見)→履歴/M3を土台にした"contra watchモード"の着想。時系列軸は軽い可視化改良 |
 | scite (scite.ai) | [`scite_review.md`](scite_review.md) | 支持/反論/言及の態度分類。bybridgeはS2 intent(無料)が上位で不要。固有は「反論引用→出力『注意点』」だが希少+有料で優先度低 |
 | CORE (core.ac.uk) | [`core_review.md`](core_review.md) | **採用候補**: 合法・無料・最大のOA全文層(API v3)。「abstractが薄い」課題をbyserendipity/bybridgeで全文補強。Anna's Archiveの合法本命 |
-| arXiv (arxiv.org) | [`arxiv_review.md`](arxiv_review.md) | **採用候補(provider層)**: 発見は不適(STEM限定で遠さを縮める)。全文provider層の筆頭=キー不要+クリーンなLaTeXソース。preprint=注意点フラグ |
+| arXiv (arxiv.org) | [`arxiv_review.md`](arxiv_review.md) | **採用候補(2役)**: ①byserendipityの副次検索対象(STEM=機構可読で構造一致の精度↑) ②全文provider層の筆頭(キー不要+LaTeXクリーン)。OpenAlex=広さ/arXiv=深さ精度。引用エッジ非提供のみ制約(bybridgeはOpenAlex/S2と分担)、構造的欠陥なし |
 
 ## 横断的な示唆（8件調査後の総括）
 
@@ -86,6 +86,12 @@ byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」
 - **4接続タイプでの自己定位**（ResearchRabbit）: 結合/類似は遠さへ反転、共著=避ける、引用=使う。
 
 ### 8. 一貫した構図
-収集の母集団は **OpenAlex 据え置き**、加算価値は **Semantic Scholar（埋め込み/推薦/引用インテント）＋ CORE（OA 全文）**
-の2素材に集約。残りは「contra が何でないか（収束 vs 発散）」を映す鏡。実装合流点は
-**①byrepo Web Pass ②OA 全文 provider 層 ③S2 加算レイヤー ④OKF メモリ＋可視化**。
+収集の母集団は **OpenAlex を主役に据え置き**、加算価値は **Semantic Scholar（埋め込み/推薦/引用インテント）＋
+CORE/arXiv（OA 全文）＋ arXiv（STEM の副次検索対象）** に集約。残りは「contra が何でないか（収束 vs 発散）」を映す鏡。
+実装合流点は **①byrepo Web Pass ②OA 全文 provider 層 ③S2 加算レイヤー ④OKF メモリ＋可視化**。
+
+### 9. 検索対象は「広さ × 精度」の2軸で考える（arXiv 再評価より）
+ソースを「広さ(recall)＝遠ドメイン射程」だけで測ると誤る。**機構の可読性（mechanism legibility）が高い分野
+（arXiv の STEM）は、構造一致の判定精度(precision)が高く偽 bridge を弾きやすい**ため、ジャンル限定でも
+良質な検索対象になりうる。**OpenAlex=広さ / arXiv=深さ・精度**の併用が指針。今後ソースを評価する際は
+recall だけでなく **「機構がどれだけ明示的に書かれる分野か」** を質の軸として加える。
