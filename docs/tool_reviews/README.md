@@ -23,11 +23,13 @@
 |---|---|---|
 | OKF / Google `knowledge-catalog` | [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md) | 公開コーパスではない。効くのは Web Pass（手法）と OKF バンドル化（記憶層） |
 | Internet Archive (archive.org) | [`internet_archive_review.md`](internet_archive_review.md) | 発見コーパスは弱。Wayback が byrepo Web Pass のリンク切れを埋める（堅牢化層） |
+| Elicit (elicit.com) | [`elicit_review.md`](elicit_review.md) | 製品は contra の対極（収束型）。実利は基盤の Semantic Scholar = SPECTER2 埋め込み（初の有力な追加コーパス／距離軸強化） |
 
 ## 横断的な示唆（現時点）
 
-- 「新しい検索先（母集団）を増やす」系の提案は、これまで本命になっていない。OpenAlex/GitHub を
-  置き換える公開コーパスは出ていない。
+- 「新しい検索先（母集団）を増やす」系の提案は長らく本命になっていなかったが、**Elicit 調査で初めて
+  実体ある候補＝Semantic Scholar (S2AG)** が出た。とくに **SPECTER2 埋め込み**は `spec.md` 将来構想
+  「概念アライメント距離」を低コストで実現しうる。ただし**ドメイン距離軸限定**で、構造一致判定には混ぜない。
 - 一方で **byrepo の Web Pass（README リンク追跡）** が複数レポートの合流点になっている:
   OKF からは手法、archive.org（Wayback）からは堅牢化層が乗る。最初の実装候補として有力。
 - **出力の OKF バンドル化 = 自前メモリ層** も横断テーマ。`history.py` の一般化＋Save Page Now による
