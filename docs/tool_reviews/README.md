@@ -28,13 +28,28 @@
 | Connected Papers (connectedpapers.com) | [`connected_papers_review.md`](connected_papers_review.md) | bybridge と同系統手法（bibliographic coupling）を収束方向に回した双子。妥当性裏づけ＋co-citation拡張＋可視化設計図 |
 | Semantic Scholar (semanticscholar.org) | [`semantic_scholar_review.md`](semantic_scholar_review.md) | OpenAlexは据え置きつつ加算する3レイヤー（SPECTER2/推薦/引用インテント）。引用インテントが bybridge の偽bridge除去を原理化 |
 | SciSpace (scispace.com) | [`scispace_review.md`](scispace_review.md) | 収束型SaaS 3例目。固有価値は「遠い論文を門外漢へ翻訳」=生成段(関連性/仮説)の語り口の手本 |
+| Phind (phind.com) | [`phind_review.md`](phind_review.md) | 開発者版の収束ツール。唯一その収束マインドが Track A(byrepo)と整合。Web Pass の到達点(docs/issues/SOで制約・失敗パターン) |
 
-## 横断的な示唆（現時点）
+## 横断的な示唆（8件調査後の総括）
 
-- 「新しい検索先（母集団）を増やす」系の提案は長らく本命になっていなかったが、**Elicit 調査で初めて
-  実体ある候補＝Semantic Scholar (S2AG)** が出た。とくに **SPECTER2 埋め込み**は `spec.md` 将来構想
-  「概念アライメント距離」を低コストで実現しうる。ただし**ドメイン距離軸限定**で、構造一致判定には混ぜない。
-- 一方で **byrepo の Web Pass（README リンク追跡）** が複数レポートの合流点になっている:
-  OKF からは手法、archive.org（Wayback）からは堅牢化層が乗る。最初の実装候補として有力。
-- **出力の OKF バンドル化 = 自前メモリ層** も横断テーマ。`history.py` の一般化＋Save Page Now による
-  citation 恒久化がここに重なる。
+### 1. 「収束 vs 発散」でツールは2群に割れる
+調査した SaaS（Elicit / Consensus / SciSpace / Phind）はすべて**収束型**＝関連性・要約・合意・的確な答え。
+contra の中核 **Track B は発散**（遠ドメイン構造類推）なので、これらは**思想的に対極**であり、
+価値は主に「**contra が何でないか**を映す鏡」。例外は **Phind**：その収束は **Track A（byrepo＝接地）と整合**する。
+→ 設計指針: **フロー別に収束/発散の思想を分ける**（Track A は precision、Track B は distance）。
+
+### 2. 「新しい検索先（母集団）」はほぼ出ない
+OpenAlex を置き換える公開コーパスは現れず。唯一の加算候補が **Semantic Scholar (S2AG)**。ただし母集団は
+OpenAlex 据え置きで、S2 は**3つの加算レイヤー**として効く: SPECTER2 埋め込み（ドメイン距離軸）/
+Recommendations（候補拡張）/ **引用インテント（bybridge の偽 bridge 除去を原理化）**。
+
+### 3. 実装の合流点は3つに収束した
+- **byrepo Web Pass**（README → docs / GitHub issues / Stack Overflow を出典つき合成）:
+  OKF=手法、Phind=到達点の手本と source set、archive.org(Wayback)=リンク切れ復旧。**最有力の最初の一手**。
+- **Semantic Scholar 加算レイヤー**: SPECTER2 で `concept_distance` 補強、引用インテントで bybridge 精緻化。
+- **OKF バンドル化 = 自前メモリ層 ＋ Connected Papers 流の可視化**: `history.py` 一般化＋Save Page Now で
+  citation 恒久化、ノード色=ドメイン距離に意味反転したグラフ提示。
+
+### 4. 制約は一貫してクリア
+すべて stdlib・キー不要 or 環境変数化・出力フォーマット/スコア設計不変更の範囲で実現可能。
+Track B の `select_track_b` 構造判定にだけは外部シグナル（埋め込み類似・合意・収束）を**混ぜない**こと。
