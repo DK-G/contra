@@ -35,6 +35,7 @@
 | ResearchRabbit (researchrabbit.ai) | [`researchrabbit_review.md`](researchrabbit_review.md) | 検索先にならず。価値は4接続タイプ(引用/結合/共著/意味類似)でcontraを座標化。共著=避ける近傍軸、結合/類似は遠さへ反転 |
 | Litmaps (litmaps.com) | [`litmaps_review.md`](litmaps_review.md) | 可視化系3例目。唯一の新軸=モニタリング(継続発見)→履歴/M3を土台にした"contra watchモード"の着想。時系列軸は軽い可視化改良 |
 | scite (scite.ai) | [`scite_review.md`](scite_review.md) | 支持/反論/言及の態度分類。bybridgeはS2 intent(無料)が上位で不要。固有は「反論引用→出力『注意点』」だが希少+有料で優先度低 |
+| CORE (core.ac.uk) | [`core_review.md`](core_review.md) | **採用候補**: 合法・無料・最大のOA全文層(API v3)。「abstractが薄い」課題をbyserendipity/bybridgeで全文補強。Anna's Archiveの合法本命 |
 
 ## 横断的な示唆（8件調査後の総括）
 
@@ -59,3 +60,30 @@ Recommendations（候補拡張）/ **引用インテント（bybridge の偽 bri
 ### 4. 制約は一貫してクリア
 すべて stdlib・キー不要 or 環境変数化・出力フォーマット/スコア設計不変更の範囲で実現可能。
 Track B の `select_track_b` 構造判定にだけは外部シグナル（埋め込み類似・合意・収束）を**混ぜない**こと。
+
+---
+
+## 横断的な示唆（リスト #1–11 バッチ後の追補）
+
+### 5. 篩の結果: 採用候補は「合法・無料・API 整備のインフラ」だけ
+このバッチ7件（重複4件は除外）の判定:
+- **棄却（reject）**: Anna's Archive（著作権侵害）/ Google Scholar（API なし・ToS 禁止）/ Papernity（代筆・検出回避）。
+- **収集には不要（鏡/可視化）**: ResearchRabbit / Litmaps / scite — いずれも S2 上の SaaS で公開 API 弱く、
+  価値は contra の座標化（4接続タイプ）や個別アイデアに留まる。
+- **採用候補 ⭕**: **CORE (core.ac.uk)** — 合法・無料・最大の OA 全文層。前バッチの **Semantic Scholar** と並ぶ
+  "素材として加算価値"のある対象。
+
+### 6. 「全文補強」が確たる実装スレッドに昇格
+byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」課題に対し、複数レポートが同じ解に収束:
+**OpenAlex(`oa_url`) → Unpaywall / CORE / IA Scholar の優先順で OA 全文を解決する差し替え可能な provider 層**。
+違法経路（Anna's Archive）は恒久不採用。→ **byrepo Web Pass と並ぶ、第2の有力な最初の一手**。
+
+### 7. 新しい設計アイデア（核ではないが記録）
+- **watch / monitor モード**（Litmaps）: テーマ定期再実行＋履歴 diff で新着 bridge を surface（優先度中）。
+- **「注意点」フィールドの係争裏づけ**（scite）: contrasting 引用で caution を強化（希少+有料、優先度低）。
+- **4接続タイプでの自己定位**（ResearchRabbit）: 結合/類似は遠さへ反転、共著=避ける、引用=使う。
+
+### 8. 一貫した構図
+収集の母集団は **OpenAlex 据え置き**、加算価値は **Semantic Scholar（埋め込み/推薦/引用インテント）＋ CORE（OA 全文）**
+の2素材に集約。残りは「contra が何でないか（収束 vs 発散）」を映す鏡。実装合流点は
+**①byrepo Web Pass ②OA 全文 provider 層 ③S2 加算レイヤー ④OKF メモリ＋可視化**。
