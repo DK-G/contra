@@ -24,6 +24,7 @@
 | OKF / Google `knowledge-catalog` | [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md) | 公開コーパスではない。効くのは Web Pass（手法）と OKF バンドル化（記憶層） |
 | Internet Archive (archive.org) | [`internet_archive_review.md`](internet_archive_review.md) | 発見コーパスは弱。Wayback が byrepo Web Pass のリンク切れを埋める（堅牢化層） |
 | Elicit (elicit.com) | [`elicit_review.md`](elicit_review.md) | 製品は contra の対極（収束型）。実利は基盤の Semantic Scholar = SPECTER2 埋め込み（初の有力な追加コーパス／距離軸強化） |
+| Consensus (consensus.app) | [`consensus_review.md`](consensus_review.md) | 名前ごと contra の対極（合意=収束）。OpenAlex 再販で検索先にならず。価値は同一性の対照例 |
 
 ## 横断的な示唆（現時点）
 
