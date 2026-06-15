@@ -25,6 +25,7 @@
 |---|---|---|
 | **OpenAlex**（基準/現行） | [`openalex_review.md`](openalex_review.md) | contraのバックボーン(全分野・無料・キー不要)。⚠Concepts→Topics移行がconcept_distanceの最重要リスク。abstractはinverted indexのみ=全文provider層で補う |
 | Crossref (crossref.org) | [`crossref_review.md`](crossref_review.md) | **冗長/不採用**: DOI登録の上流レジストリ。OpenAlexがCrossrefを内包+概念/OA/引用を上乗せ。新しい母集団も距離も供給せず |
+| Unpaywall (unpaywall.org) | [`unpaywall_review.md`](unpaywall_review.md) | **冗長/不採用**: OurResearch運営でOpenAlex `oa_url`はUnpaywall由来=既に手元。provider連鎖から独立ステップとして外す訂正。位置であって全文ではない |
 
 ### ツール/サイト別レポート
 
@@ -85,10 +86,12 @@ Track B の `select_track_b` 構造判定にだけは外部シグナル（埋め
   "素材として加算価値"のある対象。
 
 ### 6. 「全文補強」が確たる実装スレッドに昇格
-byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」課題に対し、複数レポートが同じ解に収束:
-**arXiv（arXiv-id 最優先・キー不要・LaTeX クリーン）→ Unpaywall → CORE → IA Scholar の順で OA 全文を解決する
-差し替え可能な provider 層**（発見は OpenAlex 据え置き）。違法経路（Anna's Archive）は恒久不採用。
-→ **byrepo Web Pass と並ぶ、第2の有力な最初の一手**。**arXiv は導入摩擦が最小で provider 層の着手点**。
+byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」課題に対し、複数レポートが同じ解に収束。
+**【確定形（Unpaywall レポートで訂正）】**:
+**①arXiv（arXiv-id 最優先・キー不要・LaTeX クリーン）→ ②CORE / IA Scholar（非 arXiv の OA 全文・実体）→
+③OpenAlex `oa_url` の PDF 取得・抽出（= Unpaywall 由来の汎用フォールバック）**。
+発見・OA 位置の起点は OpenAlex（Unpaywall を内包）。Unpaywall は `oa_url` に畳み込まれ**独立ステップ不要**。
+違法経路（Anna's Archive）は恒久不採用。→ **byrepo Web Pass と並ぶ第2の最初の一手**、**arXiv が着手点**。
 
 ### 7. 新しい設計アイデア（核ではないが記録）
 - **watch / monitor モード**（Litmaps）: テーマ定期再実行＋履歴 diff で新着 bridge を surface（優先度中）。
