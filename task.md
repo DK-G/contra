@@ -29,7 +29,9 @@
 - [x] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセット
     - [x] 先手: CI 実行履歴＋リリース刻みを verified maturity（最大12点）として導入し、リッチシグナル取得時のみ README 系をスケールして移譲する
     - [x] 「他人」系シグナル（外部コントリビュータ数 / owner 以外の起票者）を third_party（最大6点）として導入する（dependents は REST 非提供のため対象外）
-- [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
+- [/] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
+    - [x] score 内訳表示の改善: total `/100`・各 Pillar の max（/30 /25 /20 /25）・スコアリングモード（rich: time+people / README-only）を Track A Markdown に表示
+    - [ ] discussion 観測: GitHub Discussions は REST に一覧エンドポイントが無く GraphQL 専用（dependents 同様）。GraphQL 経路の導入が必要なため保留
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
 - [ ] Web化・課金は現時点では実装しない。必要になったら Phase 2 として再評価する
@@ -37,6 +39,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 Track A score 内訳表示の改善
+*   Track A Markdown の Reliability Score 行に total `/100` と各 Pillar の max（Impl/Doc /30・LMA /25・Comm /20・Sec /25）を表示。
+*   スコアリングモードタグ（`[rich: time+people]` / `[README-only]`）を追加し、スコアが同一モード内でのみ比較可能であることを読み手に明示（A-RS2 の配点移行に対応）。
+*   Verified Maturity（/12）・Third-Party Signal（/6）も max 付き表示に統一。`tests/test_export_render.py` に rich 内訳ケースを追加（全 111 件 green）。
+*   discussion 観測は GitHub Discussions が GraphQL 専用（REST 一覧なし）のため保留。
 
 ### 2026-06-15 A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
 *   `_third_party_score`（最大6点）= 外部コントリビュータ数（owner 除く、`/contributors`、最大3）＋非 owner issue 起票者数（issues サンプル再利用・追加 REST ゼロ、最大3）。

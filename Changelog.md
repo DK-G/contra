@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0078） Track A score 内訳表示の改善
+
+### 概要
+* Track A Markdown の Reliability Score 行に total `/100`・各 Pillar の max・スコアリングモードタグ（rich: time+people / README-only）を追加し、A-RS1/A-RS2 で導入したシグナルを読み手が解釈できるようにした。
+* discussion 観測は GitHub Discussions が GraphQL 専用のため保留。
+
+### 関連タスク
+* Task: Track A の discussion 観測 / score 内訳表示の改善（後者を実装）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1/A-RS2 で導入した Pillar スコアを Track A 出力で解釈可能にするため、score 内訳表示（max・モード）を改善する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/core/output_spec.py, tests/test_export_render.py, task.md, diff.md, Changelog.md
+Reliability Score 行に /100 と各 Pillar の max、scoring mode タグを追加。Verified Maturity /12・Third-Party /6 も max 付きに統一。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 111 passed
+
+# 4. 既知の課題・リスク (必須)
+discussion 観測は GitHub Discussions が REST 一覧なし（GraphQL 専用）のため保留。roadmap #10（人間品質評価）は実 LLM API＋人間判断が必要で本セッションでは未実施。
+```
+
+---
+
 ## 2026-06-15（CL-0077） A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
 
 ### 概要
