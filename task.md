@@ -24,6 +24,11 @@
 
 ## 未着手 (To Do)
 
+- [/] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
+    - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
+    - [ ] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数として切り出し post-gate 化
+    - [ ] (c) エージェント採点を受け取る JSON スキーマ定義＋委譲経路を追加
+    - [ ] (d) byrepo/Track A の委譲（接地が仕事＝エージェント判定と相性良し）
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
     - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
@@ -40,6 +45,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 ローカル化 段階(a): bybridge キー無し structured 一周
+*   新モジュール `src/pipeline/delegate.py`（純関数）: 決定論選別（near_domain でマイオピア pre-filter ＋共有 bridge 数で順位付け）→ `fill_track_entries(mode="structured")` で 4部構成を充足 → OutputDocument。LLM/API キー不使用で一周完結。
+*   distance_score は L0/L1 Jaccard から決定論算出。structure/serendipity は LLM 判定待ちで 0.0（委譲先エージェントが補充）。
+*   MCP `bybridge` に `structured` フラグ追加（`raw_only=true, structured=true` でキー無し 4部 Markdown）。既存経路は非破壊。
+*   `tests/test_delegate.py` に4ケース追加（全 179 件 green）。DECISION_LOG に委譲方式の採用＋段階(a)を記録。
 
 ### 2026-06-15 Phase 1 Done 評価ルーブリックの整備（docs/quality_eval.md 刷新）
 *   旧「20本レポート（100/200/200 比率・無関係4章）」前提の観点リストを、現行 contrarian 方針（MVP = Track B の良質な1本・4部構成）へ全面刷新。

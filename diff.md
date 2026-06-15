@@ -7,35 +7,38 @@
 
 ## 1. 変更目的 (必須)
 
-*   roadmap #10（Phase 1 Done 判断）を前進させるため、Track B 品質評価を**再現可能な手順＋記入式ルーブリック**として整備する。実 LLM 生成を伴う評価実行を「人間/Codex が API キー在席環境で埋めるだけ」の状態にする。
+*   LLM 判定・生成を contra 自身の API キー（従量課金）から外し、呼び出し側エージェント（Max サブスク）の推論へ委譲する設計（`docs/research/mcp_subscription_delegation.md`）の**段階(a)**として、bybridge を**キー無しで一周**できるようにする。
 
 ---
 
 ## 2. 変更概要 (必須)
 
-*   変更ファイル: `docs/quality_eval.md`（全面刷新）, `task.md`, `diff.md`, `Changelog.md`
-*   `docs/quality_eval.md` を旧「20本レポート（100/200/200 比率・無関係4章）」前提から、現行 contrarian 方針（MVP = Track B の良質な1本・4部構成）へ刷新。
-*   Done 定義（spec.md §8）・評価対象5テーマ・再現コマンド・1本ごとの観点・テーマ横断ルーブリック表・Done 成立条件を定義。
+*   変更ファイル: `src/pipeline/delegate.py`（新規）, `src/mcp_server.py`, `tests/test_delegate.py`（新規）, `DECISION_LOG.md`, `task.md`, `diff.md`, `Changelog.md`
+*   `delegate.py`（純関数）: 決定論選別（near_domain でマイオピア pre-filter ＋共有 citation-bridge 数で順位付け）→ `fill_track_entries(mode="structured")`（LLM 不使用）→ OutputDocument。
+*   MCP `bybridge` に `structured`（bool, 既定 False）を追加。`raw_only=true, structured=true` でキー無し 4部 Markdown を返す。
 
 ---
 
 ## 3. 確認方法 (必須)
 
-*   `docs/quality_eval.md` のレビュー（旧版のセクションバランス観点が廃止され、4部構成・Phase 1 Done ゲートに整合しているか）。
-*   コード変更なし: `python3 -m pytest tests/ -q` → 111 passed（回帰なし）。
+*   `python3 -m pytest tests/ -q` → 179 passed
+*   `python3 -c "import src.mcp_server"` → OK
+*   `tests/test_delegate.py`（順位付け / near-domain 棄却 / 決定論スコア / キー無しでの 4部充足）
 
 ---
 
 ## 4. 既知の課題・リスク (必須)
 
-*   評価実行そのものは**実 LLM API 認証情報＋人間の品質判断**が必要で、無認証/自律セッションでは実施不可。本変更はテンプレート整備まで。
-*   roadmap #10 の Done 判定・Pillar 配点全体の再較正は、上記評価の結果を待って実施。
+*   structure/serendipity スコアは LLM 判定待ちのため 0.0（委譲先エージェントが補充）。distance_score は L0/L1 Jaccard の決定論値。
+*   段階(b)（数値ゲートの純関数化・post-gate）、(c)（エージェント採点 JSON スキーマ）、(d)（byrepo 委譲）は未着手。
+*   用途スコープは作者自身（個人/研究）。製品バックエンドとして不特定多数に叩かせる形にはしない。
 
 ---
 
 ## 5. 変更内容の詳細 (任意)
 
-*   旧版の still-valid 観点（関係性・要約・注意点・再現性）は現行4部（RELATIONSHIP/SUMMARY/HYPOTHESIS/CAUTION/再現性）へ引き継ぎ、廃止したのは 100/200/200 比率の「セクションバランス」のみ。
-*   再現コマンドは `--single --llm-model claude-haiku-4-5 --score-votes 3`（DECISION_LOG 2026-06-02 のモデル方針・R5 投票を反映）。飽和は `--allow-weak-fallback` を付けず M3 飽和ノートで確認。
+*   `select_bridge_candidates_raw`: `near_domain_signal`（既存・L0/L1 Jaccard）で同一広域ドメインを棄却し、共有 bridge 数で降順。新たなスコア設計値は導入せず既存の閾値ロジックを再利用。
+*   `assemble_keyless_bridge_document`: structured 整形が `responses_create` を一切経由しないことをコードで確認済み（`generate.py:fill_track_entries` の mode 分岐）。
+*   既存の bybridge 経路（flat list / LLM 選別・生成）は非破壊。
 
 ---

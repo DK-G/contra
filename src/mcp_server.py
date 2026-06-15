@@ -19,8 +19,10 @@ from src.pipeline.collect import (
     collect_track_b,
 )
 from src.pipeline.concept_distance import build_theme_profile
+from src.pipeline.delegate import assemble_keyless_bridge_document
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
+from src.core.output_spec import render_markdown
 
 
 def _log(msg: str) -> None:
@@ -155,6 +157,7 @@ class StdinMcpServer:
                         "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
+                        "structured": {"type": "boolean", "description": "When raw_only is true, format the deterministic bridge candidates into the full 4-part Track B document (key-free structured assembly; no LLM). The agent can then refine the prose/scores.", "default": False},
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0}
                     },
@@ -353,6 +356,7 @@ class StdinMcpServer:
         target_count = args.get("bridge_count") or 3
         seed_count = args.get("seed_count") or 20
         raw_only = bool(args.get("raw_only"))
+        structured = bool(args.get("structured"))
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.0
 
         _log("Bybridge: collecting near-field seed papers...")
@@ -379,6 +383,19 @@ class StdinMcpServer:
         diag_line = f"収集診断: シード {len(seeds)} 件 / bridge プール {len(bridges)} 本 / 交差候補 {len(cands)} 件"
 
         if raw_only:
+            if structured:
+                # Stage (a) delegation path: key-free deterministic selection +
+                # structured 4-part assembly (no LLM). See docs/research/mcp_subscription_delegation.md.
+                _log("Bybridge: key-free structured assembly (no LLM)...")
+                profile = build_theme_profile(seeds)
+                doc = assemble_keyless_bridge_document(
+                    theme, cands, set(bridges), profile=profile, count=target_count
+                )
+                md = render_markdown(doc)
+                return {
+                    "content": [{"type": "text", "text": f"{diag_line}\n\n{md}"}],
+                    "isError": False
+                }
             lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
             ranked = sorted(cands, key=shared_bridge_count, reverse=True)
             for i, w in enumerate(ranked[:max(target_count, 10)], 1):

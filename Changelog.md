@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0080） ローカル化 段階(a): bybridge キー無し structured 一周（MCPクライアント委譲）
+
+### 概要
+* `docs/research/mcp_subscription_delegation.md` の委譲方式を採用し、段階(a)を実装。`src/pipeline/delegate.py`（純関数）で、決定論選別→structured 整形→OutputDocument を **API キー無し**で一周。
+* MCP `bybridge` に `structured` フラグを追加（`raw_only=true, structured=true` でキー無し 4部 Markdown）。
+
+### 関連タスク
+* Task: ローカル化（MCPクライアント委譲）段階(a)
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+LLM 判定・生成を contra 自身の API キーから外し、呼び出し側エージェントの推論へ委譲する設計の第一歩として、bybridge をキー無しで一周できるようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/delegate.py（新規）, src/mcp_server.py, tests/test_delegate.py（新規）, DECISION_LOG.md, task.md, diff.md, Changelog.md
+決定論選別（near_domain pre-filter＋共有bridge順）＋structured 整形（LLM不使用）で OutputDocument を生成。MCP bybridge に structured フラグ。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 179 passed。mcp_server import OK。
+
+# 4. 既知の課題・リスク (必須)
+structure/serendipity スコアは LLM 判定待ちで 0.0（委譲先が補充）。段階(b)以降（数値ゲートの純関数化・post-gate、エージェント採点スキーマ）は未着手。用途は作者自身に限定。
+```
+
+---
+
 ## 2026-06-15（CL-0079） Phase 1 Done 評価ルーブリックの整備（docs/quality_eval.md 刷新）
 
 ### 概要

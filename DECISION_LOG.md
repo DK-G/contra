@@ -4,6 +4,29 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — MCPクライアント委譲（サブスク/キー無し運用）を採用、段階(a)に着手
+
+**決定**: `docs/research/mcp_subscription_delegation.md` の「案②: MCPクライアント委譲」を**採用**し、段階導入で着手する。第一歩として段階(a)「bybridge raw_only ＋ structured 整形でキー無し一周」を実装した。
+
+**背景**: LLM 判定・生成を contra 自身の API キー（従量課金）から外し、呼び出し側エージェント（Max サブスクの Claude Code = Opus 4.8 等）自身の推論として実行する。従量$が消え、コスト理由で小型モデルに落としていた制約も外れる。安全弁は**多層防御**（質的判断＝エージェント／絶対外せない数値床＝コードの決定論ゲート）。
+
+**実装（段階 a）**:
+- 新モジュール `src/pipeline/delegate.py`（純関数・ネットワーク/LLM 非依存）:
+  - `select_bridge_candidates_raw`: 決定論的選別。near_domain（L0/L1 Jaccard）でマイオピアを pre-filter し、共有 citation-bridge 数で順位付け。LLM 不使用。
+  - `build_bridge_entries`: distance_score を L0/L1 Jaccard から決定論算出。structure/serendipity は LLM 判定待ちのため 0.0（委譲先のエージェントが補充）。
+  - `assemble_keyless_bridge_document`: 決定論選別 → `fill_track_entries(mode="structured")`（LLM を一切呼ばない）→ OutputDocument。**API キー無しで収集→選別→提示の一周が完結**。
+- MCP `bybridge` ツールに `structured`（bool, 既定 False）を追加。`raw_only=true, structured=true` でキー無しの 4部構成 Markdown を返す（既存の flat list / LLM 経路は非破壊）。
+
+**根拠**: `--gen-mode structured` と bybridge `raw_only` が既存の足場。structured 整形は決定論で `responses_create` を一切経由しないことをコードで確認。距離は既存 `near_domain_signal` と同じ L0/L1 Jaccard を再利用し、新たなスコア設計値は導入しない（`spec.md` 禁則: スコア設計値 0.20/0.50/0.35 等は不変、ゲートの所在のみコード側に集約していく方針）。
+
+**用途スコープ**: 当面ユーザーは作者自身（個人/研究）。製品バックエンドとして不特定多数に叩かせる形にはしない（Claude Code サブスク想定利用の範囲）。
+
+**検証**: `tests/test_delegate.py` に4ケース（順位付け / near-domain 棄却 / 決定論スコア / キー無しでの4部充足）。全 179 件 green。
+
+**未着手 / 次**: 段階(b) `classify.py` の数値ゲート（anomaly / serendipity / struct_depth / near-domain cap / output_floor / M3）を LLM 採点から独立した純関数として切り出し post-gate 化、段階(c) エージェント採点を受け取る JSON スキーマ定義、段階(d) byrepo/Track A の委譲。
+
+---
+
 ## 2026-06-15 — A-RS2 続編: Pillar 1 に「他人」系シグナル（外部コントリビュータ / 非 owner 起票者）を追加
 
 **決定**: 先手（時間系）に続き、生成で水増しできないもう一方のシグナル class「他人」を Pillar 1 に導入した。**dependents（下流利用）は GitHub に公式 REST API がない（HTML の dependents graph のみ）ため対象外**とし、スクレイピングは見送る。
