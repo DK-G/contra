@@ -19,7 +19,7 @@ from src.pipeline.collect import (
     collect_track_b,
 )
 from src.pipeline.concept_distance import build_theme_profile
-from src.pipeline.delegate import assemble_keyless_bridge_document
+from src.pipeline.delegate import assemble_keyless_bridge_document, finalize_delegated_document
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
 from src.core.output_spec import render_markdown
@@ -163,6 +163,61 @@ class StdinMcpServer:
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
+            },
+            {
+                "name": "delegate_finalize",
+                "description": (
+                    "Delegation post-gate (stage c): the CALLING AGENT scores cross-domain "
+                    "candidates with its own inference (no contra API key), then sends them here. "
+                    "Contra deterministically re-applies the hard floors (anomaly purpose_sim<0.20 / "
+                    "near-domain mechanism cap / serendipity / hollow structural_depth<0.50 / percentile "
+                    "/ output_floor / fallback / M3) and returns the rendered Track B markdown. "
+                    "Whatever the agent claims, gate violations are dropped here. No LLM is called."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "theme_overview": {"type": "string"},
+                        "goal": {"type": "string"},
+                        "why_problem": {"type": "string"},
+                        "approach_type": {"type": "string", "default": "experiment"},
+                        "assumptions": {"type": "array", "items": {"type": "string"}},
+                        "scope_field": {"type": "string"},
+                        "scope_scale": {"type": "string", "default": "small"},
+                        "scope_time_range": {"type": "string", "default": "last_10_years"},
+                        "keywords_include": {"type": "array", "items": {"type": "string"}},
+                        "keywords_exclude": {"type": "array", "items": {"type": "string"}},
+                        "concern": {"type": "string"},
+                        "count": {"type": "integer", "description": "Max entries to emit (cap, not target).", "default": 1},
+                        "output_floor": {"type": "number", "description": "Output-quality floor for serendipity.", "default": 0.35},
+                        "emit_fallback": {"type": "boolean", "description": "If false, a run with nothing above output_floor reports saturation instead of a weak single-best (M3).", "default": True},
+                        "candidates": {
+                            "type": "array",
+                            "description": (
+                                "Agent-scored candidates. Each item echoes contra's candidate material "
+                                "(id, title, abstract, year, venue, doi, cited_by_count, concepts, "
+                                "concept_tags[{name,level,score}], referenced_works) AND carries the agent's "
+                                "scoring: purpose_sim (0-1), mechanism_dist (0-1), optional structural_depth "
+                                "(0-1) and has_causal_pm (bool), connection_label, serendipity_rationale, and "
+                                "optional relationship/summary/caution prose."
+                            ),
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "purpose_sim": {"type": "number"},
+                                    "mechanism_dist": {"type": "number"},
+                                    "structural_depth": {"type": "number"},
+                                    "has_causal_pm": {"type": "boolean"},
+                                    "connection_label": {"type": "string"},
+                                    "serendipity_rationale": {"type": "string"}
+                                },
+                                "required": ["id", "purpose_sim", "mechanism_dist"]
+                            }
+                        }
+                    },
+                    "required": ["theme_overview", "goal", "why_problem", "candidates"]
+                }
             }
         ]
 
@@ -181,6 +236,8 @@ class StdinMcpServer:
                 result = self._execute_bynote(args)
             elif name == "bybridge_collect":
                 result = self._execute_bybridge(args)
+            elif name == "delegate_finalize":
+                result = self._execute_delegate_finalize(args)
             else:
                 raise ValueError(f"Unknown tool: {name}")
             
@@ -442,6 +499,46 @@ class StdinMcpServer:
 
         return {
             "content": [{"type": "text", "text": "\n".join(lines)}],
+            "isError": False
+        }
+
+    def _execute_delegate_finalize(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        # Stage (c): the calling agent already scored the candidates; contra re-applies
+        # the deterministic hard floors (no LLM) and renders. See
+        # docs/research/mcp_subscription_delegation.md.
+        theme = _build_theme_input(args)
+        materials = args.get("candidates") or []
+        if not materials:
+            return {
+                "content": [{"type": "text", "text": "candidates が空です。エージェント採点済みの候補リストを渡してください。"}],
+                "isError": False
+            }
+        count = int(args.get("count") or 1)
+        output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.35
+        emit_fallback = bool(args.get("emit_fallback", True))
+        diag: dict = {}
+        try:
+            doc = finalize_delegated_document(
+                materials, theme,
+                count=count, output_floor=output_floor, emit_fallback=emit_fallback, diag=diag,
+            )
+        except ValueError as exc:
+            return {"content": [{"type": "text", "text": f"委譲採点の検証に失敗: {exc}"}], "isError": True}
+
+        entries = doc.sections[0].entries if doc.sections else []
+        diag_line = (
+            f"post-gate 診断: status={diag.get('status')} / 採点 {diag.get('scored', 0)} 件 / "
+            f"anomaly {diag.get('anomaly', 0)} / hollow {diag.get('hollow', 0)} / "
+            f"通過 {diag.get('passed', 0)} / 出力 {len(entries)}"
+        )
+        if not entries:
+            return {
+                "content": [{"type": "text", "text": f"{diag_line}\n\n決定論ゲートを通過した候補がありませんでした（飽和または全棄却）。"}],
+                "isError": False
+            }
+        md = render_markdown(doc)
+        return {
+            "content": [{"type": "text", "text": f"{diag_line}\n\n{md}"}],
             "isError": False
         }
 

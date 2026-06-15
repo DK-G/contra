@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0082） ローカル化 段階(c): エージェント採点 JSON スキーマ＋委譲経路
+
+### 概要
+* 呼び出し側エージェントの採点を受け取り `apply_post_gates` に流す委譲経路と JSON スキーマを実装。`finalize_delegated_document` ＋ MCP ツール `delegate_finalize`。
+* エージェントがどう採点しても、anomaly/hollow 等の数値床は contra 側 post-gate が機械的に再適用。LLM・API キー不使用。
+
+### 関連タスク
+* Task: ローカル化（MCPクライアント委譲）段階(c)
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+3段委譲フローの [3]（contra post-gate）を MCP 経由で完結させ、エージェント採点を受け取る JSON スキーマと委譲経路を定義する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/delegate.py, src/mcp_server.py, tests/test_delegate.py, DECISION_LOG.md, task.md, diff.md, Changelog.md
+候補素材＋採点の JSON 契約、work_from_material/normalize_agent_scores/finalize_delegated_document、MCP delegate_finalize ツールを追加。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 189 passed。import src.mcp_server OK。
+
+# 4. 既知の課題・リスク (必須)
+段階(d)（byrepo 委譲）は未着手。スコア設計値は不変。実エージェントによる採点ループの実運用手順化は roadmap #10 とあわせて。
+```
+
+---
+
 ## 2026-06-15（CL-0081） ローカル化 段階(b): 数値ゲートの post-gate 純関数化
 
 ### 概要

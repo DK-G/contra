@@ -4,6 +4,24 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — ローカル化 段階(c): エージェント採点の JSON スキーマ＋委譲経路を実装
+
+**決定**: 呼び出し側エージェントが自前の推論で採点した候補を受け取り、`apply_post_gates`（段階 b）に流して提示まで行う**委譲経路**と、その入力**JSON スキーマ**を定義した。
+
+**実装（`src/pipeline/delegate.py`）**:
+- **JSON スキーマ（契約）**: 候補1件 = contra が配った素材（id/title/abstract/year/venue/doi/cited_by_count/concepts/concept_tags/referenced_works）＋エージェント採点（`purpose_sim`/`mechanism_dist` 必須、`structural_depth`/`has_causal_pm` 任意、`connection_label`/`serendipity_rationale`、任意の relationship/summary/caution プロローグ）。必須は `AGENT_SCORE_REQUIRED = (id, purpose_sim, mechanism_dist)`。
+- `work_from_material` / `score_row_from_material` / `normalize_agent_scores`（検証・分解、欠落フィールドは ValueError）。
+- `finalize_delegated_document`: 採点済み候補 → `apply_post_gates`（LLM 不使用で全ゲート再適用）→ エージェント提供のプローズを優先しつつ欠落分を `mode="structured"` で決定論補完 → OutputDocument。
+- **MCP ツール `delegate_finalize`**: theme ＋ agent-scored `candidates` を受け、post-gate 通過分の Track B Markdown と診断行（status/anomaly/hollow/passed）を返す。LLM・API キー不使用。
+
+**根拠**: 3段フロー [1]contra 生候補 → [2]エージェント採点（自分の推論）→ [3]contra post-gate の [3] を MCP 経由で完結させる。Work を素材 JSON から再構築することで、エージェントが採点のために受け取った素材をそのまま投げ返せばよく、再収集も contra 側 LLM も不要。スコア設計値は不変（段階 b の床をそのまま適用）。
+
+**検証**: `tests/test_delegate.py` に4ケース追加（Work 再構築 / 必須欠落で ValueError / 強候補通過＋エージェントプローズ尊重 / エージェントが主張しても anomaly は post-gate が棄却）。全 189 件 green。
+
+**未着手 / 次**: 段階(d) byrepo/Track A の委譲。実運用（実エージェントによる採点ループ）の手順化は roadmap #10 の評価とあわせて。
+
+---
+
 ## 2026-06-15 — ローカル化 段階(b): 数値ゲートを LLM 採点から分離し post-gate 純関数化
 
 **決定**: `select_track_b` の決定論ゲート群を LLM 採点・judge から切り離し、純関数 `apply_post_gates` として切り出した（多層防御のコード床）。

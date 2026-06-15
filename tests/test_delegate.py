@@ -7,7 +7,10 @@ from src.pipeline.concept_distance import ThemeProfile
 from src.pipeline.delegate import (
     assemble_keyless_bridge_document,
     build_bridge_entries,
+    finalize_delegated_document,
+    normalize_agent_scores,
     select_bridge_candidates_raw,
+    work_from_material,
 )
 from src.pipeline.generate import GenerationConfig, _structured_summary
 
@@ -84,3 +87,59 @@ def test_keyless_document_fills_4parts_without_llm():
     assert entry.relationship      # non-empty deterministic relationship
     assert entry.caution           # non-empty deterministic caution
     assert entry.usefulness_hypothesis
+
+
+# --- Stage (c): agent scoring -> deterministic finalize ----------------------
+
+def _material(wid, purpose_sim, mechanism_dist, **extra):
+    base = {
+        "id": wid,
+        "title": f"paper {wid}",
+        "abstract": "First. Second. Third. Fourth.",
+        "year": 2024,
+        "venue": "Journal",
+        "cited_by_count": 7,
+        "concepts": ["x"],
+        "concept_tags": [{"name": "marine biology", "level": 1, "score": 0.5}],
+        "referenced_works": ["B1"],
+        "purpose_sim": purpose_sim,
+        "mechanism_dist": mechanism_dist,
+        "connection_label": "構造的接続",
+        "serendipity_rationale": "rationale",
+    }
+    base.update(extra)
+    return base
+
+
+def test_work_from_material_rebuilds_work():
+    w = work_from_material(_material("W", 0.7, 0.8))
+    assert w.id == "W"
+    assert w.referenced_works == ["B1"]
+    assert w.concept_tags[0].name == "marine biology"
+
+
+def test_normalize_agent_scores_requires_fields():
+    import pytest
+    with pytest.raises(ValueError):
+        normalize_agent_scores([{"id": "W", "purpose_sim": 0.5}])  # missing mechanism_dist
+
+
+def test_finalize_passes_strong_candidate_and_honors_agent_prose():
+    mats = [_material("W", 0.7, 0.8, structural_depth=0.8, relationship="agent rel")]
+    diag = {}
+    doc = finalize_delegated_document(mats, _theme(), count=1, diag=diag)
+    entry = doc.sections[0].entries[0]
+    assert entry.serendipity_score == 0.56
+    assert entry.relationship == "agent rel"          # agent prose honored
+    assert entry.usefulness_hypothesis == "rationale"  # rationale -> hypothesis
+    assert entry.abstract_summary                      # structured fallback filled
+    assert diag["status"] == "ok"
+
+
+def test_finalize_drops_agent_anomaly():
+    # Agent claims a connection but purpose_sim < 0.20 -> deterministic post-gate drops it.
+    mats = [_material("W", 0.1, 0.9, structural_depth=0.9)]
+    diag = {}
+    doc = finalize_delegated_document(mats, _theme(), diag=diag)
+    assert doc.sections[0].entries == []
+    assert diag["reason"] == "all_anomaly"

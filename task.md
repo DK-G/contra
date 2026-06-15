@@ -27,7 +27,7 @@
 - [/] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
     - [x] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数 `apply_post_gates` として切り出し post-gate 化
-    - [ ] (c) エージェント採点を受け取る JSON スキーマ定義＋委譲経路を追加
+    - [x] (c) エージェント採点を受け取る JSON スキーマ定義＋委譲経路を追加（`finalize_delegated_document` ＋ MCP `delegate_finalize`）
     - [ ] (d) byrepo/Track A の委譲（接地が仕事＝エージェント判定と相性良し）
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
@@ -45,6 +45,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 ローカル化 段階(c): エージェント採点 JSON スキーマ＋委譲経路
+*   `src/pipeline/delegate.py`: エージェント採点候補の JSON 契約（`AGENT_SCORE_REQUIRED`）＋ `work_from_material`/`score_row_from_material`/`normalize_agent_scores`/`finalize_delegated_document`。
+*   finalize は採点済み候補を `apply_post_gates`（LLM 不使用で全ゲート再適用）に流し、エージェント提供プローズを優先しつつ欠落は structured 補完 → OutputDocument。
+*   MCP ツール `delegate_finalize` を追加（theme＋agent-scored candidates → post-gate 通過分の Markdown＋診断）。
+*   `tests/test_delegate.py` に4ケース追加（全 189 件 green）。DECISION_LOG に段階(c)を記録。
 
 ### 2026-06-15 ローカル化 段階(b): 数値ゲートの post-gate 純関数化
 *   `select_track_b` の決定論ゲートを LLM 採点/judge から分離。`_serendipity_scored`（anomaly＋near-cap＋serendipity）/ `_hollow_filter`（hollow 棄却・fail-open）/ `_quality_gate_and_build`（percentile→output_floor→fallback/M3→MMR→構築）を共有純関数化。

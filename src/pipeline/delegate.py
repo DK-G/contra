@@ -14,9 +14,18 @@ so they unit-test without network or LLM access.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Set
+from dataclasses import replace as dc_replace
+from typing import Any, Dict, List, Optional, Sequence, Set
 
-from src.core.models import OutputDocument, OutputEntry, OutputSection, ThemeInput, Work
+from src.core.models import (
+    Concept,
+    OutputDocument,
+    OutputEntry,
+    OutputSection,
+    ThemeInput,
+    Work,
+)
+from src.pipeline.classify import apply_post_gates
 from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 
@@ -114,8 +123,142 @@ def assemble_keyless_bridge_document(
     return OutputDocument(theme=theme, sections=[section])
 
 
+# --- Stage (c): accept agent scoring and finalize through the post-gate -----
+#
+# Contract for one delegated candidate (the agent returns a list of these). The
+# metadata fields are the material contra handed out (so the Work can be rebuilt
+# without re-collecting); the scoring fields are the agent's own judgement, which
+# the deterministic post-gate then re-checks against the hard floors.
+#
+#   {
+#     # --- candidate material (echoed back from contra) ---
+#     "id": str,                       # required (OpenAlex/work id; the join key)
+#     "title": str, "abstract": str|null,
+#     "year": int, "venue": str, "doi": str|null, "cited_by_count": int,
+#     "concepts": [str], "concept_tags": [{"name": str, "level": int, "score": float}],
+#     "referenced_works": [str], "publication_type": str|null,
+#     # --- agent scoring (the delegated LLM judgement) ---
+#     "purpose_sim": float,            # required, 0..1
+#     "mechanism_dist": float,         # required, 0..1
+#     "structural_depth": float|null,  # optional hollow-judge verdict, 0..1
+#     "has_causal_pm": bool|null,      # optional
+#     "connection_label": str,         # optional (default below)
+#     "serendipity_rationale": str,    # optional -> usefulness hypothesis
+#     # --- optional agent prose (else deterministic structured fill) ---
+#     "relationship": str, "summary": str, "caution": str,
+#   }
+AGENT_SCORE_REQUIRED = ("id", "purpose_sim", "mechanism_dist")
+
+
+def _as_float(value: Any) -> float:
+    return float(value)
+
+
+def work_from_material(material: Dict[str, Any]) -> Work:
+    """Rebuild a Work from the candidate material the agent echoes back."""
+    tags = [
+        Concept(name=str(t.get("name", "")), level=int(t.get("level", 0)), score=float(t.get("score", 0.0)))
+        for t in (material.get("concept_tags") or [])
+        if t.get("name")
+    ]
+    return Work(
+        id=str(material["id"]),
+        title=str(material.get("title", "")),
+        year=int(material.get("year") or 0),
+        venue=str(material.get("venue", "")),
+        doi=material.get("doi"),
+        cited_by_count=int(material.get("cited_by_count") or 0),
+        abstract=material.get("abstract"),
+        concepts=[str(c) for c in (material.get("concepts") or [])],
+        concept_tags=tags,
+        publication_type=material.get("publication_type"),
+        referenced_works=[str(r) for r in (material.get("referenced_works") or [])],
+    )
+
+
+def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract the post-gate score row from an agent-scored candidate."""
+    row: Dict[str, Any] = {
+        "purpose_sim": _as_float(material["purpose_sim"]),
+        "mechanism_dist": _as_float(material["mechanism_dist"]),
+        "connection_label": str(material.get("connection_label") or "構造的接続"),
+        "serendipity_rationale": str(material.get("serendipity_rationale") or ""),
+    }
+    if material.get("structural_depth") is not None:
+        row["structural_depth"] = _as_float(material["structural_depth"])
+    if material.get("has_causal_pm") is not None:
+        row["has_causal_pm"] = bool(material["has_causal_pm"])
+    return row
+
+
+def normalize_agent_scores(
+    materials: Sequence[Dict[str, Any]],
+) -> "tuple[Dict[str, Work], Dict[str, dict], Dict[str, Dict[str, Any]]]":
+    """Validate + split agent-scored candidates into (works, score rows, raw-by-id).
+
+    Raises ValueError if a candidate is missing a required field.
+    """
+    works: Dict[str, Work] = {}
+    scores: Dict[str, dict] = {}
+    by_id: Dict[str, Dict[str, Any]] = {}
+    for i, material in enumerate(materials):
+        for key in AGENT_SCORE_REQUIRED:
+            if material.get(key) is None:
+                raise ValueError(f"delegated candidate #{i} missing required field '{key}'")
+        wid = str(material["id"])
+        works[wid] = work_from_material(material)
+        scores[wid] = score_row_from_material(material)
+        by_id[wid] = material
+    return works, scores, by_id
+
+
+def finalize_delegated_document(
+    materials: Sequence[Dict[str, Any]],
+    theme: ThemeInput,
+    *,
+    theme_profile: Optional[ThemeProfile] = None,
+    count: int = 1,
+    config: Optional[GenerationConfig] = None,
+    emit_fallback: bool = True,
+    section_title: str = "Track B: 接続点フィーチャー（委譲採点 → post-gate）",
+    diag: Optional[dict] = None,
+    **gate_kwargs: Any,
+) -> OutputDocument:
+    """Stage (c): run agent-scored candidates through the deterministic post-gate.
+
+    The agent supplies purpose_sim / mechanism_dist / (optional) structural_depth etc.;
+    ``apply_post_gates`` re-applies the hard floors (anomaly / near-cap / serendipity /
+    hollow / percentile / output-floor / fallback / M3) with NO LLM. Any agent-supplied
+    4-part prose is honored; missing parts fall back to the deterministic structured fill.
+    """
+    works, scores, by_id = normalize_agent_scores(materials)
+    entries = apply_post_gates(
+        scores, works,
+        theme_profile=theme_profile, count=count, emit_fallback=emit_fallback,
+        diag=diag, **gate_kwargs,
+    )
+    # Seed any agent-supplied prose, then deterministically fill the rest (no LLM).
+    seeded: List[OutputEntry] = []
+    for entry in entries:
+        material = by_id.get(entry.work.id, {})
+        seeded.append(dc_replace(
+            entry,
+            relationship=str(material.get("relationship") or "") or entry.relationship,
+            abstract_summary=str(material.get("summary") or "") or entry.abstract_summary,
+            caution=str(material.get("caution") or "") or entry.caution,
+        ))
+    filled = fill_track_entries(seeded, config or GenerationConfig(), theme=theme, mode="structured")
+    section = OutputSection(title=section_title, track="B", entries=filled)
+    return OutputDocument(theme=theme, sections=[section])
+
+
 __all__ = [
     "select_bridge_candidates_raw",
     "build_bridge_entries",
     "assemble_keyless_bridge_document",
+    "AGENT_SCORE_REQUIRED",
+    "work_from_material",
+    "score_row_from_material",
+    "normalize_agent_scores",
+    "finalize_delegated_document",
 ]
