@@ -19,6 +19,14 @@
 
 ## レポート一覧
 
+### 一般論文サイト総覧（OpenAlex 基準で比較）
+
+| ソース | レポート | 一言結論 |
+|---|---|---|
+| **OpenAlex**（基準/現行） | [`openalex_review.md`](openalex_review.md) | contraのバックボーン(全分野・無料・キー不要)。⚠Concepts→Topics移行がconcept_distanceの最重要リスク。abstractはinverted indexのみ=全文provider層で補う |
+
+### ツール/サイト別レポート
+
 | 対象 | レポート | 一言結論 |
 |---|---|---|
 | OKF / Google `knowledge-catalog` | [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md) | 公開コーパスではない。効くのは Web Pass（手法）と OKF バンドル化（記憶層） |
