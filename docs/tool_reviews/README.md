@@ -32,6 +32,7 @@
 | BASE (base-search.net) | [`base_review.md`](base_review.md) | **不採用**: CORE同役(OAリポジトリ集約400M+)だがAPI申請制・制約付きでCORE/OpenAlexに劣後。固有の距離/全文信号なし |
 | bioRxiv / medRxiv | [`biorxiv_medrxiv_review.md`](biorxiv_medrxiv_review.md) | **個別不要(Europe PMCに包含)**: 無料・良APIだが生物医学プレプリントはEurope PMCが統合。固有要素(出版DOI対応/版/最速)は中核に効かず |
 | DBLP (dblp.org) | [`dblp_review.md`](dblp_review.md) | **不採用**: CS書誌の金字塔だがabstract/全文なし=構造照合に使えない。強みの著者名寄せもcontraが避ける著者軸。CS精度はarXivで足りる |
+| Lens.org / 特許genre | [`lens_patents_review.md`](lens_patents_review.md) | **Lens自体は不採用**(学術冗長・API有料)。但し**特許=arXiv以来の最有力新方向**(Purpose→Mechanism明示・全分野横断=serendipityに理想)。入口は無料特許API(PatentsView/Google Patents/EPO)、独立トラック"bypatent"の将来拡張 |
 
 ### ツール/サイト別レポート
 
@@ -108,6 +109,13 @@ byserendipity/bybridge の「**abstract が薄く mechanism 判定が弱い**」
 収集の母集団は **OpenAlex を主役に据え置き**、加算価値は **Semantic Scholar（埋め込み/推薦/引用インテント）＋
 CORE/arXiv（OA 全文）＋ arXiv（STEM の副次検索対象）** に集約。残りは「contra が何でないか（収束 vs 発散）」を映す鏡。
 実装合流点は **①byrepo Web Pass ②OA 全文 provider 層 ③S2 加算レイヤー ④OKF メモリ＋可視化**。
+
+### 10. 最大の新発見＝「特許」という未開拓ジャンル（Lens.org 調査より）
+一般論文サイト総覧の大半は OpenAlex に包含され冗長だったが、**Lens.org が運ぶ"特許"は OpenAlex が持たない
+初の本当に新しい母集団**。特許は **Problem→Solution（Purpose→Mechanism）が法的に明示され、全技術分野を横断**する
+＝contra の serendipity（purpose_sim × mechanism_dist）と**構造そのものが一致**。TRIZ/類推的イノベーションの
+古典的源泉でもある。論文と文書構造が異なるため独立トラック（"bypatent"）の**将来拡張**だが、概念適合は最強。
+入口は無料特許 API（PatentsView / Google Patents Public Data / EPO OPS）、**Lens API（有料）は使わない**。
 
 ### 9. 検索対象は「広さ × 精度」の2軸で考える（arXiv 再評価より）
 ソースを「広さ(recall)＝遠ドメイン射程」だけで測ると誤る。**機構の可読性（mechanism legibility）が高い分野
