@@ -30,6 +30,7 @@
 | OpenCitations (opencitations.net) | [`opencitations_review.md`](opencitations_review.md) | **冗長/不採用**: 引用グラフはOpenAlex referenced_works、引用の質はS2 intentで既出。intent未付与で新信号なし。自己引用除外の着想のみ(OpenAlexで自前算出可) |
 | DOAJ (doaj.org) | [`doaj_review.md`](doaj_review.md) | **冗長/不採用**: OA誌ホワイトリストだがOpenAlex `is_in_doaj`で露出済み。legitimacyフラグを「注意点」に軽く使う(発見の足切りには使わない)。caution信号クラスタの一員 |
 | BASE (base-search.net) | [`base_review.md`](base_review.md) | **不採用**: CORE同役(OAリポジトリ集約400M+)だがAPI申請制・制約付きでCORE/OpenAlexに劣後。固有の距離/全文信号なし |
+| bioRxiv / medRxiv | [`biorxiv_medrxiv_review.md`](biorxiv_medrxiv_review.md) | **個別不要(Europe PMCに包含)**: 無料・良APIだが生物医学プレプリントはEurope PMCが統合。固有要素(出版DOI対応/版/最速)は中核に効かず |
 
 ### ツール/サイト別レポート
 
