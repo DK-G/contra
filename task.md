@@ -26,9 +26,9 @@
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
     - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
-- [/] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセット
-    - [x] 先手: CI 実行履歴＋リリース刻みを verified maturity（最大12点）として導入し、リッチシグナル取得時のみ README 系を 0.6 倍へ移譲する
-    - [ ] 「他人」系シグナル（外部コントリビュータ数 / owner 以外の起票者 / dependents）を導入する
+- [x] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセット
+    - [x] 先手: CI 実行履歴＋リリース刻みを verified maturity（最大12点）として導入し、リッチシグナル取得時のみ README 系をスケールして移譲する
+    - [x] 「他人」系シグナル（外部コントリビュータ数 / owner 以外の起票者）を third_party（最大6点）として導入する（dependents は REST 非提供のため対象外）
 - [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
@@ -37,6 +37,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
+*   `_third_party_score`（最大6点）= 外部コントリビュータ数（owner 除く、`/contributors`、最大3）＋非 owner issue 起票者数（issues サンプル再利用・追加 REST ゼロ、最大3）。
+*   Pillar 1 rich モード配点を再配分: README 系 0.4 倍（completeness 8 / code 4）＋時間系 verified maturity 12 ＋他人系 third_party 6 = 30。非 rich は従来どおり。
+*   owner 判定のため `owner_login` を保持。`_fetch_issue_signal` を 5-tuple 化（非 owner 起票者を計上）。dependents は GitHub REST 非提供のため対象外。
+*   `source_meta`＋Track A Markdown（Third-Party Signal 行）に露出。`tests/test_git_collect.py` に3ケース追加（全 110 件 green）。
 
 ### 2026-06-15 A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
 *   `_verified_maturity_score`（最大12点）= リリース刻み（`_release_cadence_score` 最大6）＋CI健全性（`_ci_health_score` 直近 runs の実行＋成功率 最大6）。設定ファイル存在でなく「回って通っている」事実を採点。

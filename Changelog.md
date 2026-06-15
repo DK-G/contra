@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0077） A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
+
+### 概要
+* 時間系（先手）に続き「他人」系シグナル（外部コントリビュータ＋非 owner 起票者）を Pillar 1 に導入し、A-RS2 を完了とした。
+* `_third_party_score`（最大6点）を新設。README 系を 0.4 倍へ更にスケールし、時間系12＋他人系6で再配分。dependents は REST 非提供のため対象外。
+
+### 関連タスク
+* Task: A-RS2 続編（byrepo Pillar 1「他人」系）／ roadmap A-RS2（完了）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS2 続編: 生成で水増しできないもう一方のシグナル class「他人」（外部コントリビュータ / 非 owner 起票者）を Pillar 1 に導入する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, src/core/output_spec.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_third_party_score（最大6）= 外部コントリビュータ（/contributors）＋非 owner 起票者（issues 再利用）。Pillar 1 rich モードを README 0.4倍＋verified 12＋third_party 6 へ再配分。owner_login 保持、_fetch_issue_signal 5-tuple 化。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 110 passed
+
+# 4. 既知の課題・リスク (必須)
+dependents は GitHub REST 非提供のため対象外（将来 GraphQL 要検討）。外部コントリビュータ取得で repo あたり REST 約3増（トークン前提）。Pillar 配点全体の再較正は roadmap #10 の人間品質評価とあわせて。
+```
+
+---
+
 ## 2026-06-15（CL-0076） A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
 
 ### 概要

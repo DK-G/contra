@@ -99,6 +99,12 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
             lines.append(
                 f"- Verified Maturity: {verified} (releases: {releases}, CI: {ci_ok}/{ci_sampled} passing)"
             )
+            third_party = entry.work.source_meta.get("third_party_score", "—")
+            contributors = entry.work.source_meta.get("external_contributor_count", "—")
+            reporters = entry.work.source_meta.get("non_owner_issue_reporters", "—")
+            lines.append(
+                f"- Third-Party Signal: {third_party} (ext. contributors: {contributors}, non-owner reporters: {reporters})"
+            )
         lines.append(f"- Issue Signal: {issue_signal}")
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")

@@ -15,6 +15,7 @@ from src.pipeline.git_collect import (
     _lma_score,
     _release_cadence_score,
     _resolve_rich_signals,
+    _third_party_score,
     _verified_maturity_score,
     build_track_a_git_query,
     collect_track_a_git_repos,
@@ -373,3 +374,81 @@ def test_collect_with_rich_signals_exposes_verified_maturity():
     assert work.source_meta["has_rich_signals"] is True
     assert work.source_meta["verified_maturity_score"] == 12
     assert work.source_meta["release_count"] == 6
+
+
+# --- A-RS2 follow-up: "third-party" (people) signals -------------------------
+
+def test_third_party_score_tiers():
+    assert _third_party_score(_repo()) == 0
+    assert _third_party_score(_repo(external_contributor_count=1)) == 1
+    assert _third_party_score(_repo(external_contributor_count=8)) == 3
+    assert _third_party_score(_repo(non_owner_issue_reporters=5)) == 3
+    # Both classes combine up to the cap.
+    assert _third_party_score(
+        _repo(external_contributor_count=8, non_owner_issue_reporters=5)
+    ) == 6
+
+
+def test_third_party_contributes_to_pillar_one_in_rich_mode():
+    rich = _repo(
+        readme_text="# t",
+        has_rich_signals=True,
+        external_contributor_count=8,
+        non_owner_issue_reporters=5,
+    )
+    _apply_reliability(_theme(), rich)
+    assert rich.third_party_score == 6
+    assert rich.impl_doc_score >= 6
+
+
+class _PeopleGitHubClient(_FakeGitHubClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.config = _SimpleConfig()
+
+    def get(self, path, params=None):
+        if path == "/search/repositories":
+            payload = super().get(path, params)
+            payload["items"][0]["owner"] = {"login": "acme"}
+            return payload
+        if path.endswith("/issues"):
+            self.calls.append((path, params))
+            return [
+                {"state": "open", "body": "bug", "user": {"login": "alice"}, "labels": []},
+                {"state": "closed", "body": "fix", "user": {"login": "bob"}, "labels": []},
+                {"state": "closed", "body": "dup", "user": {"login": "acme"}, "labels": []},
+            ]
+        if path.endswith("/releases"):
+            self.calls.append((path, params))
+            return [{"published_at": "2026-01-01T00:00:00Z"}]
+        if path.endswith("/actions/runs"):
+            self.calls.append((path, params))
+            return {"workflow_runs": []}
+        if path.endswith("/contributors"):
+            self.calls.append((path, params))
+            return [
+                {"login": "acme"},  # owner -> excluded
+                {"login": "alice"},
+                {"login": "bob"},
+                {"login": "carol"},
+            ]
+        return super().get(path, params)
+
+
+def test_collect_counts_external_people_signals():
+    client = _PeopleGitHubClient()
+    repos = collect_track_a_git_repos(
+        _theme(),
+        config=GitCollectConfig(include_rich_signals=True),
+        client=client,
+    )
+    repo = repos[0]
+    assert repo.owner_login == "acme"
+    assert repo.external_contributor_count == 3  # alice, bob, carol (owner excluded)
+    assert repo.non_owner_issue_reporters == 2  # alice, bob (owner's issue excluded)
+    assert repo.third_party_score == 3  # contributors>=3 (2) + reporters>=1 (1)
+
+    work = repository_to_work(repo)
+    assert work.source_meta["third_party_score"] == 3
+    assert work.source_meta["external_contributor_count"] == 3
+    assert work.source_meta["non_owner_issue_reporters"] == 2

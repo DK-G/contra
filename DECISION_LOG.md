@@ -4,6 +4,24 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — A-RS2 続編: Pillar 1 に「他人」系シグナル（外部コントリビュータ / 非 owner 起票者）を追加
+
+**決定**: 先手（時間系）に続き、生成で水増しできないもう一方のシグナル class「他人」を Pillar 1 に導入した。**dependents（下流利用）は GitHub に公式 REST API がない（HTML の dependents graph のみ）ため対象外**とし、スクレイピングは見送る。
+
+**実装内容**:
+- `_third_party_score`（最大6点）を新設＝外部コントリビュータ数（owner を除く、`/contributors`、最大3）＋非 owner issue 起票者数（issues サンプルの重複排除した起票者、最大3）。後者は **A-RS2 先手で既に取得済みの issues ペイロードを再利用**し追加 REST 呼び出しゼロ。前者のみ repo あたり1 REST 増。
+- Pillar 1（最大30据え置き）の rich モード配点を再配分: README 系を **0.6 倍 → 0.4 倍**へ更にスケール（completeness 20→8、code 10→4）し、時間系（verified maturity 最大12）＋他人系（third_party 最大6）で構成。8+4+12+6=30。非 rich モードは従来どおり（無認証回帰なし）。
+- owner 判定のため search item の `owner.login` を `GitRepository.owner_login` に保持。`_fetch_issue_signal` は `owner_login` を受けて非 owner 起票者を数える（5-tuple 化）。
+- 取得失敗は graceful degrade。`source_meta` と Track A Markdown（`Third-Party Signal: N (ext. contributors: …, non-owner reporters: …)`）に露出。
+
+**根拠**: 「他人」シグナル（外部コントリビュータ・非 owner 起票者）は実際の第三者の関与であり、スキャフォールドでは生成不能。README 配点を 0.4 倍まで下げたのは、時間系・他人系の2つの硬いシグナル class が揃ったため README 依存を更に減らす段階移行の継続。
+
+**トレードオフ / 注意**: 外部コントリビュータ取得で repo あたり REST が更に1増（合計 約3増/repo、トークン前提は不変）。dependents は API 非提供のため将来 GraphQL/別経路を要検討。A-RS2 はこれで時間系・他人系の双方を導入完了。Pillar 配点全体の再較正（人間レビュー）は roadmap #10 の品質評価とあわせて実施予定。
+
+**検証**: `tests/test_git_collect.py` に3ケース追加（third_party 段階・rich モードでの Pillar 1 寄与・収集経路での owner 除外カウント）。全 110 件 green。
+
+---
+
 ## 2026-06-15 — A-RS2 着手: Pillar 1 配点を README → 「時間」系シグナルへ段階移行
 
 **決定**: 起票済み懸念2（README 成熟度 30点が vibe coding 時代に最も水増し容易なシグナルへ乗っている）への対応として、配点の段階移行の**先手（CI 実行履歴＋リリース刻み）**を実装した。「他人」系（外部コントリビュータ / dependents）は次段に残す。

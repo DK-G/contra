@@ -102,6 +102,11 @@ class GitRepository:
     ci_recent_success: int = 0
     has_rich_signals: bool = False
     verified_maturity_score: int = 0
+    # A-RS2 follow-up: "third-party" (people) signals.
+    owner_login: str = ""
+    external_contributor_count: int = 0
+    non_owner_issue_reporters: int = 0
+    third_party_score: int = 0
 
 
 @dataclass

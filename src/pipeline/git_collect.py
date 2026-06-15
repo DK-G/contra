@@ -107,9 +107,11 @@ def _decode_readme(payload: dict) -> str:
 
 def _normalize_repo(item: dict, readme_text: str = "") -> GitRepository:
     license_info = item.get("license") or {}
+    owner_info = item.get("owner") or {}
     return GitRepository(
         full_name=str(item.get("full_name", "")),
         html_url=str(item.get("html_url", "")),
+        owner_login=str(owner_info.get("login") or ""),
         description=str(item.get("description") or ""),
         stars=int(item.get("stargazers_count") or 0),
         forks=int(item.get("forks_count") or 0),
@@ -452,10 +454,44 @@ def _verified_maturity_score(repo: GitRepository) -> int:
     return _release_cadence_score(repo) + _ci_health_score(repo)
 
 
+def _third_party_score(repo: GitRepository) -> int:
+    """Pillar 1 "people" sub-score (Max 6pts).
+
+    The other hard-to-fake signal class (DECISION_LOG 2026-06-12 concern 2):
+    engagement by people other than the owner. A generator can scaffold a repo
+    but cannot manufacture external contributors or non-owner issue reporters.
+    Dependents (downstream usage) has no official REST API and is left out.
+    """
+    score = 0
+    ext = repo.external_contributor_count
+    if ext >= 1:
+        score += 1
+    if ext >= 3:
+        score += 1
+    if ext >= 8:
+        score += 1
+    reporters = repo.non_owner_issue_reporters
+    if reporters >= 1:
+        score += 1
+    if reporters >= 3:
+        score += 1
+    if reporters >= 5:
+        score += 1
+    return min(score, 6)
+
+
 def _fetch_issue_signal(
-    client: GitHubClient, full_name: str, sample_size: int, repo_stars: int = 0
-) -> tuple[int, str, int, int]:
-    """Return (issue_score, summary, open_count, closed_count) from an issue sample."""
+    client: GitHubClient,
+    full_name: str,
+    sample_size: int,
+    repo_stars: int = 0,
+    owner_login: str = "",
+) -> tuple[int, str, int, int, int]:
+    """Return (issue_score, summary, open_count, closed_count, non_owner_reporters).
+
+    Non-owner reporters reuse this same payload (no extra REST call) as a
+    "third-party" people signal: distinct issue authors other than the owner.
+    """
     payload = client.get(
         f"/repos/{full_name}/issues",
         {"state": "all", "per_page": sample_size},
@@ -464,11 +500,17 @@ def _fetch_issue_signal(
     if not issues:
         # Zero Issues Trap check
         if repo_stars >= 50:
-            return 0, "issuesなし (警告: ゼロIssueの罠)", 0, 0
-        return 3, "issuesなし (小規模または新規)", 0, 0
+            return 0, "issuesなし (警告: ゼロIssueの罠)", 0, 0, 0
+        return 3, "issuesなし (小規模または新規)", 0, 0, 0
 
     open_count = sum(1 for item in issues if item.get("state") == "open")
     closed_count = sum(1 for item in issues if item.get("state") == "closed")
+    reporters = {
+        login
+        for item in issues
+        if (login := str((item.get("user") or {}).get("login") or "")) and login != owner_login
+    }
+    non_owner_reporters = len(reporters)
     body_rich = any((item.get("body") or "").strip() for item in issues)
     labels = sorted(
         {
@@ -489,25 +531,29 @@ def _fetch_issue_signal(
     summary = f"issues {len(issues)}件 / open {open_count} / closed {closed_count}"
     if labels:
         summary += f" / labels: {', '.join(labels[:3])}"
-    return min(score, 10), summary, open_count, closed_count
+    return min(score, 10), summary, open_count, closed_count, non_owner_reporters
 
 
 def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
-    # Pillar 1 (Max 30). When harder-to-fake "time" signals are available
-    # (A-RS2), migrate weight: README heuristics are scaled to 0.6 (max 12 + 6)
-    # and the freed 12pts go to verified maturity (release cadence + CI health).
-    # Without rich signals we keep the original README-heavy scoring (no
-    # regression for unauthenticated runs).
+    # Pillar 1 (Max 30). When harder-to-fake signals are available (A-RS2),
+    # migrate weight off the README heuristics (scaled to 0.4: max 8 + 4) toward
+    # the two signal classes that scaffolding cannot fake: "time" (verified
+    # maturity, max 12) and "people" (third-party engagement, max 6). Without
+    # rich signals we keep the original README-heavy scoring (no regression for
+    # unauthenticated runs).
     if repo.has_rich_signals:
-        readme_comp = round(_readme_completeness_and_mature_categories(repo.readme_text) * 12 / 20)
-        code_dens = round(_code_examples_density(repo.readme_text) * 6 / 10)
+        readme_comp = round(_readme_completeness_and_mature_categories(repo.readme_text) * 0.4)
+        code_dens = round(_code_examples_density(repo.readme_text) * 0.4)
         verified = _verified_maturity_score(repo)
+        third_party = _third_party_score(repo)
         repo.verified_maturity_score = verified
-        impl_doc = readme_comp + code_dens + verified
+        repo.third_party_score = third_party
+        impl_doc = readme_comp + code_dens + verified + third_party
     else:
         readme_comp = _readme_completeness_and_mature_categories(repo.readme_text)
         code_dens = _code_examples_density(repo.readme_text)
         repo.verified_maturity_score = 0
+        repo.third_party_score = 0
         impl_doc = readme_comp + code_dens
 
     # Pillar 2 (Max 25)
@@ -581,6 +627,9 @@ def repository_to_work(repo: GitRepository) -> Work:
             "latest_release_at": repo.latest_release_at,
             "ci_runs_sampled": repo.ci_runs_sampled,
             "ci_recent_success": repo.ci_recent_success,
+            "third_party_score": repo.third_party_score,
+            "external_contributor_count": repo.external_contributor_count,
+            "non_owner_issue_reporters": repo.non_owner_issue_reporters,
         },
     )
 
@@ -608,6 +657,22 @@ def _fetch_ci_signal(client: GitHubClient, full_name: str, sample_size: int) -> 
     return sampled, success
 
 
+def _fetch_contributor_signal(
+    client: GitHubClient, full_name: str, owner_login: str, sample_size: int
+) -> int:
+    """Return the count of contributors other than the owner ("people" signal)."""
+    payload = client.get(
+        f"/repos/{full_name}/contributors",
+        {"per_page": sample_size, "anon": "false"},
+    )
+    contributors = payload if isinstance(payload, list) else []
+    return sum(
+        1
+        for contributor in contributors
+        if (login := str(contributor.get("login") or "")) and login != owner_login
+    )
+
+
 def _resolve_rich_signals(cfg: GitCollectConfig, client: GitHubClient) -> bool:
     """Auto-enable rich signals only when a token is present (rate-limit guard)."""
     if cfg.include_rich_signals is not None:
@@ -617,7 +682,7 @@ def _resolve_rich_signals(cfg: GitCollectConfig, client: GitHubClient) -> bool:
 
 
 def _attach_rich_signals(client: GitHubClient, repo: GitRepository, sample_size: int) -> None:
-    """Fetch release-cadence + CI-health signals; degrade gracefully on error."""
+    """Fetch release-cadence + CI-health + contributor signals; degrade on error."""
     try:
         repo.release_count, repo.latest_release_at = _fetch_release_signal(
             client, repo.full_name, sample_size
@@ -630,6 +695,12 @@ def _attach_rich_signals(client: GitHubClient, repo: GitRepository, sample_size:
         )
     except Exception:
         repo.ci_runs_sampled, repo.ci_recent_success = 0, 0
+    try:
+        repo.external_contributor_count = _fetch_contributor_signal(
+            client, repo.full_name, repo.owner_login, sample_size
+        )
+    except Exception:
+        repo.external_contributor_count = 0
     repo.has_rich_signals = True
 
 
@@ -665,6 +736,7 @@ def collect_track_a_git_repos(
         repo = _normalize_repo(item, readme_text=readme_text)
         issue_open_count = 0
         issue_closed_count = 0
+        non_owner_reporters = 0
         if cfg.include_issues and repo.full_name:
             try:
                 (
@@ -672,8 +744,9 @@ def collect_track_a_git_repos(
                     issue_signal_summary,
                     issue_open_count,
                     issue_closed_count,
+                    non_owner_reporters,
                 ) = _fetch_issue_signal(
-                    gh, repo.full_name, cfg.issue_sample_size, repo.stars
+                    gh, repo.full_name, cfg.issue_sample_size, repo.stars, repo.owner_login
                 )
             except Exception:
                 issue_score, issue_signal_summary = 0, "issue取得失敗"
@@ -681,6 +754,7 @@ def collect_track_a_git_repos(
         repo.issue_signal_summary = issue_signal_summary
         repo.issue_open_count = issue_open_count
         repo.issue_closed_count = issue_closed_count
+        repo.non_owner_issue_reporters = non_owner_reporters
         if include_rich and repo.full_name:
             _attach_rich_signals(gh, repo, cfg.rich_sample_size)
         repos.append(_apply_reliability(theme, repo))
