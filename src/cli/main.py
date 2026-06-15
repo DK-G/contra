@@ -233,6 +233,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--single", action="store_true", help="MVP mode: output the single best Track B serendipity unit")
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
+    parser.add_argument(
+        "--git-rich-signals",
+        dest="git_rich_signals",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="Track A: fetch release-cadence + CI-health signals (Pillar 1 weight migration, A-RS2). "
+        "Adds ~2 REST calls/repo; default auto-enables only when GITHUB_TOKEN is set.",
+    )
     parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
     parser.add_argument("--struct-depth-gate", type=float, default=_STRUCT_DEPTH_GATE, help="Track B hollow gate: min judge structural_depth (0-1); candidates below it are rejected as hollow (shared-category/lacks-systematicity). Default tracks the calibrated _STRUCT_DEPTH_GATE")
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
@@ -310,7 +318,11 @@ def main(argv: list[str]) -> int:
     use_llm = gen_mode == "llm"
 
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
-    git_config = GitCollectConfig(per_page=max(args.track_a_count * 2, 10), max_repos=max(args.track_a_count * 2, 10))
+    git_config = GitCollectConfig(
+        per_page=max(args.track_a_count * 2, 10),
+        max_repos=max(args.track_a_count * 2, 10),
+        include_rich_signals=args.git_rich_signals,
+    )
 
     # MVP (--single): the single best Track B serendipity unit. Track A is an optional anchor.
     track_b_target = 1 if args.single else args.track_b_count

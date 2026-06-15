@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0076） A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
+
+### 概要
+* 懸念2（README 成熟度が vibe coding 時代に水増し容易）への対応として、Pillar 1 の配点を「時間」系シグナルへ段階移行する先手を実装。
+* `_verified_maturity_score`（リリース刻み＋CI健全性、最大12点）を新設。リッチシグナル取得時のみ README 系を 0.6 倍へ移譲。GITHUB_TOKEN 在席時のみ自動有効化。
+
+### 関連タスク
+* Task: A-RS2（byrepo Pillar 1 配点移行・先手）／ roadmap A-RS2
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS2: Pillar 1 の README 偏重を是正し、生成で水増しできない「時間」系シグナル（CI 実行履歴＋リリース刻み）へ配点を段階移行する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, src/core/output_spec.py, src/cli/main.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_verified_maturity_score（cadence+ci, 最大12）を新設。リッチシグナル取得時のみ README 系を 0.6 倍へスケール。include_rich_signals=None はトークン在席時のみ自動有効。CLI --git-rich-signals で上書き。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 107 passed
+
+# 4. 既知の課題・リスク (必須)
+「他人」系シグナル（contributors/dependents）は未着手。リッチシグナルは API コスト増のためトークン前提。トークン在席時は README のみ満点 repo が相対降格（狙い通り）。
+```
+
+---
+
 ## 2026-06-15（CL-0075） A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
 
 ### 概要

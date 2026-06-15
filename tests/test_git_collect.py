@@ -8,9 +8,14 @@ from src.core.models import GitRepository, Keywords, Scope, ThemeInput
 from src.pipeline.git_collect import (
     GitCollectConfig,
     _apply_pool_relative_lma,
+    _apply_reliability,
+    _ci_health_score,
     _decode_readme,
     _is_completed_stable,
     _lma_score,
+    _release_cadence_score,
+    _resolve_rich_signals,
+    _verified_maturity_score,
     build_track_a_git_query,
     collect_track_a_git_repos,
     collect_track_a_git_works,
@@ -259,3 +264,112 @@ def test_pool_relative_lma_ties_share_credit():
     # a and b share the same recency -> identical credit.
     assert a.lma_score == b.lma_score
     assert c.lma_score == 12  # freshest of the three
+
+
+# --- A-RS2: Pillar 1 weight migration to verified "time" signals -------------
+
+def _repo(**overrides) -> GitRepository:
+    base = dict(full_name="acme/x", html_url="https://github.com/acme/x")
+    base.update(overrides)
+    return GitRepository(**base)
+
+
+def test_release_cadence_tiers():
+    assert _release_cadence_score(_repo(release_count=0)) == 0
+    assert _release_cadence_score(_repo(release_count=1)) == 2
+    assert _release_cadence_score(_repo(release_count=3)) == 4
+    assert _release_cadence_score(_repo(release_count=6)) == 6
+
+
+def test_ci_health_tiers():
+    assert _ci_health_score(_repo(ci_runs_sampled=0)) == 0
+    assert _ci_health_score(_repo(ci_runs_sampled=10, ci_recent_success=10)) == 6
+    assert _ci_health_score(_repo(ci_runs_sampled=10, ci_recent_success=6)) == 4
+    assert _ci_health_score(_repo(ci_runs_sampled=10, ci_recent_success=2)) == 3
+
+
+def test_verified_maturity_is_cadence_plus_ci():
+    repo = _repo(release_count=6, ci_runs_sampled=10, ci_recent_success=10)
+    assert _verified_maturity_score(repo) == 12
+
+
+_STRONG_README = (
+    "# Tool\ninstall\nusage\nsetup\nwhy this matters\nroadmap\n"
+    "```py\na\n```\n```py\nb\n```\n```py\nc\n```"
+)
+
+
+def test_rich_signals_migrate_weight_off_readme():
+    # A strong README alone reaches the Pillar 1 ceiling (30) in legacy mode.
+    plain = _repo(readme_text=_STRONG_README)
+    _apply_reliability(_theme(), plain)
+    assert plain.impl_doc_score == 30
+    assert plain.verified_maturity_score == 0
+
+    # With rich signals enabled but no releases/CI, README is down-weighted and
+    # cannot reach the old ceiling: this is the vibe-coding inflation case.
+    rich = _repo(readme_text=_STRONG_README, has_rich_signals=True)
+    _apply_reliability(_theme(), rich)
+    assert rich.impl_doc_score < plain.impl_doc_score
+    assert rich.verified_maturity_score == 0
+
+
+def test_rich_signals_credit_releases_and_ci():
+    rich = _repo(
+        readme_text="# t",
+        has_rich_signals=True,
+        release_count=6,
+        ci_runs_sampled=10,
+        ci_recent_success=10,
+    )
+    _apply_reliability(_theme(), rich)
+    assert rich.verified_maturity_score == 12
+    assert rich.impl_doc_score >= 12  # verified maturity alone contributes 12
+
+
+def test_resolve_rich_signals_explicit_override():
+    assert _resolve_rich_signals(GitCollectConfig(include_rich_signals=True), _FakeGitHubClient()) is True
+    assert _resolve_rich_signals(GitCollectConfig(include_rich_signals=False), _FakeGitHubClient()) is False
+
+
+def test_resolve_rich_signals_auto_requires_token():
+    # _FakeGitHubClient has no .config -> treated as unauthenticated.
+    assert _resolve_rich_signals(GitCollectConfig(), _FakeGitHubClient()) is False
+
+
+class _SimpleConfig:
+    token = "ghp_test"
+
+
+class _RichGitHubClient(_FakeGitHubClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.config = _SimpleConfig()
+
+    def get(self, path, params=None):
+        if path.endswith("/releases"):
+            self.calls.append((path, params))
+            return [{"published_at": f"202{i}-01-01T00:00:00Z"} for i in range(6)]
+        if path.endswith("/actions/runs"):
+            self.calls.append((path, params))
+            return {"workflow_runs": [{"conclusion": "success"} for _ in range(8)]}
+        return super().get(path, params)
+
+
+def test_collect_with_rich_signals_exposes_verified_maturity():
+    client = _RichGitHubClient()
+    repos = collect_track_a_git_repos(
+        _theme(),
+        config=GitCollectConfig(include_rich_signals=True),
+        client=client,
+    )
+    repo = repos[0]
+    assert repo.has_rich_signals is True
+    assert repo.release_count == 6
+    assert repo.ci_runs_sampled == 8
+    assert repo.verified_maturity_score == 12  # 6 cadence + 6 ci (8/8 success)
+
+    work = repository_to_work(repo)
+    assert work.source_meta["has_rich_signals"] is True
+    assert work.source_meta["verified_maturity_score"] == 12
+    assert work.source_meta["release_count"] == 6

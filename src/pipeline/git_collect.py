@@ -40,6 +40,11 @@ class GitCollectConfig:
     include_issues: bool = True
     issue_sample_size: int = 5
     pool_relative_lma: bool = True
+    # A-RS2: release-cadence + CI-health signals add ~2 REST calls per repo and
+    # blow the unauthenticated 60 req/h budget, so default to auto: enabled only
+    # when the client carries a token. Set True/False to force.
+    include_rich_signals: Optional[bool] = None
+    rich_sample_size: int = 10
 
 
 def _clean_token(token: str) -> str:
@@ -397,8 +402,54 @@ def _security_and_practices_score(repo: GitRepository) -> int:
         if signal in text:
             has_research = 5
             break
-            
+
     return score + heur_score + has_research
+
+
+# A-RS2 (DECISION_LOG 2026-06-12 concern 2): in the vibe-coding era a complete
+# README (and the mere existence of a workflow file) is cheap to generate, so
+# Pillar 1 shifts weight off README heuristics onto "time" signals that cannot
+# be faked by scaffolding: real release cadence and CI that actually runs and
+# passes. These need extra REST calls and are gated on a token being present.
+
+def _release_cadence_score(repo: GitRepository) -> int:
+    """Versioning discipline from tagged releases (Max 6pts).
+
+    Counts published releases — a generator can scaffold a README but not a
+    history of cut releases. Recency itself is Pillar 2's job, not cadence's.
+    """
+    n = repo.release_count
+    if n <= 0:
+        return 0
+    score = 2  # at least one real release
+    if n >= 3:
+        score += 2
+    if n >= 6:
+        score += 2
+    return min(score, 6)
+
+
+def _ci_health_score(repo: GitRepository) -> int:
+    """CI that actually runs and passes (Max 6pts).
+
+    Distinct from the Pillar 4 heuristic (which only sees a workflow file
+    mentioned in text): this scores the *fact* of recent runs and their
+    success, which scaffolding cannot manufacture.
+    """
+    if repo.ci_runs_sampled <= 0:
+        return 0
+    score = 3  # CI executes at all
+    ratio = repo.ci_recent_success / repo.ci_runs_sampled
+    if ratio >= 0.8:
+        score += 3
+    elif ratio >= 0.5:
+        score += 1
+    return min(score, 6)
+
+
+def _verified_maturity_score(repo: GitRepository) -> int:
+    """Pillar 1 "time" sub-score: release cadence + CI health (Max 12pts)."""
+    return _release_cadence_score(repo) + _ci_health_score(repo)
 
 
 def _fetch_issue_signal(
@@ -442,11 +493,23 @@ def _fetch_issue_signal(
 
 
 def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
-    # Pillar 1 (Max 30)
-    readme_comp = _readme_completeness_and_mature_categories(repo.readme_text)
-    code_dens = _code_examples_density(repo.readme_text)
-    impl_doc = readme_comp + code_dens
-    
+    # Pillar 1 (Max 30). When harder-to-fake "time" signals are available
+    # (A-RS2), migrate weight: README heuristics are scaled to 0.6 (max 12 + 6)
+    # and the freed 12pts go to verified maturity (release cadence + CI health).
+    # Without rich signals we keep the original README-heavy scoring (no
+    # regression for unauthenticated runs).
+    if repo.has_rich_signals:
+        readme_comp = round(_readme_completeness_and_mature_categories(repo.readme_text) * 12 / 20)
+        code_dens = round(_code_examples_density(repo.readme_text) * 6 / 10)
+        verified = _verified_maturity_score(repo)
+        repo.verified_maturity_score = verified
+        impl_doc = readme_comp + code_dens + verified
+    else:
+        readme_comp = _readme_completeness_and_mature_categories(repo.readme_text)
+        code_dens = _code_examples_density(repo.readme_text)
+        repo.verified_maturity_score = 0
+        impl_doc = readme_comp + code_dens
+
     # Pillar 2 (Max 25)
     lma = _lma_score(repo)
     
@@ -512,6 +575,12 @@ def repository_to_work(repo: GitRepository) -> Work:
             "security_score": repo.security_score,
             "issue_open_count": repo.issue_open_count,
             "issue_closed_count": repo.issue_closed_count,
+            "has_rich_signals": repo.has_rich_signals,
+            "verified_maturity_score": repo.verified_maturity_score,
+            "release_count": repo.release_count,
+            "latest_release_at": repo.latest_release_at,
+            "ci_runs_sampled": repo.ci_runs_sampled,
+            "ci_recent_success": repo.ci_recent_success,
         },
     )
 
@@ -521,6 +590,49 @@ def _fetch_readme_text(client: GitHubClient, full_name: str) -> str:
     return _decode_readme(payload)
 
 
+def _fetch_release_signal(client: GitHubClient, full_name: str, sample_size: int) -> tuple[int, str]:
+    """Return (release_count, latest_published_at) from a releases sample."""
+    payload = client.get(f"/repos/{full_name}/releases", {"per_page": sample_size})
+    releases = payload if isinstance(payload, list) else []
+    count = len(releases)
+    latest = str(releases[0].get("published_at") or "") if releases else ""
+    return count, latest
+
+
+def _fetch_ci_signal(client: GitHubClient, full_name: str, sample_size: int) -> tuple[int, int]:
+    """Return (runs_sampled, recent_success_count) from the Actions runs sample."""
+    payload = client.get(f"/repos/{full_name}/actions/runs", {"per_page": sample_size})
+    runs = payload.get("workflow_runs") or [] if isinstance(payload, dict) else []
+    sampled = len(runs)
+    success = sum(1 for run in runs if run.get("conclusion") == "success")
+    return sampled, success
+
+
+def _resolve_rich_signals(cfg: GitCollectConfig, client: GitHubClient) -> bool:
+    """Auto-enable rich signals only when a token is present (rate-limit guard)."""
+    if cfg.include_rich_signals is not None:
+        return cfg.include_rich_signals
+    token = getattr(getattr(client, "config", None), "token", None)
+    return bool(token)
+
+
+def _attach_rich_signals(client: GitHubClient, repo: GitRepository, sample_size: int) -> None:
+    """Fetch release-cadence + CI-health signals; degrade gracefully on error."""
+    try:
+        repo.release_count, repo.latest_release_at = _fetch_release_signal(
+            client, repo.full_name, sample_size
+        )
+    except Exception:
+        repo.release_count, repo.latest_release_at = 0, ""
+    try:
+        repo.ci_runs_sampled, repo.ci_recent_success = _fetch_ci_signal(
+            client, repo.full_name, sample_size
+        )
+    except Exception:
+        repo.ci_runs_sampled, repo.ci_recent_success = 0, 0
+    repo.has_rich_signals = True
+
+
 def collect_track_a_git_repos(
     theme: ThemeInput,
     config: Optional[GitCollectConfig] = None,
@@ -528,6 +640,7 @@ def collect_track_a_git_repos(
 ) -> List[GitRepository]:
     cfg = config or GitCollectConfig()
     gh = client or GitHubClient()
+    include_rich = _resolve_rich_signals(cfg, gh)
     query = build_track_a_git_query(theme)
     payload = gh.get(
         "/search/repositories",
@@ -568,6 +681,8 @@ def collect_track_a_git_repos(
         repo.issue_signal_summary = issue_signal_summary
         repo.issue_open_count = issue_open_count
         repo.issue_closed_count = issue_closed_count
+        if include_rich and repo.full_name:
+            _attach_rich_signals(gh, repo, cfg.rich_sample_size)
         repos.append(_apply_reliability(theme, repo))
         if len(repos) >= cfg.max_repos:
             break

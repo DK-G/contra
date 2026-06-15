@@ -4,6 +4,27 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — A-RS2 着手: Pillar 1 配点を README → 「時間」系シグナルへ段階移行
+
+**決定**: 起票済み懸念2（README 成熟度 30点が vibe coding 時代に最も水増し容易なシグナルへ乗っている）への対応として、配点の段階移行の**先手（CI 実行履歴＋リリース刻み）**を実装した。「他人」系（外部コントリビュータ / dependents）は次段に残す。
+
+**実装内容**:
+- `_verified_maturity_score`（最大12点）を新設＝`_release_cadence_score`（リリース数による versioning discipline、最大6点）＋`_ci_health_score`（直近 Actions runs の実行＋成功率、最大6点）。いずれも「設定ファイルの存在」でなく「実際にリリースが刻まれ／CI が回って通っている」事実を採点する（スキャフォールドで水増し不能）。
+- Pillar 1（最大30点据え置き）を、リッチシグナル取得時のみ **README 系を 0.6 倍にスケール**（completeness 20→12、code density 10→6）し、空いた12点を verified maturity に移譲。**リッチシグナル非取得時は従来の README 重点スコアのまま**（無認証実行に回帰なし）。
+- 取得は `_fetch_release_signal`（`/releases`）と `_fetch_ci_signal`（`/actions/runs`）。repo ごと約2 REST 呼び出し増。
+- **GITHUB_TOKEN とセット**: `GitCollectConfig.include_rich_signals=None`（既定）はトークン在席時のみ自動有効化（無認証 60 req/h の壁を踏まないため）。`True/False` で明示上書き、CLI `--git-rich-signals/--no-git-rich-signals` で制御。取得失敗は graceful degrade（0点・has_rich_signals は立てる）。
+- `source_meta` と Track A Markdown（`Verified Maturity: N (releases: …, CI: ok/sampled passing)`）に露出。
+
+**根拠**: 生成で水増しできないシグナルは本質的に「時間」と「他人」のみ（DECISION_LOG 2026-06-12）。README ヒューリスティックは「AI ツールを使ったか」程度まで情報量が劣化したため、満点が乗る配点を時間系へ移す。完全撤廃せず 0.6 倍に留めるのは段階移行＋無認証フォールバック維持のため。
+
+**トレードオフ / 注意**: トークン在席時は README のみで満点に届いた repo が相対的に降格する（=狙い通りの是正）。リッチシグナル取得は API コスト増のためトークン前提。「他人」系シグナル（contributors / dependents）と Pillar 1 の更なる配点見直しは A-RS2 続編として残す。
+
+**検証**: `tests/test_git_collect.py` に8ケース追加（cadence/ci 段階、verified=cadence+ci、リッチ時の README 降格、リリース/CI クレジット、rich 解決のトークン依存/明示上書き、収集経路での露出）。全 107 件 green。
+
+**未着手 / 次**: A-RS2 続編（「他人」系シグナル）。
+
+---
+
 ## 2026-06-15 — A-RS1 完了: Pillar 2 (LMA) に候補プール内相対正規化を追加
 
 **決定**: 懸念1の改善方針候補2「候補プール内相対正規化」を実装し、A-RS1（候補1＋候補2）を完了とする。

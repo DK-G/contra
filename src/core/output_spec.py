@@ -91,6 +91,14 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
             )
         else:
             lines.append(f"- Reliability Score: {score}  |  License: {license_name}")
+        if entry.work.source_meta.get("has_rich_signals"):
+            verified = entry.work.source_meta.get("verified_maturity_score", "—")
+            releases = entry.work.source_meta.get("release_count", "—")
+            ci_sampled = entry.work.source_meta.get("ci_runs_sampled", "—")
+            ci_ok = entry.work.source_meta.get("ci_recent_success", "—")
+            lines.append(
+                f"- Verified Maturity: {verified} (releases: {releases}, CI: {ci_ok}/{ci_sampled} passing)"
+            )
         lines.append(f"- Issue Signal: {issue_signal}")
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")

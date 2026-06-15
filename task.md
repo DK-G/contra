@@ -26,7 +26,9 @@
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
     - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
-- [ ] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセットで判断する
+- [/] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセット
+    - [x] 先手: CI 実行履歴＋リリース刻みを verified maturity（最大12点）として導入し、リッチシグナル取得時のみ README 系を 0.6 倍へ移譲する
+    - [ ] 「他人」系シグナル（外部コントリビュータ数 / owner 以外の起票者 / dependents）を導入する
 - [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
@@ -35,6 +37,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
+*   `_verified_maturity_score`（最大12点）= リリース刻み（`_release_cadence_score` 最大6）＋CI健全性（`_ci_health_score` 直近 runs の実行＋成功率 最大6）。設定ファイル存在でなく「回って通っている」事実を採点。
+*   Pillar 1（最大30据え置き）をリッチシグナル取得時のみ README 系 0.6 倍へスケールし、空いた12点を verified maturity に移譲。非取得時は従来スコア（無認証回帰なし）。
+*   取得は `/releases` と `/actions/runs`（repo あたり約2 REST 増）。`include_rich_signals=None` はトークン在席時のみ自動有効化、CLI `--git-rich-signals/--no-git-rich-signals` で上書き、失敗は graceful degrade。
+*   `source_meta`＋Track A Markdown（Verified Maturity 行）に露出。`tests/test_git_collect.py` に8ケース追加（全 107 件 green）。
 
 ### 2026-06-15 A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
 *   `_apply_pool_relative_lma` を追加。候補プールをドメインサンプルとみなし、push 鮮度のプール内相対順位で LMA を補正（成熟ドメインで全 repo が stale でも最も手入れされた repo が浮上）。

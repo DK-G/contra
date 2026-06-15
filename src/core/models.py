@@ -95,6 +95,13 @@ class GitRepository:
     issue_signal_summary: str = ""
     issue_open_count: int = 0
     issue_closed_count: int = 0
+    # A-RS2: harder-to-fake "time" signals (require extra REST calls + token).
+    release_count: int = 0
+    latest_release_at: str = ""
+    ci_runs_sampled: int = 0
+    ci_recent_success: int = 0
+    has_rich_signals: bool = False
+    verified_maturity_score: int = 0
 
 
 @dataclass
