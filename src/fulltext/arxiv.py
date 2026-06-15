@@ -78,11 +78,34 @@ def _decode(data: bytes) -> str:
     return data.decode("utf-8", errors="ignore")
 
 
+def _document_body(tex: str) -> str:
+    """The content between \\begin{document} and \\end{document}, or the whole fragment.
+
+    arXiv multi-file submissions \\input separate .tex fragments; those fragments have no
+    \\begin{document}. We must keep each file's BODY (and the fragments whole) so the included
+    text survives — otherwise concatenating a fragment AFTER the main file's \\end{document}
+    would be truncated away by the document-boundary trim.
+    """
+    begin = re.search(r"\\begin\{document\}", tex)
+    if not begin:
+        return tex
+    body = tex[begin.end():]
+    end = re.search(r"\\end\{document\}", body)
+    if end:
+        body = body[:end.start()]
+    return body
+
+
 def _join_tex(texts: List[str]) -> str:
-    """Order .tex blobs so the one containing \\begin{document} (the main file) comes first."""
-    main = [t for t in texts if "\\begin{document}" in t]
-    rest = [t for t in texts if "\\begin{document}" not in t]
-    return "\n".join(main + rest)
+    """Concatenate .tex blobs: main file bodies first (in file order), then \\input fragments.
+
+    Each main file (one containing \\begin{document}) contributes only its body; fragment files
+    are kept whole. This preserves the included body of split submissions instead of losing it
+    to the main file's \\end{document} trim.
+    """
+    mains = [_document_body(t) for t in texts if "\\begin{document}" in t]
+    frags = [t for t in texts if "\\begin{document}" not in t]
+    return "\n".join(mains + frags)
 
 
 def _eprint_to_tex(data: bytes) -> str:

@@ -68,6 +68,17 @@ def _eprint_tar(tex: str, name: str = "main.tex") -> bytes:
     return gzip.compress(buf.getvalue())
 
 
+def _eprint_tar_multi(files: dict) -> bytes:
+    """Build a gzipped tar of {name: bytes} — mirrors a real multi-file arXiv submission."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for name, data in files.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return gzip.compress(buf.getvalue())
+
+
 # --- extract_arxiv_id -------------------------------------------------------
 
 def test_arxiv_id_from_explicit_source_meta():
@@ -128,6 +139,35 @@ def test_extract_text_from_gzipped_tar():
     out = extract_text_from_eprint(_eprint_tar(_SAMPLE_TEX), max_chars=4000)
     assert "feedback loop" in out
     assert "\\" not in out
+
+
+def test_extract_text_multifile_keeps_input_fragments():
+    # Realistic arXiv submission: main \inputs separate fragments; a .bib and a binary figure
+    # must be ignored, and a latin-1 fragment must decode. The included body must NOT be lost
+    # to the main file's \end{document} trim (the multi-file regression this guards).
+    main = "\n".join([
+        r"\documentclass{article}",
+        r"\begin{document}",
+        r"\input{intro}",
+        r"\input{methods}",
+        r"\bibliography{refs}",
+        r"\end{document}",
+    ]).encode("utf-8")
+    intro = (r"\section{Introduction}" "\n" r"The core feedback mechanism is studied here.").encode("utf-8")
+    methods = (r"\section{Methods}" "\n" r"We measured rate-limiting under the Schr\"odinger regime.").encode("latin-1")
+    files = {
+        "main.tex": main,
+        "intro.tex": intro,
+        "methods.tex": methods,
+        "refs.bib": b"@article{foo2020, title={ignored bibliography entry}}",
+        "fig1.png": b"\x89PNG\r\n\x1a\n\x00binarynoise",
+    }
+    out = extract_text_from_eprint(_eprint_tar_multi(files), max_chars=4000)
+    assert "feedback mechanism" in out          # intro fragment survived
+    assert "rate-limiting" in out                # methods fragment survived
+    assert "ignored bibliography entry" not in out  # .bib not pulled in
+    assert "binarynoise" not in out                 # binary figure not pulled in
+    assert "\\" not in out and "$" not in out
 
 
 def test_extract_text_from_single_gzipped_tex():
