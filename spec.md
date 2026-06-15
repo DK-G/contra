@@ -47,7 +47,16 @@
     output_spec.py    # 出力Markdown仕様定数
   /openalex
     client.py         # OpenAlex HTTPクライアント（リトライ・ページング）
-    parser.py         # APIレスポンス → Work への正規化
+    parser.py         # APIレスポンス → Work への正規化（source_meta に OA/arXiv ヒントを付与）
+  /fulltext           # OA全文 provider 層（差し替え可能・入力補強レイヤー。スコア核には触れない）
+    base.py           # FullText / FulltextProvider Protocol / ProviderChain / needs_fulltext / effective_abstract
+    cache.py          # 論文ID単位のローカルキャッシュ（hit/miss 両方記録・再取得しない）
+    http.py           # 非arXiv provider 共通の polite HTTP フェッチャ（レート制御・retry）
+    textutil.py       # 共通テキスト整形（collapse_ws / extract_excerpt / prose_ratio）
+    arxiv.py          # ① arXiv provider（キー不要・e-print LaTeX 展開→ノイズ除去）
+    europepmc.py      # ② Europe PMC provider（キー不要・JATS XML 全文）
+    core.py           # ② CORE provider（CORE_API_KEY を env から・未設定なら無効）
+    oa_pdf.py         # ③ oa_url PDF フォールバック（stdlib only・best-effort・prose品質ゲート）
   /pipeline
     collect.py        # Collector: テーマ→クエリ生成→ページング収集
     filter.py         # abstractあり優先フィルタ・件数制限
@@ -134,6 +143,16 @@
 
 ## 7. 決定ログ
 
+- `2026-06-15` **OA全文 provider 層の導入（abstract 薄 → mechanism 判定弱の補強）**:
+  - byserendipity / bybridge の候補で「abstract が薄く mechanism 判定が弱い」課題を、OA論文の全文取得で補強する**差し替え可能な provider 層** `src/fulltext/` を新設。解決順は **① arXiv（キー不要・e-print LaTeX が最低ノイズ）→ ② Europe PMC（キー不要・JATS XML）/ CORE（`CORE_API_KEY`）→ ③ OpenAlex `oa_url` PDF（汎用フォールバック・stdlib only の best-effort）**。Unpaywall は OpenAlex `oa_url` に内包されるため独立 provider にしない。
+  - **位置づけは「収集/判定の入力材料」レイヤー**。`select_track_b` のスコア設計（`purpose_sim × mechanism_dist`、ゲート 0.20/0.50/0.35 等）には一切触れない。全文は `effective_abstract(work)` 経由で PM スコアラ入力の abstract に**連結**するだけ（`--fulltext` 無指定なら従来とバイト単位で同一）。
+  - **無駄打ち防止**: `--fulltext`（既定 off）の opt-in。`needs_fulltext`（OA かつ abstract が `--fulltext-max-abstract` 字未満）に合致する Track B 候補だけ取得。取得結果は論文ID単位で `data/fulltext/`（git追跡外）に**キャッシュ（hit/miss 両方）**し再実行で再取得しない。失敗時は `None` で abstract のみへ素直にフォールバック。
+  - **制約遵守**: 外部ライブラリ追加なし（urllib / gzip / tarfile / zlib / xml.etree のみ）。APIキーは env から（arXiv 不要、CORE は `CORE_API_KEY`）。`src/core/models.py` は変更せず、OA/arXiv ヒントと取得全文は既存の `Work.source_meta`（柔軟 dict）に格納。
+  - **多ファイル e-print 対応**: arXiv は本文を `\input` で別 `.tex` に分割するため、main の body と各フラグメントを結合してから LaTeX 除去（main の `\end{document}` でフラグメントを取りこぼさない）。
+  - **PDF フォールバックは best-effort**: stdlib のみでは CID/Type0 フォントのグリフ再マップ不可。`prose_ratio` 品質ゲートで崩れたテキストは採用せず `None`（=最後尾 provider なので abstract のみに戻る）。
+  - **検証**: ユニットテストはネットワークを injected fetcher で全モック（`tests/test_fulltext.py` / `tests/test_fulltext_providers.py`）。実ネットワーク疎通は `scripts/arxiv_fulltext_probe.py`（arXiv 単体＋`--doi/--oa-url` でフルチェーン）で別途確認する。
+  - **後続候補**: IA Scholar provider の追加、実機サンプル生成での全文補強あり/なし品質比較。
+
 - `2026-06-09` **byrepo パイプラインの信頼性スコアリングの改善（4 Pillars実装）および次世代機能の導入決定**:
   - Track A（Gitリポジトリ）の信頼性評価ロジックを、単純なスター数や更新日付から「マルチディメンショナルな100点満点スコア（4つのPillars）」にアップグレード。
   - クエリ構築における、スペースを含む除外フレーズのマイナス記号指定（例：`"-metaphor generation"`）が GitHub API で検索結果を 0 件にしてしまうバグを修正。GitHub が公式にサポートする `NOT` 構文（例：`NOT "metaphor generation"`）を使用するように修正。さらに `poetry` ツール除外の競合問題も解消。
@@ -212,5 +231,5 @@
 
 ## 検証ツール (Validation Tools)
 
-- **ユニットテスト（`tests/`）**: 選別スコア / 収集 / 飽和検知 / purpose_level / MAX-MIN 多様化 / 数値捏造ガード / export レンダリング / input_schema / history（`python -m pytest tests/`）
-- **プローブスクリプト（`scripts/`）**: `depletion_probe.py` / `r1_model_probe.py` / `r2_judge_compare.py` / `r5_score_stability.py`（各チューニングラウンドの検証用）
+- **ユニットテスト（`tests/`）**: 選別スコア / 収集 / 飽和検知 / purpose_level / MAX-MIN 多様化 / 数値捏造ガード / export レンダリング / input_schema / history / OA全文 provider 層（`test_fulltext.py` / `test_fulltext_providers.py`・ネットワークはモック）（`python -m pytest tests/`）
+- **プローブスクリプト（`scripts/`）**: `depletion_probe.py` / `r1_model_probe.py` / `r2_judge_compare.py` / `r5_score_stability.py`（各チューニングラウンドの検証用）/ `arxiv_fulltext_probe.py`（OA全文 provider の実ネットワーク疎通確認・要 outbound）

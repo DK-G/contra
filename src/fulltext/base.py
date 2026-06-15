@@ -3,9 +3,9 @@
 This is the swappable OA full-text resolution layer that補強s thin abstracts so the
 Track B mechanism判定 (P/M structure abduction in classify.py) has more material to work
 with. It is an INPUT layer only — it never changes the serendipity score formula or its
-gate thresholds (spec.md §4). Resolution order is defined by the provider chain; the first
-increment ships only the arXiv provider (see arxiv.py), with CORE / Europe PMC / OpenAlex
-oa_url PDF deferred to later increments.
+gate thresholds (spec.md §4). Resolution order is defined by the provider chain
+(build_default_chain): arXiv -> Europe PMC -> CORE -> OpenAlex oa_url PDF. Each provider
+returns None when it cannot resolve a work, so the chain degrades to the abstract-only path.
 """
 
 from __future__ import annotations
