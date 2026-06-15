@@ -24,6 +24,7 @@
 | ソース | レポート | 一言結論 |
 |---|---|---|
 | **OpenAlex**（基準/現行） | [`openalex_review.md`](openalex_review.md) | contraのバックボーン(全分野・無料・キー不要)。⚠Concepts→Topics移行がconcept_distanceの最重要リスク。abstractはinverted indexのみ=全文provider層で補う |
+| Crossref (crossref.org) | [`crossref_review.md`](crossref_review.md) | **冗長/不採用**: DOI登録の上流レジストリ。OpenAlexがCrossrefを内包+概念/OA/引用を上乗せ。新しい母集団も距離も供給せず |
 
 ### ツール/サイト別レポート
 
