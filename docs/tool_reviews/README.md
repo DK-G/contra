@@ -28,6 +28,7 @@
 | Unpaywall (unpaywall.org) | [`unpaywall_review.md`](unpaywall_review.md) | **冗長/不採用**: OurResearch運営でOpenAlex `oa_url`はUnpaywall由来=既に手元。provider連鎖から独立ステップとして外す訂正。位置であって全文ではない |
 | PubMed / Europe PMC | [`pubmed_europepmc_review.md`](pubmed_europepmc_review.md) | **加算候補(生物医学版arXiv)**: MeSH距離精度+OA全文(9M+)+プレプリント統合。入口はEurope PMC RESTに一本化、これで#8 bioRxiv/medRxivも賄える |
 | OpenCitations (opencitations.net) | [`opencitations_review.md`](opencitations_review.md) | **冗長/不採用**: 引用グラフはOpenAlex referenced_works、引用の質はS2 intentで既出。intent未付与で新信号なし。自己引用除外の着想のみ(OpenAlexで自前算出可) |
+| DOAJ (doaj.org) | [`doaj_review.md`](doaj_review.md) | **冗長/不採用**: OA誌ホワイトリストだがOpenAlex `is_in_doaj`で露出済み。legitimacyフラグを「注意点」に軽く使う(発見の足切りには使わない)。caution信号クラスタの一員 |
 
 ### ツール/サイト別レポート
 
