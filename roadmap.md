@@ -46,8 +46,8 @@
 | FT2 | OA全文 provider 実ネットワーク検証（keyless 経路: arXiv/Europe PMC/IA Scholar/oa_url PDF） | **検証済み(2026-06-15)・LaTeX解析欠陥3件修正・timeout 30→60s** |
 | FT3 | CORE 経路の実走検証（要 `CORE_API_KEY`・保留）＋ `--fulltext` on/off の全文補強品質比較（要 LLM キー） | 未着手 |
 | 10 | Phase 1 Done 判断: 複数テーマでの品質レビューと人間評価 | 未完了 |
-| A-RS1 | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | 未着手（DECISION_LOG 2026-06-12 参照） |
-| A-RS2 | byrepo Pillar 1 配点移行: README 成熟度 → 時間・他人系シグナル（CI実行履歴/リリース刻み/外部関与） | 未着手（同上、GITHUB_TOKEN 事実上必須化とセット） |
+| ~~A-RS1~~ | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | **完了（2026-06-15）**: 完成判定の床＋プール内相対正規化を実装 |
+| ~~A-RS2~~ | byrepo Pillar 1 配点移行: README 成熟度 → 時間・他人系シグナル（CI実行履歴/リリース刻み/外部関与） | **完了（2026-06-15）**: 時間系（CI実行履歴＋リリース刻み）＋他人系（外部コントリビュータ＋非owner起票者）を導入。dependents は REST 非提供のため対象外 |
 
 **成果物**
 - CLIツール（テーマ入力→ Track B 1本、または質ゲート通過分のMarkdown出力）

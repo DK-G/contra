@@ -84,13 +84,33 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
         lma = entry.work.source_meta.get("lma_score")
         comm = entry.work.source_meta.get("community_score")
         sec = entry.work.source_meta.get("security_score")
+        has_rich = entry.work.source_meta.get("has_rich_signals")
+        # Scoring mode tells the reader how Pillar 1 was computed: scores are
+        # only comparable within the same mode (rich mode migrates README weight
+        # onto verified time/people signals). See DECISION_LOG 2026-06-12 (A-RS2).
+        mode = "rich: time+people" if has_rich else "README-only"
         lines.append(f"- 更新年: {entry.work.year or '—'}  |  種別: {entry.work.venue}  |  stars: {entry.work.cited_by_count}")
         if impl_doc is not None and lma is not None and comm is not None and sec is not None:
             lines.append(
-                f"- Reliability Score: {score} (Impl/Doc: {impl_doc}, LMA: {lma}, Comm: {comm}, Sec: {sec})  |  License: {license_name}"
+                f"- Reliability Score: {score}/100 [{mode}] "
+                f"(Impl/Doc: {impl_doc}/30, LMA: {lma}/25, Comm: {comm}/20, Sec: {sec}/25)  |  License: {license_name}"
             )
         else:
-            lines.append(f"- Reliability Score: {score}  |  License: {license_name}")
+            lines.append(f"- Reliability Score: {score}/100 [{mode}]  |  License: {license_name}")
+        if has_rich:
+            verified = entry.work.source_meta.get("verified_maturity_score", "—")
+            releases = entry.work.source_meta.get("release_count", "—")
+            ci_sampled = entry.work.source_meta.get("ci_runs_sampled", "—")
+            ci_ok = entry.work.source_meta.get("ci_recent_success", "—")
+            lines.append(
+                f"- Verified Maturity: {verified}/12 (releases: {releases}, CI: {ci_ok}/{ci_sampled} passing)"
+            )
+            third_party = entry.work.source_meta.get("third_party_score", "—")
+            contributors = entry.work.source_meta.get("external_contributor_count", "—")
+            reporters = entry.work.source_meta.get("non_owner_issue_reporters", "—")
+            lines.append(
+                f"- Third-Party Signal: {third_party}/6 (ext. contributors: {contributors}, non-owner reporters: {reporters})"
+            )
         lines.append(f"- Issue Signal: {issue_signal}")
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")

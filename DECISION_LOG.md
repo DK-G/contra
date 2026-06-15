@@ -4,6 +4,80 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — A-RS2 続編: Pillar 1 に「他人」系シグナル（外部コントリビュータ / 非 owner 起票者）を追加
+
+**決定**: 先手（時間系）に続き、生成で水増しできないもう一方のシグナル class「他人」を Pillar 1 に導入した。**dependents（下流利用）は GitHub に公式 REST API がない（HTML の dependents graph のみ）ため対象外**とし、スクレイピングは見送る。
+
+**実装内容**:
+- `_third_party_score`（最大6点）を新設＝外部コントリビュータ数（owner を除く、`/contributors`、最大3）＋非 owner issue 起票者数（issues サンプルの重複排除した起票者、最大3）。後者は **A-RS2 先手で既に取得済みの issues ペイロードを再利用**し追加 REST 呼び出しゼロ。前者のみ repo あたり1 REST 増。
+- Pillar 1（最大30据え置き）の rich モード配点を再配分: README 系を **0.6 倍 → 0.4 倍**へ更にスケール（completeness 20→8、code 10→4）し、時間系（verified maturity 最大12）＋他人系（third_party 最大6）で構成。8+4+12+6=30。非 rich モードは従来どおり（無認証回帰なし）。
+- owner 判定のため search item の `owner.login` を `GitRepository.owner_login` に保持。`_fetch_issue_signal` は `owner_login` を受けて非 owner 起票者を数える（5-tuple 化）。
+- 取得失敗は graceful degrade。`source_meta` と Track A Markdown（`Third-Party Signal: N (ext. contributors: …, non-owner reporters: …)`）に露出。
+
+**根拠**: 「他人」シグナル（外部コントリビュータ・非 owner 起票者）は実際の第三者の関与であり、スキャフォールドでは生成不能。README 配点を 0.4 倍まで下げたのは、時間系・他人系の2つの硬いシグナル class が揃ったため README 依存を更に減らす段階移行の継続。
+
+**トレードオフ / 注意**: 外部コントリビュータ取得で repo あたり REST が更に1増（合計 約3増/repo、トークン前提は不変）。dependents は API 非提供のため将来 GraphQL/別経路を要検討。A-RS2 はこれで時間系・他人系の双方を導入完了。Pillar 配点全体の再較正（人間レビュー）は roadmap #10 の品質評価とあわせて実施予定。
+
+**検証**: `tests/test_git_collect.py` に3ケース追加（third_party 段階・rich モードでの Pillar 1 寄与・収集経路での owner 除外カウント）。全 110 件 green。
+
+---
+
+## 2026-06-15 — A-RS2 着手: Pillar 1 配点を README → 「時間」系シグナルへ段階移行
+
+**決定**: 起票済み懸念2（README 成熟度 30点が vibe coding 時代に最も水増し容易なシグナルへ乗っている）への対応として、配点の段階移行の**先手（CI 実行履歴＋リリース刻み）**を実装した。「他人」系（外部コントリビュータ / dependents）は次段に残す。
+
+**実装内容**:
+- `_verified_maturity_score`（最大12点）を新設＝`_release_cadence_score`（リリース数による versioning discipline、最大6点）＋`_ci_health_score`（直近 Actions runs の実行＋成功率、最大6点）。いずれも「設定ファイルの存在」でなく「実際にリリースが刻まれ／CI が回って通っている」事実を採点する（スキャフォールドで水増し不能）。
+- Pillar 1（最大30点据え置き）を、リッチシグナル取得時のみ **README 系を 0.6 倍にスケール**（completeness 20→12、code density 10→6）し、空いた12点を verified maturity に移譲。**リッチシグナル非取得時は従来の README 重点スコアのまま**（無認証実行に回帰なし）。
+- 取得は `_fetch_release_signal`（`/releases`）と `_fetch_ci_signal`（`/actions/runs`）。repo ごと約2 REST 呼び出し増。
+- **GITHUB_TOKEN とセット**: `GitCollectConfig.include_rich_signals=None`（既定）はトークン在席時のみ自動有効化（無認証 60 req/h の壁を踏まないため）。`True/False` で明示上書き、CLI `--git-rich-signals/--no-git-rich-signals` で制御。取得失敗は graceful degrade（0点・has_rich_signals は立てる）。
+- `source_meta` と Track A Markdown（`Verified Maturity: N (releases: …, CI: ok/sampled passing)`）に露出。
+
+**根拠**: 生成で水増しできないシグナルは本質的に「時間」と「他人」のみ（DECISION_LOG 2026-06-12）。README ヒューリスティックは「AI ツールを使ったか」程度まで情報量が劣化したため、満点が乗る配点を時間系へ移す。完全撤廃せず 0.6 倍に留めるのは段階移行＋無認証フォールバック維持のため。
+
+**トレードオフ / 注意**: トークン在席時は README のみで満点に届いた repo が相対的に降格する（=狙い通りの是正）。リッチシグナル取得は API コスト増のためトークン前提。「他人」系シグナル（contributors / dependents）と Pillar 1 の更なる配点見直しは A-RS2 続編として残す。
+
+**検証**: `tests/test_git_collect.py` に8ケース追加（cadence/ci 段階、verified=cadence+ci、リッチ時の README 降格、リリース/CI クレジット、rich 解決のトークン依存/明示上書き、収集経路での露出）。全 107 件 green。
+
+**未着手 / 次**: A-RS2 続編（「他人」系シグナル）。
+
+---
+
+## 2026-06-15 — A-RS1 完了: Pillar 2 (LMA) に候補プール内相対正規化を追加
+
+**決定**: 懸念1の改善方針候補2「候補プール内相対正規化」を実装し、A-RS1（候補1＋候補2）を完了とする。
+
+**実装内容**（`src/pipeline/git_collect.py`）:
+- `_apply_pool_relative_lma(repos)` を追加。同一クエリで収集した候補プールをドメインサンプルとみなし、各 repo の **push 鮮度のプール内相対順位**で LMA を補正する。成熟ドメインで全 repo が stale な場合でも、絶対 tier で全員が最下位（1点）に潰れず、プール内で最も手入れされた repo が浮上する。
+- 補正は `relative > 現 lma` のときのみ適用（`max` 意味論）。新鮮な repo の絶対スコアは決して下げない。順位天井は 12点で**完成判定の床（最大15点）より低く**置き、順位だけで「維持＋採用された完成ライブラリ」を上回らないようにした。順位は同点（同日 push）に等しいクレジットを与える。
+- プールサイズが 3 未満のときは順位が無情報なため no-op。`GitCollectConfig.pool_relative_lma`（既定 True）で切替可能。`_apply_reliability` の後段で適用し、補正時は4 Pillars から `reliability_score` を再計算。追加 API コストはゼロ。
+
+**根拠**: 候補1（完成判定の床）は「採用＋高クローズ率」の二条件を満たす repo のみを救済するが、シグナルの薄い小規模 repo や issue 履歴のない成熟ライブラリは依然として救えない。プール内相対正規化はメタデータ追加取得なしに「ドメイン全体が stale」を自動補正する補完策。
+
+**検証**: `tests/test_git_collect.py` に4ケース追加（stale ドメインで最新が浮上 / 新鮮 repo は不変 / 小プール no-op / 同点は等クレジット）。全 99 件 green。
+
+**未着手 / 次**: A-RS2（Pillar 1 配点を時間・他人系シグナルへ移行、GITHUB_TOKEN 事実上必須化とセット）。
+
+---
+
+## 2026-06-15 — A-RS1 着手: Pillar 2 (LMA) に完成判定の床を実装
+
+**決定**: 2026-06-12 に起票した懸念1（Pillar 2 が完成した安定ライブラリを最も強く罰する）への改善方針候補1「完成判定の床」を実装した。候補2「候補プール内相対正規化」は引き続き未着手。
+
+**実装内容**（`src/pipeline/git_collect.py`）:
+- `_lma_score` を「鮮度（freshness）」算出と「完成判定の床」適用の2段構成に分離。push 経過日数に基づく従来の段階配点（14日=25点 … 1年超=1点）を `freshness` として保持。
+- `_is_completed_stable(repo)` を追加。**採用シグナル**（`stars >= 50` または `forks >= 10`）と、**過去の issue 活動＋高クローズ率**（`issue_closed_count > 0` かつ `closed >= open`）の**両方**を満たす stale repo のみを「完成した安定ライブラリ」と判定する。Pillar 3 の「ゼロIssueの罠」と同型に、「完成」と「誰も使っていない」を区別する。
+- 該当時は LMA を `freshness` でなく床値で止める: 基本 12点、強採用（`stars >= 200`）は 15点。`max(freshness, floor)` のため新鮮な repo のスコアは下げない。
+- issue サンプルの open/closed 件数を `GitRepository.issue_open_count` / `issue_closed_count` に構造化保持（従来は summary 文字列のみ）。`source_meta` にも露出。
+
+**根拠**: 「2年間 push がない＝完成していて修正不要」な小さく完璧なユーティリティが top-3 から脱落する歪みを、撤廃（鮮度ゼロ化）せずに緩和する。互換性腐敗の実害は残るため床は中位（12〜15点）に留め、満点（25点）には戻さない。採用＋クローズ率の二条件で「放置」を床から除外する。
+
+**検証**: `tests/test_git_collect.py` に床の発火/非発火5ケースを追加（強採用→15、中採用→12、未採用/issue履歴なし→1、未解決 issue 滞留→1、新鮮 repo→25）。全 95 件 green。
+
+**未着手 / 次**: 候補2（候補プール内相対正規化）と A-RS2（Pillar 1 配点移行）。
+
+---
+
 ## 2026-06-12 — byrepo Reliability Score の構造的懸念2件（起票・実装未着手）
 
 **決定**: Reliability Score（4 Pillars）に以下の構造的懸念があることを認定し、改善方針の候補を記録する。実装は未着手。着手順は懸念1 → 懸念2 を推奨（出力 top-3 への歪みが大きい順）。

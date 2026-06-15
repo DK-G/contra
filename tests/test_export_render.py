@@ -91,6 +91,51 @@ def test_render_track_a_github_entry():
     assert "GitHub" in md
     assert "Reliability Score: 72" in md
     assert "issues 2件 / open 1 / closed 1" in md
+    # Score-breakdown improvement: total max + scoring mode are shown.
+    assert "Reliability Score: 72/100" in md
+    assert "[README-only]" in md
+
+
+def test_render_track_a_github_entry_with_rich_breakdown():
+    work = Work(
+        id="https://github.com/acme/grid-twin",
+        title="acme/grid-twin",
+        year=2026,
+        venue="GitHub",
+        doi=None,
+        cited_by_count=120,
+        abstract="repo summary",
+        publication_type="github_repository",
+        source_meta={
+            "reliability_score": 84,
+            "license_name": "MIT",
+            "issue_signal_summary": "issues 5件 / open 1 / closed 4",
+            "impl_doc_score": 26,
+            "lma_score": 20,
+            "community_score": 18,
+            "security_score": 20,
+            "has_rich_signals": True,
+            "verified_maturity_score": 11,
+            "release_count": 6,
+            "ci_runs_sampled": 10,
+            "ci_recent_success": 9,
+            "third_party_score": 5,
+            "external_contributor_count": 7,
+            "non_owner_issue_reporters": 4,
+        },
+    )
+    entry = OutputEntry(
+        work=work, relationship="関連性", abstract_summary="概要",
+        caution="注意点", usefulness_hypothesis="仮説テキスト",
+        track="A", label="実装アンカー", relationship_level="高",
+    )
+    section = OutputSection(title="Track A: Practical Anchors（1件）", track="A", entries=[entry])
+    md = render_markdown(OutputDocument(theme=_theme(), sections=[section]))
+    # Pillar breakdown shows maxes and the rich scoring mode.
+    assert "Reliability Score: 84/100 [rich: time+people]" in md
+    assert "Impl/Doc: 26/30, LMA: 20/25, Comm: 18/20, Sec: 20/25" in md
+    assert "Verified Maturity: 11/12 (releases: 6, CI: 9/10 passing)" in md
+    assert "Third-Party Signal: 5/6 (ext. contributors: 7, non-owner reporters: 4)" in md
 
 
 def test_render_empty_section_shows_placeholder():

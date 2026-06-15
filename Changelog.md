@@ -7,6 +7,180 @@
 
 ---
 
+## 2026-06-15（CL-0079） Phase 1 Done 評価ルーブリックの整備（docs/quality_eval.md 刷新）
+
+### 概要
+* `docs/quality_eval.md` を旧20本方針から現行 contrarian 4部構成へ全面刷新。Done 定義・5テーマ・再現コマンド・記入式ルーブリック表を整備し、roadmap #10（人間品質評価）を「実行して埋めるだけ」の状態にした。
+* 実 LLM API＋人間判断が必要なため、評価実行そのものは本セッション（無認証）では未実施。
+
+### 関連タスク
+* Task: Phase 1 Done 判断（評価ルーブリックの整備を完了、評価実行は保留）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+roadmap #10（Phase 1 Done 判断）を前進させるため、品質評価を再現可能な手順＋記入式ルーブリックとして整備する。
+
+# 2. 変更概要 (必須)
+変更ファイル: docs/quality_eval.md（全面刷新）, task.md, diff.md, Changelog.md
+旧20本方針の観点を現行4部構成へ刷新。Done 定義・5テーマ・再現コマンド・1本ごと観点・テーマ横断ルーブリック表を定義。
+
+# 3. 確認方法 (必須)
+doc レビュー。コード変更なし（python3 -m pytest tests/ -q → 111 passed 維持）。
+
+# 4. 既知の課題・リスク (必須)
+評価実行は実 LLM API＋人間判断が必要で無認証セッションでは不可。Codex/人間が API キー在席環境で §4 表を埋める。
+```
+
+---
+
+## 2026-06-15（CL-0078） Track A score 内訳表示の改善
+
+### 概要
+* Track A Markdown の Reliability Score 行に total `/100`・各 Pillar の max・スコアリングモードタグ（rich: time+people / README-only）を追加し、A-RS1/A-RS2 で導入したシグナルを読み手が解釈できるようにした。
+* discussion 観測は GitHub Discussions が GraphQL 専用のため保留。
+
+### 関連タスク
+* Task: Track A の discussion 観測 / score 内訳表示の改善（後者を実装）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1/A-RS2 で導入した Pillar スコアを Track A 出力で解釈可能にするため、score 内訳表示（max・モード）を改善する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/core/output_spec.py, tests/test_export_render.py, task.md, diff.md, Changelog.md
+Reliability Score 行に /100 と各 Pillar の max、scoring mode タグを追加。Verified Maturity /12・Third-Party /6 も max 付きに統一。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 111 passed
+
+# 4. 既知の課題・リスク (必須)
+discussion 観測は GitHub Discussions が REST 一覧なし（GraphQL 専用）のため保留。roadmap #10（人間品質評価）は実 LLM API＋人間判断が必要で本セッションでは未実施。
+```
+
+---
+
+## 2026-06-15（CL-0077） A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
+
+### 概要
+* 時間系（先手）に続き「他人」系シグナル（外部コントリビュータ＋非 owner 起票者）を Pillar 1 に導入し、A-RS2 を完了とした。
+* `_third_party_score`（最大6点）を新設。README 系を 0.4 倍へ更にスケールし、時間系12＋他人系6で再配分。dependents は REST 非提供のため対象外。
+
+### 関連タスク
+* Task: A-RS2 続編（byrepo Pillar 1「他人」系）／ roadmap A-RS2（完了）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS2 続編: 生成で水増しできないもう一方のシグナル class「他人」（外部コントリビュータ / 非 owner 起票者）を Pillar 1 に導入する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, src/core/output_spec.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_third_party_score（最大6）= 外部コントリビュータ（/contributors）＋非 owner 起票者（issues 再利用）。Pillar 1 rich モードを README 0.4倍＋verified 12＋third_party 6 へ再配分。owner_login 保持、_fetch_issue_signal 5-tuple 化。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 110 passed
+
+# 4. 既知の課題・リスク (必須)
+dependents は GitHub REST 非提供のため対象外（将来 GraphQL 要検討）。外部コントリビュータ取得で repo あたり REST 約3増（トークン前提）。Pillar 配点全体の再較正は roadmap #10 の人間品質評価とあわせて。
+```
+
+---
+
+## 2026-06-15（CL-0076） A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
+
+### 概要
+* 懸念2（README 成熟度が vibe coding 時代に水増し容易）への対応として、Pillar 1 の配点を「時間」系シグナルへ段階移行する先手を実装。
+* `_verified_maturity_score`（リリース刻み＋CI健全性、最大12点）を新設。リッチシグナル取得時のみ README 系を 0.6 倍へ移譲。GITHUB_TOKEN 在席時のみ自動有効化。
+
+### 関連タスク
+* Task: A-RS2（byrepo Pillar 1 配点移行・先手）／ roadmap A-RS2
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS2: Pillar 1 の README 偏重を是正し、生成で水増しできない「時間」系シグナル（CI 実行履歴＋リリース刻み）へ配点を段階移行する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, src/core/output_spec.py, src/cli/main.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_verified_maturity_score（cadence+ci, 最大12）を新設。リッチシグナル取得時のみ README 系を 0.6 倍へスケール。include_rich_signals=None はトークン在席時のみ自動有効。CLI --git-rich-signals で上書き。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 107 passed
+
+# 4. 既知の課題・リスク (必須)
+「他人」系シグナル（contributors/dependents）は未着手。リッチシグナルは API コスト増のためトークン前提。トークン在席時は README のみ満点 repo が相対降格（狙い通り）。
+```
+
+---
+
+## 2026-06-15（CL-0075） A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
+
+### 概要
+* 改善方針候補2「候補プール内相対正規化」を実装し、A-RS1（候補1＋候補2）を完了とした。
+* `_apply_pool_relative_lma` を追加。候補プールをドメインサンプルとみなし、push 鮮度のプール内相対順位で LMA を補正。`max` 意味論で新鮮 repo は不変、追加 API コストゼロ。
+
+### 関連タスク
+* Task: A-RS1（byrepo Pillar 2 改善）／ roadmap A-RS1（完了）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1 改善方針候補2「候補プール内相対正規化」を実装し、成熟ドメインで全 repo が stale でも最も手入れされた repo が浮上するようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_apply_pool_relative_lma を追加し collect_track_a_git_repos の後段で適用。GitCollectConfig.pool_relative_lma で切替。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 99 passed
+
+# 4. 既知の課題・リスク (必須)
+A-RS2（Pillar 1 配点移行）は未着手。順位は magnitude を無視するヒューリスティック（天井 12点・max 意味論で被害は限定）。
+```
+
+---
+
+## 2026-06-15（CL-0074） A-RS1: Pillar 2 (LMA) 完成判定の床を実装
+
+### 概要
+* byrepo Reliability Score の Pillar 2 (LMA) が「完成した安定ライブラリ」を最も強く罰する問題（DECISION_LOG 2026-06-12 懸念1）を、改善方針候補1「完成判定の床」で緩和した。
+* `_is_completed_stable` を新設し、採用シグナル＋過去 issue 活動＋高クローズ率を満たす stale repo の LMA を 12〜15点で床止め。issue の open/closed 件数を構造化保持。
+
+### 関連タスク
+* Task: A-RS1（byrepo Pillar 2 改善）／ roadmap A-RS1
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1: byrepo Reliability Score の Pillar 2 (LMA) が「完成した安定ライブラリ」を最も強く罰する問題を、改善方針候補1「完成判定の床」で緩和する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_lma_score を「鮮度」算出と「完成判定の床」適用の2段構成へ分離。_is_completed_stable を新設。issue の open/closed 件数を GitRepository に構造化保持し source_meta へ露出。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 95 passed
+
+# 4. 既知の課題・リスク (必須)
+改善方針候補2（プール内相対正規化）と A-RS2（Pillar 1 配点移行）は未着手。close 率は issue サンプルに基づくヒューリスティック。
+```
+
+---
+
 ## 2026-06-09（CL-0073） named flow 追加（byrepo / byserendipity）
 
 ### 概要

@@ -13,17 +13,26 @@
     - [x] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
     - [x] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる（`docs/specs/track_a_git_anchor_design.md`）
 - [/] Phase 1 Done 判断: Track B 品質評価
-    - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
+    - [x] 評価ルーブリック・再現コマンド・記入式テーマ横断表を `docs/quality_eval.md` に整備（旧20本方針から現行 contrarian 4部構成へ刷新）
+    - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する（実 LLM API 必要）
     - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する
     - [ ] 「役に立つ可能性の仮説」が論文固有の発見に基づいているか確認する
     - [ ] 飽和ノート発生時に弱い候補で水増しされないことを確認する
-    - [ ] 品質評価結果を `docs/quality_eval.md` または `memo.md` に追記する
+    - [ ] 品質評価結果を `docs/quality_eval.md` の §4 表・§5 総評に追記する
 
 ---
 
 ## 未着手 (To Do)
 
-- [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
+- [x] A-RS1: byrepo Pillar 2 (LMA) 改善
+    - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
+    - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
+- [x] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセット
+    - [x] 先手: CI 実行履歴＋リリース刻みを verified maturity（最大12点）として導入し、リッチシグナル取得時のみ README 系をスケールして移譲する
+    - [x] 「他人」系シグナル（外部コントリビュータ数 / owner 以外の起票者）を third_party（最大6点）として導入する（dependents は REST 非提供のため対象外）
+- [/] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
+    - [x] score 内訳表示の改善: total `/100`・各 Pillar の max（/30 /25 /20 /25）・スコアリングモード（rich: time+people / README-only）を Track A Markdown に表示
+    - [ ] discussion 観測: GitHub Discussions は REST に一覧エンドポイントが無く GraphQL 専用（dependents 同様）。GraphQL 経路の導入が必要なため保留
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
 - [ ] Web化・課金は現時点では実装しない。必要になったら Phase 2 として再評価する
@@ -31,6 +40,41 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 Phase 1 Done 評価ルーブリックの整備（docs/quality_eval.md 刷新）
+*   旧「20本レポート（100/200/200 比率・無関係4章）」前提の観点リストを、現行 contrarian 方針（MVP = Track B の良質な1本・4部構成）へ全面刷新。
+*   Done 定義（spec.md §8）・評価対象5テーマ・再現コマンド（`--single --llm-model claude-haiku-4-5 --score-votes 3`）・1本ごとの観点（RELATIONSHIP/SUMMARY/HYPOTHESIS/CAUTION/再現性）・記入式テーマ横断ルーブリック表・Done 成立条件を定義。
+*   実 LLM 生成が必要なため「人間/Codex が API キー在席で実行して埋めるテンプレート」として機能。コード変更なし（テスト 111 件 green 維持）。
+
+### 2026-06-15 Track A score 内訳表示の改善
+*   Track A Markdown の Reliability Score 行に total `/100` と各 Pillar の max（Impl/Doc /30・LMA /25・Comm /20・Sec /25）を表示。
+*   スコアリングモードタグ（`[rich: time+people]` / `[README-only]`）を追加し、スコアが同一モード内でのみ比較可能であることを読み手に明示（A-RS2 の配点移行に対応）。
+*   Verified Maturity（/12）・Third-Party Signal（/6）も max 付き表示に統一。`tests/test_export_render.py` に rich 内訳ケースを追加（全 111 件 green）。
+*   discussion 観測は GitHub Discussions が GraphQL 専用（REST 一覧なし）のため保留。
+
+### 2026-06-15 A-RS2 続編: Pillar 1 に「他人」系シグナルを追加（A-RS2 完了）
+*   `_third_party_score`（最大6点）= 外部コントリビュータ数（owner 除く、`/contributors`、最大3）＋非 owner issue 起票者数（issues サンプル再利用・追加 REST ゼロ、最大3）。
+*   Pillar 1 rich モード配点を再配分: README 系 0.4 倍（completeness 8 / code 4）＋時間系 verified maturity 12 ＋他人系 third_party 6 = 30。非 rich は従来どおり。
+*   owner 判定のため `owner_login` を保持。`_fetch_issue_signal` を 5-tuple 化（非 owner 起票者を計上）。dependents は GitHub REST 非提供のため対象外。
+*   `source_meta`＋Track A Markdown（Third-Party Signal 行）に露出。`tests/test_git_collect.py` に3ケース追加（全 110 件 green）。
+
+### 2026-06-15 A-RS2: Pillar 1 配点移行の先手（CI実行履歴＋リリース刻み）を実装
+*   `_verified_maturity_score`（最大12点）= リリース刻み（`_release_cadence_score` 最大6）＋CI健全性（`_ci_health_score` 直近 runs の実行＋成功率 最大6）。設定ファイル存在でなく「回って通っている」事実を採点。
+*   Pillar 1（最大30据え置き）をリッチシグナル取得時のみ README 系 0.6 倍へスケールし、空いた12点を verified maturity に移譲。非取得時は従来スコア（無認証回帰なし）。
+*   取得は `/releases` と `/actions/runs`（repo あたり約2 REST 増）。`include_rich_signals=None` はトークン在席時のみ自動有効化、CLI `--git-rich-signals/--no-git-rich-signals` で上書き、失敗は graceful degrade。
+*   `source_meta`＋Track A Markdown（Verified Maturity 行）に露出。`tests/test_git_collect.py` に8ケース追加（全 107 件 green）。
+
+### 2026-06-15 A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
+*   `_apply_pool_relative_lma` を追加。候補プールをドメインサンプルとみなし、push 鮮度のプール内相対順位で LMA を補正（成熟ドメインで全 repo が stale でも最も手入れされた repo が浮上）。
+*   `max` 意味論で新鮮 repo は不変。順位天井 12点（完成判定の床 15点より低位）、同点は等クレジット、プール 3 未満は no-op、`GitCollectConfig.pool_relative_lma` で切替可、追加 API コストゼロ。
+*   補正時は4 Pillars から `reliability_score` を再計算。`tests/test_git_collect.py` に4ケース追加（全 99 件 green）。
+
+### 2026-06-15 A-RS1: Pillar 2 (LMA) 完成判定の床を実装
+*   `_lma_score` を freshness 算出と完成判定の床に分離。stale でも「採用シグナル（stars>=50 / forks>=10）＋過去 issue 活動＋高クローズ率（closed>=open）」を満たす完成した安定ライブラリは LMA を 12点（強採用は 15点）で床止め。
+*   `_is_completed_stable` を追加し「完成」と「誰も使っていない」を区別（Pillar 3「ゼロIssueの罠」と同型）。`max(freshness, floor)` で新鮮 repo のスコアは不変。
+*   issue サンプルの open/closed 件数を `GitRepository.issue_open_count` / `issue_closed_count` に構造化保持し、`source_meta` へ露出。
+*   `tests/test_git_collect.py` に床の発火/非発火5ケースを追加（全 95 件 green）。
+*   DECISION_LOG 2026-06-15 / roadmap A-RS1 を更新。候補2（プール内相対正規化）と A-RS2 は未着手。
 
 ### 2026-06-09 named flow 追加（byrepo / byserendipity）
 *   Track A Git practical anchors 用の named flow `byrepo` を `docs/agent_rules/byrepo.md` に追加。
