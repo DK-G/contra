@@ -68,6 +68,37 @@ def _get_concept_tags(work: Dict[str, Any]) -> List[Concept]:
     return tags
 
 
+def _get_source_meta(work: Dict[str, Any]) -> Dict[str, Any]:
+    """Collect OA / full-text resolution hints into source_meta (non-breaking enrichment).
+
+    Stores is_oa / oa_url / pdf_url / landing_page_url and, when any location points at
+    arXiv, arxiv_url — the full-text provider layer (src/fulltext) derives the arXiv id from
+    these. No new Work field is introduced; this rides on the existing flexible source_meta.
+    """
+    meta: Dict[str, Any] = {}
+    oa = work.get("open_access") or {}
+    if isinstance(oa, dict):
+        meta["is_oa"] = bool(oa.get("is_oa"))
+        if oa.get("oa_url"):
+            meta["oa_url"] = str(oa.get("oa_url"))
+    ploc = work.get("primary_location") or {}
+    if isinstance(ploc, dict):
+        if ploc.get("pdf_url"):
+            meta["pdf_url"] = str(ploc.get("pdf_url"))
+        if ploc.get("landing_page_url"):
+            meta["landing_page_url"] = str(ploc.get("landing_page_url"))
+    locations = work.get("locations") or []
+    if isinstance(locations, list):
+        for loc in locations:
+            if not isinstance(loc, dict):
+                continue
+            for key in ("landing_page_url", "pdf_url"):
+                url = loc.get(key)
+                if url and "arxiv.org" in str(url).lower():
+                    meta.setdefault("arxiv_url", str(url))
+    return meta
+
+
 def _get_author_affiliations(work: Dict[str, Any]) -> List[str]:
     authorships = work.get("authorships") or []
     seen = set()
@@ -108,6 +139,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         venue = _get_venue(work)
         concepts = _get_concepts(work)
         concept_tags = _get_concept_tags(work)
+        source_meta = _get_source_meta(work)
         affiliations = _get_author_affiliations(work)
         publication_type = work.get("type") or work.get("type_crossref") or None
         referenced = work.get("referenced_works") or []
@@ -133,6 +165,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         author_affiliations=affiliations,
         publication_type=str(publication_type) if publication_type else None,
         is_retracted=is_retracted,
+        source_meta=source_meta,
         referenced_works=referenced_works,
     )
 
