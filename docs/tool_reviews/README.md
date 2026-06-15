@@ -26,6 +26,7 @@
 | **OpenAlex**（基準/現行） | [`openalex_review.md`](openalex_review.md) | contraのバックボーン(全分野・無料・キー不要)。⚠Concepts→Topics移行がconcept_distanceの最重要リスク。abstractはinverted indexのみ=全文provider層で補う |
 | Crossref (crossref.org) | [`crossref_review.md`](crossref_review.md) | **冗長/不採用**: DOI登録の上流レジストリ。OpenAlexがCrossrefを内包+概念/OA/引用を上乗せ。新しい母集団も距離も供給せず |
 | Unpaywall (unpaywall.org) | [`unpaywall_review.md`](unpaywall_review.md) | **冗長/不採用**: OurResearch運営でOpenAlex `oa_url`はUnpaywall由来=既に手元。provider連鎖から独立ステップとして外す訂正。位置であって全文ではない |
+| PubMed / Europe PMC | [`pubmed_europepmc_review.md`](pubmed_europepmc_review.md) | **加算候補(生物医学版arXiv)**: MeSH距離精度+OA全文(9M+)+プレプリント統合。入口はEurope PMC RESTに一本化、これで#8 bioRxiv/medRxivも賄える |
 
 ### ツール/サイト別レポート
 
