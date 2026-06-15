@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from src.core.models import OutputEntry, ThemeInput, Work
+from src.fulltext.base import effective_abstract
 from src.openai_client import OpenAIError, extract_output_text, responses_create
 from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
 
@@ -548,8 +549,11 @@ def _score_b_candidates_pm(
     k = max(1, vote_k)
     for start in range(0, len(pool), _SCORE_CHUNK_SIZE):
         chunk = pool[start:start + _SCORE_CHUNK_SIZE]
+        # effective_abstract == (w.abstract or "")[:500] unless a full-text excerpt was
+        # attached (--fulltext); then the cleaned excerpt is appended so the P/M mechanism
+        # judgment has more material. Score formula and thresholds are unchanged (input only).
         papers_input = [
-            {"id": w.id, "title": w.title, "abstract": (w.abstract or "")[:500]}
+            {"id": w.id, "title": w.title, "abstract": effective_abstract(w)}
             for w in chunk
         ]
         chunk_ids = [w.id for w in chunk]

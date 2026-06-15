@@ -20,6 +20,8 @@
 - 完了済み（Step 9 / 2026-05-30〜31）: Purpose/Mechanism スキーマによる Track B 品質再設計、テーマ別 percentile gate、近接誤判定の抑制、複数テーマ検証。
 - 完了済み（R2 / R3 / R5 / M3）: hollow gate、purpose_sim の離散レベル化、自己一貫性投票、テーマ飽和検知を実装済み。
 - 完了済み（2026-06-09）: **byrepo (Track A) パイプラインの信頼性スコアリングの改善 (4 Pillars実装)**。GitHub Search のフレーズ除外 NOT 構文への最適化によるバグ修正と、`theme_contra_level_up.json` を用いたレベルアップリポジトリの自己探索実行。
+- 完了済み（2026-06-15）: **OA全文 provider 層 (`src/fulltext/`)**。abstract 薄→mechanism 判定弱の補強として、差し替え可能な provider chain（arXiv→Europe PMC→IA Scholar→CORE→oa_url PDF）・論文ID単位キャッシュ・`--fulltext` opt-in を実装（スコア核は不変／spec.md §7 2026-06-15）。
+- 検証済み（2026-06-15）: OA全文 provider 層を probe で**実ネットワーク検証**。keyless 経路（arXiv / Europe PMC / IA Scholar / oa_url PDF）は全て正常動作、closed-access は正しく miss。arXiv の LaTeX 解析欠陥3件（ファイル名/環境名/内部マクロの全文漏れ）を修正・e-print タイムアウト 30→60s。CORE は `CORE_API_KEY` 未設定のため保留。
 - 未完了: Phase 1 Done 判断のための複数テーマ品質レビューと、人間による「遠いが構造一致」出力の最終評価。
 
 
@@ -40,6 +42,9 @@
 | R3 | purpose_sim の離散レベル化 | **実装済み** |
 | R5 | 自己一貫性投票（score-votes） | **実装済み** |
 | M3 | テーマ飽和検知（output_floor / saturation report） | **実装済み** |
+| FT1 | OA全文 provider 層（arXiv/Europe PMC/IA Scholar/CORE/oa_url PDF chain・キャッシュ・`--fulltext`・入力補強） | **実装済み(2026-06-15)** |
+| FT2 | OA全文 provider 実ネットワーク検証（keyless 経路: arXiv/Europe PMC/IA Scholar/oa_url PDF） | **検証済み(2026-06-15)・LaTeX解析欠陥3件修正・timeout 30→60s** |
+| FT3 | CORE 経路の実走検証（要 `CORE_API_KEY`・保留）＋ `--fulltext` on/off の全文補強品質比較（要 LLM キー） | 未着手 |
 | 10 | Phase 1 Done 判断: 複数テーマでの品質レビューと人間評価 | 未完了 |
 | A-RS1 | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | 未着手（DECISION_LOG 2026-06-12 参照） |
 | A-RS2 | byrepo Pillar 1 配点移行: README 成熟度 → 時間・他人系シグナル（CI実行履歴/リリース刻み/外部関与） | 未着手（同上、GITHUB_TOKEN 事実上必須化とセット） |

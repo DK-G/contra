@@ -238,6 +238,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
     parser.add_argument("--allow-weak-fallback", action="store_true", help="Track B saturation (M3): by default a run that yields NO unit above --output-floor reports 'テーマ飽和' instead of padding the report with a single weak fallback paper. Set this to restore the old single-best fallback behaviour")
     parser.add_argument("--score-votes", type=int, default=1, help="Track B self-consistency (R5): run the PM scoring + hollow judge K times and reduce by median/majority to stop borderline candidates flipping across the floor between runs. 1 = single pass (default); 3 = ~3x LLM cost for more stable scores")
+    parser.add_argument("--fulltext", action="store_true", help="OA full-text補強 (opt-in, default off): for Track B candidates that are OA AND have a short abstract, fetch the OA full text (arXiv e-print first) and append a cleaned excerpt to the mechanism判定 input. Resolution is cached per paper id; serendipity score formula/thresholds are unchanged (input material only)")
+    parser.add_argument("--fulltext-cache-dir", default="data/fulltext", help="Directory for per-paper full-text cache (gitignored). Re-runs reuse cached hits AND misses")
+    parser.add_argument("--fulltext-max-abstract", type=int, default=280, help="Only fetch full text for OA candidates whose abstract is shorter than this many characters (無駄打ち防止)")
     parser.add_argument("--mcp", action="store_true", help="Launch Stdio MCP Server")
     args = parser.parse_args(argv)
 
@@ -397,6 +400,27 @@ def main(argv: list[str]) -> int:
                 print(f"[ok] citation 2-hop: +{added} 件 (Track B 候補 {len(track_b_works)} 件に統合)")
             except (OpenAlexError, OpenAlexParseError) as exc:
                 print(f"[warn] citation 2-hop collection failed: {exc}", file=sys.stderr)
+
+    # OA full-text補強 (opt-in). Runs BEFORE selection so the P/M mechanism scorer sees the
+    # enriched text. Only OA + short-abstract Track B candidates are fetched (無駄打ち防止);
+    # misses/hits are cached per id, and any failure falls back to the abstract-only path.
+    if args.fulltext and use_llm and track_b_works:
+        from src.fulltext import attach_fulltext, build_default_chain, needs_fulltext
+
+        chain = build_default_chain(cache_dir=args.fulltext_cache_dir)
+        targeted = [
+            w for w in track_b_works
+            if needs_fulltext(w, max_abstract_chars=args.fulltext_max_abstract)
+        ]
+        print(
+            f"[info] 全文補強: OA×短abstract候補 {len(targeted)}/{len(track_b_works)} 件を "
+            "arXiv で解決中 (1 req/3s)..."
+        )
+        ft_hits = 0
+        for w in targeted:
+            if attach_fulltext(w, chain.resolve(w)):
+                ft_hits += 1
+        print(f"[ok] 全文補強: {ft_hits} 件取得 (LaTeX e-print 要点を mechanism 判定入力に連結)")
 
     print("[info] Track B 選別中 (serendipity = purpose × mechanism, gated)...")
     select_diag: dict = {}
