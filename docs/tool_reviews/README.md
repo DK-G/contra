@@ -34,6 +34,29 @@
 | DBLP (dblp.org) | [`dblp_review.md`](dblp_review.md) | **不採用**: CS書誌の金字塔だがabstract/全文なし=構造照合に使えない。強みの著者名寄せもcontraが避ける著者軸。CS精度はarXivで足りる |
 | Lens.org / 特許genre | [`lens_patents_review.md`](lens_patents_review.md) | **Lens自体は不採用**(学術冗長・API有料)。但し**特許=arXiv以来の最有力新方向**(Purpose→Mechanism明示・全分野横断=serendipityに理想)。入口は無料特許API(PatentsView/Google Patents/EPO)、独立トラック"bypatent"の将来拡張 |
 | Dimensions (dimensions.ai) | [`dimensions_review.md`](dimensions_review.md) | **不採用**: 横断リンク商用DB。出版物はOpenAlex冗長、固有の特許は#10の無料APIで対応、助成金/政策は非整合、有用Analytics APIは有料/申請制 |
+| Scopus / Web of Science | [`scopus_wos_review.md`](scopus_wos_review.md) | **不採用(確定)**: 機関サブスク必須・再配布禁止の商用DBで方針と非両立。OpenAlexが検証済みの開かれた代替(参照comparable・OA誌は桁違いに広い) |
+
+### 一般論文サイト総覧 総括（#1–12 完了）
+
+12 件を OpenAlex 基準で評価した結果、4 区分に整理できた:
+
+1. **バックボーン（維持）= OpenAlex**。全分野・無料・キー不要で「広さ(recall)」を唯一満たす。
+   唯一の要対応は **Concepts→Topics 移行**（`concept_distance` の足元）。
+2. **加算候補（ドメイン専門の精度＋全文）= arXiv / Europe PMC**。OpenAlex の広さに、機構可読な専門ドメインの
+   精度と OA 全文を重ねる（arXiv=STEM、Europe PMC=生物医学）。専門タクソノミ（arXiv カテゴリ / MeSH）は距離信号に流用可。
+   ［前バッチの **Semantic Scholar**（埋め込み/引用インテント）, **CORE**（OA 全文）も同区分］
+3. **OpenAlex に包含/冗長 = Crossref・Unpaywall・OpenCitations・DOAJ**（OurResearch 系＋引用/OA 基盤は OpenAlex が内包）。
+   **劣後/不要 = BASE（API 申請制）・DBLP（abstract 無し）・bioRxiv/medRxiv（→Europe PMC）**。
+4. **商用で不採用 = Lens API・Dimensions・Scopus・WoS**。購読/再配布の壁。**OpenAlex が検証済みの開かれた代替**。
+
+**最大の収穫＝特許という新ジャンル**（#10）。OpenAlex が持たない初の本当に新しい母集団で、Purpose→Mechanism が
+明示され全分野横断＝contra の核に構造一致。入口は無料特許 API（PatentsView/Google Patents/EPO）、独立トラック
+"bypatent" の将来拡張。
+
+**実装に効く確定事項**:
+- 全文 provider 層: **①arXiv ②CORE/IA Scholar/Europe PMC ③OpenAlex `oa_url`**（Unpaywall は `oa_url` に内包）。
+- 距離信号: OpenAlex **Topics/Domain-Field**（移行後）＋ ドメイン専門タクソノミ（arXiv/MeSH/CPC-IPC）＋ SPECTER2。
+- 注意点(caution)信号: arXiv preprint / DOAJ `is_in_doaj` / scite（優先度低）。
 
 ### ツール/サイト別レポート
 
