@@ -23,9 +23,9 @@
 
 ## 未着手 (To Do)
 
-- [/] A-RS1: byrepo Pillar 2 (LMA) 改善
+- [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
-    - [ ] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
+    - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
 - [ ] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセットで判断する
 - [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
@@ -35,6 +35,11 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
+*   `_apply_pool_relative_lma` を追加。候補プールをドメインサンプルとみなし、push 鮮度のプール内相対順位で LMA を補正（成熟ドメインで全 repo が stale でも最も手入れされた repo が浮上）。
+*   `max` 意味論で新鮮 repo は不変。順位天井 12点（完成判定の床 15点より低位）、同点は等クレジット、プール 3 未満は no-op、`GitCollectConfig.pool_relative_lma` で切替可、追加 API コストゼロ。
+*   補正時は4 Pillars から `reliability_score` を再計算。`tests/test_git_collect.py` に4ケース追加（全 99 件 green）。
 
 ### 2026-06-15 A-RS1: Pillar 2 (LMA) 完成判定の床を実装
 *   `_lma_score` を freshness 算出と完成判定の床に分離。stale でも「採用シグナル（stars>=50 / forks>=10）＋過去 issue 活動＋高クローズ率（closed>=open）」を満たす完成した安定ライブラリは LMA を 12点（強採用は 15点）で床止め。

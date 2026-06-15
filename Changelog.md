@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0075） A-RS1: Pillar 2 (LMA) 候補プール内相対正規化を実装（A-RS1 完了）
+
+### 概要
+* 改善方針候補2「候補プール内相対正規化」を実装し、A-RS1（候補1＋候補2）を完了とした。
+* `_apply_pool_relative_lma` を追加。候補プールをドメインサンプルとみなし、push 鮮度のプール内相対順位で LMA を補正。`max` 意味論で新鮮 repo は不変、追加 API コストゼロ。
+
+### 関連タスク
+* Task: A-RS1（byrepo Pillar 2 改善）／ roadmap A-RS1（完了）
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1 改善方針候補2「候補プール内相対正規化」を実装し、成熟ドメインで全 repo が stale でも最も手入れされた repo が浮上するようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_apply_pool_relative_lma を追加し collect_track_a_git_repos の後段で適用。GitCollectConfig.pool_relative_lma で切替。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 99 passed
+
+# 4. 既知の課題・リスク (必須)
+A-RS2（Pillar 1 配点移行）は未着手。順位は magnitude を無視するヒューリスティック（天井 12点・max 意味論で被害は限定）。
+```
+
+---
+
 ## 2026-06-15（CL-0074） A-RS1: Pillar 2 (LMA) 完成判定の床を実装
 
 ### 概要

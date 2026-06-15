@@ -39,6 +39,7 @@ class GitCollectConfig:
     include_readme: bool = True
     include_issues: bool = True
     issue_sample_size: int = 5
+    pool_relative_lma: bool = True
 
 
 def _clean_token(token: str) -> str:
@@ -313,6 +314,52 @@ def _lma_score(repo: GitRepository) -> int:
     return freshness
 
 
+# Pool-relative LMA normalization (A-RS1 remedy 2, DECISION_LOG 2026-06-12).
+# Treat the candidate pool itself as a domain sample: when an entire mature
+# domain is stale, the absolute recency tiers crush every repo to the bottom,
+# so we additionally credit each repo by its recency *rank within the pool*.
+# Applied via max() so it only ever lifts a repo, never lowers a genuinely
+# fresh one. The ceiling sits below the completed-state floor so rank alone
+# never outranks a maintained + adopted library.
+_LMA_POOL_CEILING = 12
+_LMA_POOL_BASE = 2
+_LMA_POOL_MIN_SIZE = 3
+
+
+def _apply_pool_relative_lma(repos: Sequence[GitRepository]) -> None:
+    """Lift each repo's LMA by its recency rank within the candidate pool.
+
+    Mutates `repo.lma_score` and recomputes `repo.reliability_score` in place.
+    No-op for pools smaller than `_LMA_POOL_MIN_SIZE` (rank is uninformative).
+    Ties on recency receive equal credit.
+    """
+    rankable = [
+        (repo, days)
+        for repo in repos
+        if (days := _days_since(repo.pushed_at or repo.updated_at)) is not None
+    ]
+    if len(rankable) < _LMA_POOL_MIN_SIZE:
+        return
+
+    n = len(rankable)
+    days_list = [days for _, days in rankable]
+    span = _LMA_POOL_CEILING - _LMA_POOL_BASE
+    for repo, days in rankable:
+        # Fresher (fewer days) ranks higher; ties share a percentile.
+        more_stale = sum(1 for other in days_list if other > days)
+        percentile = more_stale / (n - 1)
+        relative = round(_LMA_POOL_BASE + percentile * span)
+        if relative > repo.lma_score:
+            repo.lma_score = relative
+            repo.reliability_score = min(
+                repo.impl_doc_score
+                + repo.lma_score
+                + repo.community_score
+                + repo.security_score,
+                100,
+            )
+
+
 def _fork_to_star_score(repo: GitRepository) -> int:
     """Evaluate Fork-to-Star ratio (Max 10pts)."""
     if repo.stars < 10:
@@ -524,6 +571,8 @@ def collect_track_a_git_repos(
         repos.append(_apply_reliability(theme, repo))
         if len(repos) >= cfg.max_repos:
             break
+    if cfg.pool_relative_lma:
+        _apply_pool_relative_lma(repos)
     repos.sort(key=lambda repo: repo.reliability_score, reverse=True)
     return repos
 

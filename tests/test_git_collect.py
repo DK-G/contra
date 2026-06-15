@@ -7,6 +7,7 @@ import base64
 from src.core.models import GitRepository, Keywords, Scope, ThemeInput
 from src.pipeline.git_collect import (
     GitCollectConfig,
+    _apply_pool_relative_lma,
     _decode_readme,
     _is_completed_stable,
     _lma_score,
@@ -193,3 +194,68 @@ def test_lma_no_floor_when_issues_pile_up_unresolved():
 def test_lma_floor_never_lowers_a_fresh_score():
     repo = _stale_repo(pushed_at="2026-06-10T00:00:00Z")
     assert _lma_score(repo) == 25
+
+
+def _scored_repo(name: str, pushed_at: str, lma: int) -> GitRepository:
+    return GitRepository(
+        full_name=name,
+        html_url=f"https://github.com/{name}",
+        pushed_at=pushed_at,
+        lma_score=lma,
+        impl_doc_score=20,
+        community_score=10,
+        security_score=15,
+        reliability_score=20 + lma + 10 + 15,
+    )
+
+
+def test_pool_relative_lma_lifts_freshest_among_stale_domain():
+    # A mature domain where every repo is stale (absolute LMA would be 1).
+    most_stale = _scored_repo("acme/old", "2023-01-01T00:00:00Z", lma=1)
+    mid = _scored_repo("acme/mid", "2024-01-01T00:00:00Z", lma=1)
+    freshest = _scored_repo("acme/new", "2025-01-01T00:00:00Z", lma=1)
+    pool = [most_stale, mid, freshest]
+
+    _apply_pool_relative_lma(pool)
+
+    # Rank-based credit: freshest -> ceiling, mid -> midpoint, most stale -> base.
+    assert freshest.lma_score == 12
+    assert mid.lma_score == 7
+    assert most_stale.lma_score == 2
+    # reliability_score is recomputed from the four pillars.
+    assert freshest.reliability_score == 20 + 12 + 10 + 15
+
+
+def test_pool_relative_lma_never_lowers_a_fresh_repo():
+    fresh = _scored_repo("acme/fresh", "2026-06-10T00:00:00Z", lma=25)
+    stale_a = _scored_repo("acme/s1", "2024-01-01T00:00:00Z", lma=1)
+    stale_b = _scored_repo("acme/s2", "2023-01-01T00:00:00Z", lma=1)
+    before = fresh.reliability_score
+
+    _apply_pool_relative_lma([fresh, stale_a, stale_b])
+
+    assert fresh.lma_score == 25  # rank credit (12) < absolute (25) -> unchanged
+    assert fresh.reliability_score == before
+    assert stale_a.lma_score > 1  # stale repos still get lifted
+
+
+def test_pool_relative_lma_noop_for_small_pool():
+    a = _scored_repo("acme/a", "2023-01-01T00:00:00Z", lma=1)
+    b = _scored_repo("acme/b", "2024-01-01T00:00:00Z", lma=1)
+
+    _apply_pool_relative_lma([a, b])
+
+    assert a.lma_score == 1
+    assert b.lma_score == 1
+
+
+def test_pool_relative_lma_ties_share_credit():
+    a = _scored_repo("acme/a", "2023-01-01T00:00:00Z", lma=1)
+    b = _scored_repo("acme/b", "2023-01-01T00:00:00Z", lma=1)
+    c = _scored_repo("acme/c", "2025-01-01T00:00:00Z", lma=1)
+
+    _apply_pool_relative_lma([a, b, c])
+
+    # a and b share the same recency -> identical credit.
+    assert a.lma_score == b.lma_score
+    assert c.lma_score == 12  # freshest of the three
