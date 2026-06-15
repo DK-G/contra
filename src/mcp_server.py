@@ -19,7 +19,11 @@ from src.pipeline.collect import (
     collect_track_b,
 )
 from src.pipeline.concept_distance import build_theme_profile
-from src.pipeline.delegate import assemble_keyless_bridge_document, finalize_delegated_document
+from src.pipeline.delegate import (
+    assemble_keyless_bridge_document,
+    assemble_keyless_track_a_document,
+    finalize_delegated_document,
+)
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
 from src.core.output_spec import render_markdown
@@ -120,7 +124,8 @@ class StdinMcpServer:
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
-                        "track_a_count": {"type": "integer", "description": "Maximum number of practical repositories to return.", "default": 3}
+                        "track_a_count": {"type": "integer", "description": "Maximum number of practical repositories to return.", "default": 3},
+                        "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic 4-pillar reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -332,7 +337,18 @@ class StdinMcpServer:
 
         # Select & rank works based on reliability score
         works = sorted(works, key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True)[:target_count]
-        
+
+        if bool(args.get("structured")):
+            # Stage (d) delegation path: key-free structured Track A assembly (no LLM).
+            # byrepo selection is already the deterministic reliability score; only the
+            # 4-part prose is structured-filled. See docs/research/mcp_subscription_delegation.md.
+            _log("Byrepo: key-free structured assembly (no LLM)...")
+            doc = assemble_keyless_track_a_document(theme, works, count=target_count)
+            return {
+                "content": [{"type": "text", "text": render_markdown(doc)}],
+                "isError": False
+            }
+
         # Convert to entries / fill text
         from src.pipeline.classify import classify_track_a
         entries = classify_track_a(works, theme, model="gpt-4o-mini", count=target_count, use_llm=True)

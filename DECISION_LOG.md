@@ -4,6 +4,26 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — ローカル化 段階(d): byrepo/Track A の委譲（キー無し構造組み立て）。委譲シリーズ(a-d)完了
+
+**決定**: Track A（byrepo）のキー無し経路を実装し、委譲シリーズ(a)〜(d)を完了とする。
+
+**設計上の要点（Track A と Track B の非対称性）**:
+- **Track B** は採点（purpose_sim × mechanism_dist 等）が LLM 由来のため、エージェント採点を contra の決定論 post-gate で**再チェック**する `delegate_finalize`（段階 c）が必要。
+- **Track A（byrepo）** は選別が **4-Pillar 信頼性スコア＝コードの決定論**。エージェント由来の数値が無いため**再ゲートする対象が無い**。LLM が要るのは 4部プローズのみ。よって委譲は単純で、「決定論で収集＋採点＋構造整形 → エージェントが後でプローズを磨く」で完結する。
+
+**実装**:
+- `src/pipeline/delegate.py`: `build_track_a_entries`（信頼性スコア降順・決定論ランク付け、relationship_level を信頼性帯から付与）＋ `assemble_keyless_track_a_document`（決定論ランク → `fill_track_entries(mode="structured")` → OutputDocument）。LLM 不使用。
+- MCP `byrepo_search` に `structured` フラグ追加。`structured=true` で信頼性スコア順＋構造整形済み Track A Markdown をキー無しで返す（既存 LLM 経路は非破壊）。
+
+**根拠**: byrepo は元々 collect/score が決定論（GitHub/OpenAlex 取得のみ、LLM なし）。`classify_track_a(use_llm=False)` と `mode="structured"` も決定論であることをコードで確認済み。これで Track A・Track B ともに「キー無しで一周 → 委譲先エージェントが推論で磨く」経路が揃った。
+
+**検証**: `tests/test_delegate.py` に2ケース追加（信頼性順ランク／キー無しでの4部充足）。全 191 件 green。
+
+**委譲シリーズ総括 (a-d)**: (a) bybridge キー無し structured 一周 → (b) 数値ゲートの post-gate 純関数化 → (c) エージェント採点 JSON スキーマ＋`delegate_finalize` → (d) Track A キー無し組み立て。多層防御（質的判断＝エージェント／硬い数値床＝コード）の足場が一通り通った。**未着手 / 次**: 実エージェントによる採点ループの実運用手順化（roadmap #10 の品質評価とセット）、agentmemory による周回メモリ統合。
+
+---
+
 ## 2026-06-15 — ローカル化 段階(c): エージェント採点の JSON スキーマ＋委譲経路を実装
 
 **決定**: 呼び出し側エージェントが自前の推論で採点した候補を受け取り、`apply_post_gates`（段階 b）に流して提示まで行う**委譲経路**と、その入力**JSON スキーマ**を定義した。

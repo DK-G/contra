@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0083） ローカル化 段階(d): byrepo/Track A 委譲（委譲シリーズ a-d 完了）
+
+### 概要
+* Track A（byrepo）のキー無し構造組み立てを実装し、委譲シリーズ(a)〜(d)を完了。`build_track_a_entries` ＋ `assemble_keyless_track_a_document` ＋ MCP `byrepo` の `structured` フラグ。
+* 設計要点: Track A は選別＝決定論の信頼性スコアのため再ゲート不要（Track B の delegate_finalize より単純）。
+
+### 関連タスク
+* Task: ローカル化（MCPクライアント委譲）段階(d) ＝シリーズ完了
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+byrepo/Track A をキー無しで一周できるようにし、委譲シリーズ(a-d)を完了する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/delegate.py, src/mcp_server.py, tests/test_delegate.py, DECISION_LOG.md, task.md, diff.md, Changelog.md
+build_track_a_entries（信頼性スコア降順）＋assemble_keyless_track_a_document（structured 整形）＋MCP byrepo structured フラグ。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 191 passed。import src.mcp_server OK。
+
+# 4. 既知の課題・リスク (必須)
+実エージェントによる採点ループの実運用手順化（roadmap #10 とセット）、agentmemory 統合は未着手。スコア設計値は不変。
+```
+
+---
+
 ## 2026-06-15（CL-0082） ローカル化 段階(c): エージェント採点 JSON スキーマ＋委譲経路
 
 ### 概要

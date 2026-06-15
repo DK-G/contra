@@ -143,3 +143,46 @@ def test_finalize_drops_agent_anomaly():
     doc = finalize_delegated_document(mats, _theme(), diag=diag)
     assert doc.sections[0].entries == []
     assert diag["reason"] == "all_anomaly"
+
+
+# --- Stage (d): key-free Track A (byrepo) assembly ---------------------------
+
+def _github_work(wid, reliability, title="acme/tool"):
+    return Work(
+        id=wid,
+        title=title,
+        year=2026,
+        venue="GitHub",
+        doi=None,
+        cited_by_count=100,
+        abstract="repo summary. second sentence. third sentence.",
+        publication_type="github_repository",
+        source_meta={
+            "reliability_score": reliability,
+            "license_name": "MIT",
+            "issue_signal_summary": "issues 3件 / open 1 / closed 2",
+            "impl_doc_score": 20, "lma_score": 18, "community_score": 15, "security_score": 12,
+        },
+    )
+
+
+def test_build_track_a_entries_ranks_by_reliability():
+    from src.pipeline.delegate import build_track_a_entries
+    works = [_github_work("low", 30, "a/low"), _github_work("high", 85, "a/high"), _github_work("mid", 55, "a/mid")]
+    entries = build_track_a_entries(works, count=2)
+    assert [e.work.id for e in entries] == ["high", "mid"]
+    assert entries[0].track == "A"
+    assert entries[0].relationship_level == "高"   # 85 >= 70
+    assert entries[1].relationship_level == "中"   # 55 in [40,70)
+
+
+def test_keyless_track_a_document_fills_prose_without_llm():
+    from src.pipeline.delegate import assemble_keyless_track_a_document
+    works = [_github_work("W", 85)]
+    doc = assemble_keyless_track_a_document(_theme(), works, count=1)
+    entry = doc.sections[0].entries[0]
+    assert entry.track == "A"
+    assert entry.abstract_summary   # deterministic structured fill
+    assert entry.relationship
+    assert entry.caution
+    assert entry.usefulness_hypothesis

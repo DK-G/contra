@@ -24,11 +24,11 @@
 
 ## 未着手 (To Do)
 
-- [/] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
+- [x] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
     - [x] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数 `apply_post_gates` として切り出し post-gate 化
     - [x] (c) エージェント採点を受け取る JSON スキーマ定義＋委譲経路を追加（`finalize_delegated_document` ＋ MCP `delegate_finalize`）
-    - [ ] (d) byrepo/Track A の委譲（接地が仕事＝エージェント判定と相性良し）
+    - [x] (d) byrepo/Track A の委譲（信頼性スコア＝決定論選別のためキー無し構造組み立てで完結。MCP `byrepo` の `structured` フラグ）
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
     - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
     - [x] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
@@ -45,6 +45,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 ローカル化 段階(d): byrepo/Track A 委譲（委譲シリーズ a-d 完了）
+*   `src/pipeline/delegate.py`: `build_track_a_entries`（4-Pillar 信頼性スコア降順の決定論ランク）＋ `assemble_keyless_track_a_document`（→ structured 整形 → OutputDocument）。LLM 不使用。
+*   MCP `byrepo_search` に `structured` フラグ追加（信頼性順＋構造整形済み Track A Markdown をキー無しで返す）。
+*   設計要点: Track A は選別が決定論（信頼性スコア）のため再ゲート不要＝Track B（delegate_finalize）より単純。
+*   `tests/test_delegate.py` に2ケース追加（全 191 件 green）。DECISION_LOG に段階(d)＋シリーズ総括を記録。
 
 ### 2026-06-15 ローカル化 段階(c): エージェント採点 JSON スキーマ＋委譲経路
 *   `src/pipeline/delegate.py`: エージェント採点候補の JSON 契約（`AGENT_SCORE_REQUIRED`）＋ `work_from_material`/`score_row_from_material`/`normalize_agent_scores`/`finalize_delegated_document`。

@@ -252,6 +252,61 @@ def finalize_delegated_document(
     return OutputDocument(theme=theme, sections=[section])
 
 
+# --- Stage (d): key-free Track A (byrepo) assembly --------------------------
+#
+# Track A delegation is simpler than Track B: byrepo's selection is the 4-Pillar
+# Reliability Score, computed deterministically in code (no LLM). There is no
+# agent-supplied number for contra to re-gate -- the only LLM step is the 4-part
+# prose. So the key-free path collects + scores (deterministic) and fills the
+# prose with the structured mode; the agent refines the prose afterward in its
+# own context. (Track B, by contrast, needs delegate_finalize because the agent
+# supplies purpose_sim/mechanism_dist that the post-gate must re-check.)
+
+_TRACK_A_LABEL = "実装アンカー"
+
+
+def _reliability_level(score: int) -> str:
+    if score >= 70:
+        return "高"
+    if score >= 40:
+        return "中"
+    return "低"
+
+
+def build_track_a_entries(works: Sequence[Work], *, count: int = 3) -> List[OutputEntry]:
+    """Deterministic Track A entries ranked by the 4-Pillar Reliability Score (no LLM)."""
+    chosen = sorted(
+        works, key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True
+    )[: max(count, 0)]
+    return [
+        OutputEntry(
+            work=work,
+            relationship="",
+            abstract_summary="",
+            caution="",
+            track="A",
+            label=_TRACK_A_LABEL,
+            relationship_level=_reliability_level(work.source_meta.get("reliability_score", 0)),
+        )
+        for work in chosen
+    ]
+
+
+def assemble_keyless_track_a_document(
+    theme: ThemeInput,
+    works: Sequence[Work],
+    *,
+    count: int = 3,
+    config: Optional[GenerationConfig] = None,
+    section_title: str = "Track A: Practical Anchors（キー無し・構造整形）",
+) -> OutputDocument:
+    """Full key-free Track A assembly: deterministic reliability ranking → structured fill."""
+    entries = build_track_a_entries(works, count=count)
+    filled = fill_track_entries(entries, config or GenerationConfig(), theme=theme, mode="structured")
+    section = OutputSection(title=section_title, track="A", entries=filled)
+    return OutputDocument(theme=theme, sections=[section])
+
+
 __all__ = [
     "select_bridge_candidates_raw",
     "build_bridge_entries",
@@ -261,4 +316,6 @@ __all__ = [
     "score_row_from_material",
     "normalize_agent_scores",
     "finalize_delegated_document",
+    "build_track_a_entries",
+    "assemble_keyless_track_a_document",
 ]
