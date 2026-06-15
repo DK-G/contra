@@ -13,11 +13,12 @@
     - [x] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
     - [x] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる（`docs/specs/track_a_git_anchor_design.md`）
 - [/] Phase 1 Done 判断: Track B 品質評価
-    - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
+    - [x] 評価ルーブリック・再現コマンド・記入式テーマ横断表を `docs/quality_eval.md` に整備（旧20本方針から現行 contrarian 4部構成へ刷新）
+    - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する（実 LLM API 必要）
     - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する
     - [ ] 「役に立つ可能性の仮説」が論文固有の発見に基づいているか確認する
     - [ ] 飽和ノート発生時に弱い候補で水増しされないことを確認する
-    - [ ] 品質評価結果を `docs/quality_eval.md` または `memo.md` に追記する
+    - [ ] 品質評価結果を `docs/quality_eval.md` の §4 表・§5 総評に追記する
 
 ---
 
@@ -39,6 +40,11 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 Phase 1 Done 評価ルーブリックの整備（docs/quality_eval.md 刷新）
+*   旧「20本レポート（100/200/200 比率・無関係4章）」前提の観点リストを、現行 contrarian 方針（MVP = Track B の良質な1本・4部構成）へ全面刷新。
+*   Done 定義（spec.md §8）・評価対象5テーマ・再現コマンド（`--single --llm-model claude-haiku-4-5 --score-votes 3`）・1本ごとの観点（RELATIONSHIP/SUMMARY/HYPOTHESIS/CAUTION/再現性）・記入式テーマ横断ルーブリック表・Done 成立条件を定義。
+*   実 LLM 生成が必要なため「人間/Codex が API キー在席で実行して埋めるテンプレート」として機能。コード変更なし（テスト 111 件 green 維持）。
 
 ### 2026-06-15 Track A score 内訳表示の改善
 *   Track A Markdown の Reliability Score 行に total `/100` と各 Pillar の max（Impl/Doc /30・LMA /25・Comm /20・Sec /25）を表示。
