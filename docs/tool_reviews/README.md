@@ -33,6 +33,7 @@
 | bioRxiv / medRxiv | [`biorxiv_medrxiv_review.md`](biorxiv_medrxiv_review.md) | **個別不要(Europe PMCに包含)**: 無料・良APIだが生物医学プレプリントはEurope PMCが統合。固有要素(出版DOI対応/版/最速)は中核に効かず |
 | DBLP (dblp.org) | [`dblp_review.md`](dblp_review.md) | **不採用**: CS書誌の金字塔だがabstract/全文なし=構造照合に使えない。強みの著者名寄せもcontraが避ける著者軸。CS精度はarXivで足りる |
 | Lens.org / 特許genre | [`lens_patents_review.md`](lens_patents_review.md) | **Lens自体は不採用**(学術冗長・API有料)。但し**特許=arXiv以来の最有力新方向**(Purpose→Mechanism明示・全分野横断=serendipityに理想)。入口は無料特許API(PatentsView/Google Patents/EPO)、独立トラック"bypatent"の将来拡張 |
+| Dimensions (dimensions.ai) | [`dimensions_review.md`](dimensions_review.md) | **不採用**: 横断リンク商用DB。出版物はOpenAlex冗長、固有の特許は#10の無料APIで対応、助成金/政策は非整合、有用Analytics APIは有料/申請制 |
 
 ### ツール/サイト別レポート
 
