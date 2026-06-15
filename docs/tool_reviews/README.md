@@ -37,6 +37,7 @@
 | scite (scite.ai) | [`scite_review.md`](scite_review.md) | 支持/反論/言及の態度分類。bybridgeはS2 intent(無料)が上位で不要。固有は「反論引用→出力『注意点』」だが希少+有料で優先度低 |
 | CORE (core.ac.uk) | [`core_review.md`](core_review.md) | **採用候補**: 合法・無料・最大のOA全文層(API v3)。「abstractが薄い」課題をbyserendipity/bybridgeで全文補強。Anna's Archiveの合法本命 |
 | arXiv (arxiv.org) | [`arxiv_review.md`](arxiv_review.md) | **採用候補(2役)**: ①byserendipityの副次検索対象(STEM=機構可読で構造一致の精度↑) ②全文provider層の筆頭(キー不要+LaTeXクリーン)。OpenAlex=広さ/arXiv=深さ精度。引用エッジ非提供のみ制約(bybridgeはOpenAlex/S2と分担)、構造的欠陥なし |
+| Dive into Deep Learning (d2l.ai) | [`d2l_review.md`](d2l_review.md) | **別カテゴリ=開発者リファレンス**(ソースではない)。spec §2.1 概念アライメント距離(GloVe)/SPECTER2実装の将来フェーズ教材。当面は軽量経路(SPECTER2取得)優先 |
 
 ## 横断的な示唆（8件調査後の総括）
 
