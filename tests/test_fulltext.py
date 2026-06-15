@@ -124,6 +124,54 @@ def test_clean_latex_strips_markup_and_comments():
     assert "E = mc" not in out                         # equation env dropped
 
 
+def test_clean_latex_drops_includepdf_filename():
+    # A pdfpages-only submission (real case: arXiv:1412.6980 / Adam) has its body inside an
+    # embedded PDF; its only .tex is an \includepdf wrapper. The filename must NOT leak as text.
+    tex = "\n".join([
+        r"\begin{document}",
+        r"\includepdf[pages=1-last]{0_adam_main.pdf}",
+        r"\end{document}",
+    ])
+    out = clean_latex(tex)
+    assert "0_adam_main" not in out and ".pdf" not in out
+    assert out == ""  # nothing parseable -> provider should treat this as a miss
+
+
+def test_clean_latex_strips_env_names_and_color_args():
+    tex = "\n".join([
+        r"\begin{document}",
+        r"\begin{center}",
+        r"\textcolor{red}{Highlighted finding} about the mechanism.",
+        r"\end{center}",
+        r"\end{document}",
+    ])
+    out = clean_latex(tex)
+    assert "Highlighted finding" in out and "mechanism" in out
+    assert "center" not in out  # environment name must not leak as a word
+    assert "red" not in out      # color argument must not leak as a word
+
+
+def test_clean_latex_strips_at_internal_macros():
+    # \makeatletter-style internal macros (real residue seen in arXiv:2005.14165 / GPT-3)
+    # must not leak their names as words, but a real email address must survive untouched.
+    tex = "\n".join([
+        r"\begin{document}",
+        r"\@fnsymbol{footnote}\@arabic{page} Introduction text follows. Contact a@b.com here.",
+        r"\end{document}",
+    ])
+    out = clean_latex(tex)
+    assert "Introduction text follows" in out
+    assert "fnsymbol" not in out and "arabic" not in out
+    assert "a@b.com" in out  # the leading-@ rule only fires right after a backslash
+
+
+def test_provider_returns_none_on_pdfpages_only_submission():
+    # End-to-end: the includepdf wrapper cleans to empty, so the provider misses (abstract path).
+    tex = "\n".join([r"\begin{document}", r"\includepdf{paper.pdf}", r"\end{document}"])
+    p = ArxivProvider(min_interval_sec=0, fetcher=lambda u, t: _eprint_tar(tex))
+    assert p.resolve_fulltext(_work(source_meta={"arxiv_id": "1412.6980"})) is None
+
+
 def test_extract_excerpt_caps_and_cuts_on_sentence():
     text = ("Sentence one is here. " * 50).strip()
     out = extract_excerpt(text, max_chars=60)

@@ -160,13 +160,22 @@ def clean_latex(tex: str) -> str:
         r"displaymath|gather|multline)\*?\}.*?\\end\{\1\*?\}",
         " ", tex, flags=re.DOTALL,
     )
-    # citations / refs / labels / package noise -> drop entirely
+    # citations / refs / labels / package / embedded-asset noise -> drop the command AND its
+    # arg. includepdf/pdfimport matter for pdfpages-only submissions (e.g. arXiv:1412.6980,
+    # whose sole .tex is \includepdf{0_adam_main.pdf}); without this the bare *filename* would
+    # leak through as the "full text". color/length args are non-prose tokens (a stray "red").
     tex = re.sub(
         r"\\(cite[a-z]*|ref|eqref|autoref|label|usepackage|documentclass|input|include|"
-        r"bibliography|bibliographystyle|includegraphics|newcommand|renewcommand)\b\s*"
+        r"includepdf|includepdfmerge|pdfimport|bibliography|bibliographystyle|includegraphics|"
+        r"newcommand|renewcommand|hypersetup|color|textcolor|colorbox|definecolor|pagecolor|"
+        r"setlength|vspace|hspace|setcounter|pagestyle|thispagestyle)\b\s*"
         r"(\[[^\]]*\])?\s*(\{[^}]*\})?",
         " ", tex,
     )
+    # environment delimiters of KEPT environments (center, abstract, itemize, quote, ...) ->
+    # drop the \begin{name}/\end{name} but keep the inner prose. (\begin{document} and the
+    # formula/float environments were already handled above, so only prose envs remain here.)
+    tex = re.sub(r"\\(begin|end)\*?\s*(\[[^\]]*\])?\s*\{[^{}]*\}", " ", tex)
     # section-like commands -> keep the heading text as a sentence
     tex = re.sub(
         r"\\(section|subsection|subsubsection|paragraph|title|chapter)\*?\s*\{([^{}]*)\}",
@@ -176,10 +185,12 @@ def clean_latex(tex: str) -> str:
     tex = re.sub(r"\\(textbf|textit|emph|texttt|mathrm|textrm|text|mbox)\s*\{([^{}]*)\}", r"\2", tex)
     # inline math -> space
     tex = re.sub(r"\$[^$]*\$", " ", tex)
-    # remaining \command{arg} -> keep the arg text
-    tex = re.sub(r"\\[a-zA-Z]+\*?\s*(\[[^\]]*\])?\s*\{([^{}]*)\}", r"\2", tex)
-    # remaining bare \command -> drop
-    tex = re.sub(r"\\[a-zA-Z]+\*?", " ", tex)
+    # remaining \command{arg} -> keep the arg text (allow a leading @ for \makeatletter
+    # internal macros such as \@fnsymbol{...} so the macro name is not kept as the "arg")
+    tex = re.sub(r"\\@?[a-zA-Z]+\*?\s*(\[[^\]]*\])?\s*\{([^{}]*)\}", r"\2", tex)
+    # remaining bare \command -> drop (incl. \@-internal macros like \@fnsymbol, \@arabic;
+    # the leading @ matches ONLY right after a backslash, so real emails like a@b.com survive)
+    tex = re.sub(r"\\@?[a-zA-Z]+\*?", " ", tex)
     tex = tex.replace("{", " ").replace("}", " ").replace("\\", " ")
     tex = re.sub(r"\s+", " ", tex)
     return tex.strip()
@@ -207,7 +218,7 @@ class ArxivProvider:
         self,
         *,
         min_interval_sec: float = 3.0,
-        timeout_sec: int = 30,
+        timeout_sec: int = 60,
         max_retries: int = 3,
         max_chars: int = 4000,
         eprint_base: str = "https://arxiv.org/e-print/",
