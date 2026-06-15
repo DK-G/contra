@@ -11,6 +11,7 @@ from src.core.models import Work
 from src.fulltext import build_default_chain
 from src.fulltext.core import CoreProvider
 from src.fulltext.europepmc import EuropePmcProvider, parse_jats_fulltext
+from src.fulltext.ia_scholar import IaScholarProvider
 from src.fulltext.oa_pdf import OaPdfProvider, pdf_extract_text
 from src.fulltext.textutil import collapse_ws, extract_excerpt, prose_ratio
 
@@ -194,8 +195,64 @@ def test_oa_pdf_uses_pdf_url_when_no_oa_url():
     assert ft is not None and ft.url == "https://x/z.pdf"
 
 
+# --- IA Scholar (fatcat) ----------------------------------------------------
+
+def _fatcat_release(pdf_url="https://web.archive.org/web/2020/https://x.org/paper.pdf"):
+    return json.dumps({
+        "ident": "fatcat123",
+        "files": [
+            {"mimetype": "text/html", "urls": [{"url": "https://x.org/landing"}]},
+            {"mimetype": "application/pdf", "urls": [{"url": pdf_url}]},
+        ],
+    }).encode("utf-8")
+
+
+def test_ia_scholar_resolves_archived_pdf():
+    pdf = _make_pdf(_PDF_SENTENCE)
+    urls = []
+
+    def fetcher(url):
+        urls.append(url)
+        if "/release/lookup" in url:
+            return _fatcat_release()
+        if url.endswith(".pdf"):
+            return pdf
+        return None
+
+    p = IaScholarProvider(fetcher=fetcher)
+    ft = p.resolve_fulltext(_work(doi="https://doi.org/10.1/abc"))
+    assert ft is not None and ft.source == "ia_scholar" and ft.source_id == "fatcat123"
+    assert "feedback mechanism" in ft.text
+    assert any("/release/lookup" in u for u in urls)
+
+
+def test_ia_scholar_none_without_doi():
+    called = []
+    p = IaScholarProvider(fetcher=lambda url: called.append(url) or None)
+    assert p.resolve_fulltext(_work(doi=None)) is None
+    assert called == []
+
+
+def test_ia_scholar_none_without_pdf_file():
+    release = json.dumps({"ident": "x", "files": [
+        {"mimetype": "text/html", "urls": [{"url": "https://x.org/landing"}]}
+    ]}).encode("utf-8")
+    p = IaScholarProvider(fetcher=lambda url: release if "lookup" in url else None)
+    assert p.resolve_fulltext(_work(doi="10.1/x")) is None
+
+
+def test_ia_scholar_skips_garbage_pdf():
+    def fetcher(url):
+        if "lookup" in url:
+            return _fatcat_release()
+        return _make_pdf("tiny.")  # passes mimetype but fails the prose/length gate
+    assert IaScholarProvider(fetcher=fetcher).resolve_fulltext(_work(doi="10.1/x")) is None
+
+
 # --- default chain ordering -------------------------------------------------
 
 def test_build_default_chain_order():
     chain = build_default_chain(cache_dir="data/fulltext")
-    assert [p.name for p in chain.providers] == ["arxiv", "europepmc", "core", "oa_pdf"]
+    assert [p.name for p in chain.providers] == [
+        "arxiv", "europepmc", "ia_scholar", "core", "oa_pdf",
+    ]

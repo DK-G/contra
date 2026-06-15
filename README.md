@@ -10,7 +10,7 @@
 - **Track A Git practical anchors**: GitHub repository から実装・制約・失敗パターンを収集し、4本柱 Reliability Score で評価
 - **質ゲート方式**: 本数は固定でなく、質スコア閾値を超えた候補だけを出力（`serendipity = purpose_sim × mechanism_dist`）
 - **citation 2-hop (bridge) 収集**: 近傍シードの共有引用文献を経由してホームドメイン外の交差論文を収集
-- **OA全文補強（provider層・opt-in）**: abstract が薄い OA 候補について、差し替え可能な provider chain（arXiv→Europe PMC→CORE→oa_url PDF）で全文要点を取得し mechanism 判定の入力を強化（スコア式・閾値は不変）
+- **OA全文補強（provider層・opt-in）**: abstract が薄い OA 候補について、差し替え可能な provider chain（arXiv→Europe PMC→IA Scholar→CORE→oa_url PDF）で全文要点を取得し mechanism 判定の入力を強化（スコア式・閾値は不変）
 - **Anomaly/マイオピア棄却**: 無意味接続・近接を両方弾く
 - **4部構成出力**: 概要 / テーマとの関連性 / 役に立つ可能性の仮説（中核）/ 注意点
 - **テーマ別履歴管理**: 採用論文IDを記録し、次回実行時の重複を回避
@@ -85,7 +85,7 @@ src/
   core/          データモデル・入力バリデーション・出力Markdown仕様
   openalex/      OpenAlex HTTPクライアント・レスポンスパーサー
   github/        GitHub Search クライアント（Track A / byrepo）
-  fulltext/      OA全文 provider 層（arXiv / Europe PMC / CORE / oa_url PDF・chain・キャッシュ）
+  fulltext/      OA全文 provider 層（arXiv / Europe PMC / IA Scholar / CORE / oa_url PDF・chain・キャッシュ）
   pipeline/      収集 / 選別 / 生成 / エクスポート / 履歴 / 距離計算
   cli/           CLI エントリポイント (main.py)
   mcp_server.py  by シリーズ stdio MCP サーバー
@@ -119,4 +119,4 @@ Phase 2 完了・MCP 化済み（`main` ブランチ）。
 - テーマ飽和検知（M3）・自己一貫性投票（R5）
 - stdio MCP サーバー（by シリーズ4ツール）
 - OpenAI / Anthropic 両プロバイダ対応（`--llm-model` で切替）
-- OA全文 provider 層（arXiv→Europe PMC→CORE→oa_url PDF の chain・論文ID単位キャッシュ・`--fulltext` で opt-in。mechanism 判定の入力補強でスコア核は不変）
+- OA全文 provider 層（arXiv→Europe PMC→IA Scholar→CORE→oa_url PDF の chain・論文ID単位キャッシュ・`--fulltext` で opt-in。mechanism 判定の入力補強でスコア核は不変）

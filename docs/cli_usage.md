@@ -41,7 +41,7 @@ python -m src.cli.main --input data/samples/theme.json --out output --single --f
 - `--fulltext`: OA全文補強を有効化（既定 off）。「OA かつ abstract が短い」Track B 候補だけ取得する
 - `--fulltext-max-abstract`: この文字数未満の abstract を持つ OA 候補のみ取得（既定 280・無駄打ち防止）
 - `--fulltext-cache-dir`: 全文キャッシュ先（既定 `data/fulltext`・git追跡外）。hit/miss とも記録し再実行で再取得しない
-- provider 解決順: arXiv（キー不要）→ Europe PMC（キー不要）→ CORE（`CORE_API_KEY` 設定時のみ）→ oa_url PDF（汎用フォールバック）
+- provider 解決順: arXiv（キー不要）→ Europe PMC（キー不要）→ IA Scholar（キー不要）→ CORE（`CORE_API_KEY` 設定時のみ）→ oa_url PDF（汎用フォールバック）
 - いずれの provider も解決不可なら abstract のみで続行（壊れない）
 
 実ネットワークでの疎通確認（要 outbound）:

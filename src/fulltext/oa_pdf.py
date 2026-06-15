@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import zlib
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from src.core.models import Work
 from src.fulltext.base import FullText
@@ -116,6 +116,21 @@ def pdf_extract_text(data: bytes) -> str:
     return collapse_ws(" ".join(parts))
 
 
+def extract_pdf_excerpt(data: bytes, max_chars: int = 4000) -> Optional[Tuple[str, bool]]:
+    """PDF bytes -> (excerpt, truncated), or None if extraction failed / looks like garbage.
+
+    Shared by every provider that ends up with a PDF (OaPdfProvider, IaScholarProvider): the
+    quality gate (min length + prose ratio) keeps glyph-mangled output from reaching the scorer.
+    """
+    full = pdf_extract_text(data)
+    if len(full) < _MIN_PDF_TEXT_CHARS or prose_ratio(full) < _MIN_PROSE_RATIO:
+        return None
+    excerpt = extract_excerpt(full, max_chars=max_chars)
+    if not excerpt:
+        return None
+    return excerpt, len(full) > len(excerpt)
+
+
 class OaPdfProvider:
     name = "oa_pdf"
 
@@ -143,13 +158,12 @@ class OaPdfProvider:
         data = self._get(str(url))
         if not data:
             return None
-        full = pdf_extract_text(data)
-        # Quality gate: reject stubs and glyph-garbage so only clean prose reaches the scorer.
-        if len(full) < _MIN_PDF_TEXT_CHARS or prose_ratio(full) < _MIN_PROSE_RATIO:
+        # Quality gate (in extract_pdf_excerpt): reject stubs / glyph-garbage so only clean
+        # prose reaches the scorer.
+        res = extract_pdf_excerpt(data, max_chars=self.max_chars)
+        if res is None:
             return None
-        text = extract_excerpt(full, max_chars=self.max_chars)
-        if not text:
-            return None
+        text, truncated = res
         return FullText(
             work_id=work.id,
             source=self.name,
@@ -157,8 +171,8 @@ class OaPdfProvider:
             url=str(url),
             text=text,
             char_count=len(text),
-            truncated=len(full) > len(text),
+            truncated=truncated,
         )
 
 
-__all__ = ["OaPdfProvider", "pdf_extract_text"]
+__all__ = ["OaPdfProvider", "pdf_extract_text", "extract_pdf_excerpt"]

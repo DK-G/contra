@@ -55,6 +55,7 @@
     textutil.py       # 共通テキスト整形（collapse_ws / extract_excerpt / prose_ratio）
     arxiv.py          # ① arXiv provider（キー不要・e-print LaTeX 展開→ノイズ除去）
     europepmc.py      # ② Europe PMC provider（キー不要・JATS XML 全文）
+    ia_scholar.py     # ② IA Scholar provider（キー不要・fatcat 経由の被アーカイブ全文）
     core.py           # ② CORE provider（CORE_API_KEY を env から・未設定なら無効）
     oa_pdf.py         # ③ oa_url PDF フォールバック（stdlib only・best-effort・prose品質ゲート）
   /pipeline
@@ -144,7 +145,7 @@
 ## 7. 決定ログ
 
 - `2026-06-15` **OA全文 provider 層の導入（abstract 薄 → mechanism 判定弱の補強）**:
-  - byserendipity / bybridge の候補で「abstract が薄く mechanism 判定が弱い」課題を、OA論文の全文取得で補強する**差し替え可能な provider 層** `src/fulltext/` を新設。解決順は **① arXiv（キー不要・e-print LaTeX が最低ノイズ）→ ② Europe PMC（キー不要・JATS XML）/ CORE（`CORE_API_KEY`）→ ③ OpenAlex `oa_url` PDF（汎用フォールバック・stdlib only の best-effort）**。Unpaywall は OpenAlex `oa_url` に内包されるため独立 provider にしない。
+  - byserendipity / bybridge の候補で「abstract が薄く mechanism 判定が弱い」課題を、OA論文の全文取得で補強する**差し替え可能な provider 層** `src/fulltext/` を新設。解決順は **① arXiv（キー不要・e-print LaTeX が最低ノイズ）→ ② Europe PMC（キー不要・JATS XML）/ IA Scholar（キー不要・fatcat 経由）/ CORE（`CORE_API_KEY`）→ ③ OpenAlex `oa_url` PDF（汎用フォールバック・stdlib only の best-effort）**。Unpaywall は OpenAlex `oa_url` に内包されるため独立 provider にしない。
   - **位置づけは「収集/判定の入力材料」レイヤー**。`select_track_b` のスコア設計（`purpose_sim × mechanism_dist`、ゲート 0.20/0.50/0.35 等）には一切触れない。全文は `effective_abstract(work)` 経由で PM スコアラ入力の abstract に**連結**するだけ（`--fulltext` 無指定なら従来とバイト単位で同一）。
   - **無駄打ち防止**: `--fulltext`（既定 off）の opt-in。`needs_fulltext`（OA かつ abstract が `--fulltext-max-abstract` 字未満）に合致する Track B 候補だけ取得。取得結果は論文ID単位で `data/fulltext/`（git追跡外）に**キャッシュ（hit/miss 両方）**し再実行で再取得しない。失敗時は `None` で abstract のみへ素直にフォールバック。
   - **制約遵守**: 外部ライブラリ追加なし（urllib / gzip / tarfile / zlib / xml.etree のみ）。APIキーは env から（arXiv 不要、CORE は `CORE_API_KEY`）。`src/core/models.py` は変更せず、OA/arXiv ヒントと取得全文は既存の `Work.source_meta`（柔軟 dict）に格納。

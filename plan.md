@@ -71,7 +71,7 @@ Git リポジトリなどの外部実装コードベースは品質のノイズ�
 
 ### 4.3 OA全文補強（provider層・入力強化レイヤー）
 abstract が薄い OA 候補は mechanism（解法・因果のレバー）が読み取れず Track B 判定が弱くなる。これを補うため、**差し替え可能な OA全文 provider 層**を `src/fulltext/` に置く。
-- **解決順**: ① arXiv（キー不要・e-print LaTeX が最低ノイズ）→ ② Europe PMC（キー不要・JATS XML）/ CORE（`CORE_API_KEY`）→ ③ OpenAlex `oa_url` の PDF（汎用フォールバック）。Unpaywall は OpenAlex `oa_url` に内包されるため独立 provider にしない。
+- **解決順**: ① arXiv（キー不要・e-print LaTeX が最低ノイズ）→ ② Europe PMC（キー不要・JATS XML）/ IA Scholar（キー不要・fatcat 経由）/ CORE（`CORE_API_KEY`）→ ③ OpenAlex `oa_url` の PDF（汎用フォールバック）。Unpaywall は OpenAlex `oa_url` に内包されるため独立 provider にしない。
 - **位置づけ**: あくまで**収集/判定の「入力材料」**。§6.2 の選別スコア（`purpose_sim × mechanism_dist`）と質ゲートには触れない。取得した全文要点は abstract に連結して PM スコアラへ渡すだけ。
 - **無駄打ち防止**: 既定 off の opt-in（CLI `--fulltext`）。「OA かつ abstract が短い」候補のみ取得し、論文ID単位でローカルキャッシュ（再実行で再取得しない）。失敗時は abstract のみへフォールバック。
 - 詳細・決定は [`spec.md`](spec.md) §7（2026-06-15）を参照。
