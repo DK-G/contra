@@ -7,38 +7,35 @@
 
 ## 1. 変更目的 (必須)
 
-*   LLM 判定・生成を contra 自身の API キー（従量課金）から外し、呼び出し側エージェント（Max サブスク）の推論へ委譲する設計（`docs/research/mcp_subscription_delegation.md`）の**段階(a)**として、bybridge を**キー無しで一周**できるようにする。
+*   委譲設計（`docs/research/mcp_subscription_delegation.md`）の**段階(b)**として、`select_track_b` の決定論ゲートを LLM 採点/judge から切り離し、純関数 `apply_post_gates`（コードの硬い床）として切り出す。エージェント採点に対しても同じ数値床を機械的に再適用できるようにする。
 
 ---
 
 ## 2. 変更概要 (必須)
 
-*   変更ファイル: `src/pipeline/delegate.py`（新規）, `src/mcp_server.py`, `tests/test_delegate.py`（新規）, `DECISION_LOG.md`, `task.md`, `diff.md`, `Changelog.md`
-*   `delegate.py`（純関数）: 決定論選別（near_domain でマイオピア pre-filter ＋共有 citation-bridge 数で順位付け）→ `fill_track_entries(mode="structured")`（LLM 不使用）→ OutputDocument。
-*   MCP `bybridge` に `structured`（bool, 既定 False）を追加。`raw_only=true, structured=true` でキー無し 4部 Markdown を返す。
+*   変更ファイル: `src/pipeline/classify.py`, `tests/test_post_gates.py`（新規）, `DECISION_LOG.md`, `task.md`, `diff.md`, `Changelog.md`
+*   共有純関数（LLM 不使用）: `_serendipity_scored`（anomaly＋near-domain cap＋serendipity）/ `_hollow_filter`（hollow 棄却・fail-open）/ `_quality_gate_and_build`（percentile→output_floor→fallback/M3→MMR→構築）。
+*   `apply_post_gates(scores, id_to_work, ...)` を新設＝委譲用 post-gate。`select_track_b` も同じ純関数を呼ぶよう refactor（ゲート実装を一本化）。
 
 ---
 
 ## 3. 確認方法 (必須)
 
-*   `python3 -m pytest tests/ -q` → 179 passed
-*   `python3 -c "import src.mcp_server"` → OK
-*   `tests/test_delegate.py`（順位付け / near-domain 棄却 / 決定論スコア / キー無しでの 4部充足）
+*   `python3 -m pytest tests/ -q` → 185 passed（refactor 後も M3 飽和 / score voting / purpose_level 等の Track B テストが全 green ＝挙動不変）
+*   `tests/test_post_gates.py`（anomaly / hollow / near-domain cap / fallback vs 飽和 / 因果ゆるめ表示 / 強候補通過）
 
 ---
 
 ## 4. 既知の課題・リスク (必須)
 
-*   structure/serendipity スコアは LLM 判定待ちのため 0.0（委譲先エージェントが補充）。distance_score は L0/L1 Jaccard の決定論値。
-*   段階(b)（数値ゲートの純関数化・post-gate）、(c)（エージェント採点 JSON スキーマ）、(d)（byrepo 委譲）は未着手。
-*   用途スコープは作者自身（個人/研究）。製品バックエンドとして不特定多数に叩かせる形にはしない。
+*   段階(c)（エージェント採点を受け取る JSON スキーマ定義＋ MCP 委譲経路）、段階(d)（byrepo/Track A 委譲）は未着手。
+*   スコア設計値（`_PURPOSE_SIM_MIN=0.20` / `_STRUCT_DEPTH_GATE=0.50` / `_OUTPUT_FLOOR=0.35` / `_FALLBACK_FLOOR=0.10` / `_NEAR_DOMAIN_MECH_CAP=0.5`）は不変。ゲートの所在をコード側へ集約しただけ（`spec.md` 禁則順守）。
 
 ---
 
 ## 5. 変更内容の詳細 (任意)
 
-*   `select_bridge_candidates_raw`: `near_domain_signal`（既存・L0/L1 Jaccard）で同一広域ドメインを棄却し、共有 bridge 数で降順。新たなスコア設計値は導入せず既存の閾値ロジックを再利用。
-*   `assemble_keyless_bridge_document`: structured 整形が `responses_create` を一切経由しないことをコードで確認済み（`generate.py:fill_track_entries` の mode 分岐）。
-*   既存の bybridge 経路（flat list / LLM 選別・生成）は非破壊。
+*   `apply_post_gates` の入力 score 行は `{purpose_sim, mechanism_dist, connection_label, serendipity_rationale}` 必須、`{structural_depth, has_causal_pm}` 任意（hollow judge 欠落時は fail-open）。
+*   `select_track_b` の LLM 経路では従来どおり `_score_b_candidates_pm`（採点）と `_judge_b_candidates`（hollow judge）を呼び、結果を score 行へマージしてから同じ純関数群に渡す。両経路でゲート挙動が一致する。
 
 ---

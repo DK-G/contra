@@ -4,6 +4,26 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-15 — ローカル化 段階(b): 数値ゲートを LLM 採点から分離し post-gate 純関数化
+
+**決定**: `select_track_b` の決定論ゲート群を LLM 採点・judge から切り離し、純関数 `apply_post_gates` として切り出した（多層防御のコード床）。
+
+**実装**:
+- 共有純関数を新設（いずれも LLM 不使用）:
+  - `_serendipity_scored`: anomaly 棄却（`purpose_sim < 0.20`）＋ near-domain mechanism_dist cap（0.5）＋ serendipity = purpose_sim × mechanism_dist。
+  - `_hollow_filter`: hollow 棄却（`structural_depth < struct_depth_gate`）。判定欠落は fail-open。因果ゆるめ（`has_causal_pm=False`）は棄却せず caveat 表示。
+  - `_quality_gate_and_build`: percentile gate（top30% or floor）→ output_floor → fallback/M3 → MMR 多様化 → OutputEntry 構築。
+- `apply_post_gates(scores, id_to_work, ...)`: 上記を束ねる委譲用 post-gate。エージェントが各候補に `{purpose_sim, mechanism_dist, structural_depth, has_causal_pm, connection_label, serendipity_rationale}` を返す前提で、**LLM を一切呼ばず**に anomaly/near-cap/serendipity/hollow/percentile/output-floor/fallback/M3 を再適用する。
+- `select_track_b`（既存 LLM 経路）も同じ純関数を呼ぶよう refactor（採点・judge の LLM 呼び出しは従来位置に保持）。**1つのゲート実装を両経路が共有**し、実装の乖離を防ぐ。
+
+**根拠**: 委譲設計の核心＝「賢いが揺らぐエージェント採点の下に、決定論の硬い床を敷く」。ゲートを純関数化することで、エージェントがどう採点しても `purpose_sim < 0.20` の anomaly や hollow をコードが機械的に棄却できる。スコア設計値（0.20/0.50/0.35/0.10/0.5）は不変、ゲートの所在をコード側へ集約しただけ（`spec.md` 禁則順守）。
+
+**検証**: refactor 後も既存 185 件中の Track B 関連テスト（M3 飽和 / score voting / purpose_level 等）が全 green（挙動不変）。`tests/test_post_gates.py` に6ケース追加（anomaly/hollow/near-cap/fallback vs 飽和/因果ゆるめ表示/強候補通過）。
+
+**未着手 / 次**: 段階(c) エージェント採点を受け取る JSON スキーマ定義＋ MCP 委譲経路（収集→生候補返却→エージェント採点→`apply_post_gates`）、段階(d) byrepo/Track A の委譲。
+
+---
+
 ## 2026-06-15 — MCPクライアント委譲（サブスク/キー無し運用）を採用、段階(a)に着手
 
 **決定**: `docs/research/mcp_subscription_delegation.md` の「案②: MCPクライアント委譲」を**採用**し、段階導入で着手する。第一歩として段階(a)「bybridge raw_only ＋ structured 整形でキー無し一周」を実装した。

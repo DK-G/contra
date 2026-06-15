@@ -855,6 +855,201 @@ def _mmr_rerank(
 
 
 
+def _update_diag(diag: Optional[dict], **kw) -> None:
+    """M3 saturation telemetry hook (no-op when diag is None)."""
+    if diag is not None:
+        diag.update(kw)
+
+
+# --- Deterministic post-gates (no LLM) -------------------------------------
+# Stage (b) of the MCP-client delegation design
+# (docs/research/mcp_subscription_delegation.md): the hard numeric floors are
+# factored out of select_track_b so the SAME code applies them whether the
+# purpose_sim / mechanism_dist / structural_depth came from contra's own LLM
+# pass or from a delegated agent. These functions never call the LLM.
+
+def _serendipity_scored(
+    scores: Dict[str, dict],
+    id_to_work: Dict[str, Work],
+    theme_profile: Optional[ThemeProfile],
+) -> Tuple[List[Tuple[float, str, dict]], int]:
+    """Anomaly filter + near-domain mechanism cap + serendipity = purpose_sim * mech_dist."""
+    all_scored: List[Tuple[float, str, dict]] = []
+    anomaly_count = 0
+    for wid, s in scores.items():
+        work = id_to_work.get(wid)
+        if work is None:
+            continue
+        purpose_sim = s["purpose_sim"]
+        mechanism_dist = s["mechanism_dist"]
+        # Anomaly filter: no genuine purpose-structure alignment.
+        if purpose_sim < _PURPOSE_SIM_MIN:
+            anomaly_count += 1
+            continue
+        # Near-domain cap: same L0/L1 domain -> cap mechanism_dist (anti false-serendipity).
+        if theme_profile is not None and near_domain_signal(work, theme_profile):
+            mechanism_dist = min(mechanism_dist, _NEAR_DOMAIN_MECH_CAP)
+        all_scored.append((purpose_sim * mechanism_dist, wid, s))
+    return all_scored, anomaly_count
+
+
+def _hollow_filter(
+    all_scored: List[Tuple[float, str, dict]],
+    struct_depth_gate: float,
+) -> Tuple[List[Tuple[float, str, dict]], int, int]:
+    """Hollow gate: reject structural_depth below the gate. Fail-open when unjudged.
+
+    A loose causal link (has_causal_pm is False) is surfaced as a caveat, not rejected.
+    """
+    kept: List[Tuple[float, str, dict]] = []
+    hollow_count = 0
+    loose_causal_count = 0
+    for ser, wid, s in all_scored:
+        depth = s.get("structural_depth")
+        if depth is not None and depth < struct_depth_gate:
+            hollow_count += 1
+            continue
+        if s.get("has_causal_pm") is False:
+            loose_causal_count += 1
+        kept.append((ser, wid, s))
+    return kept, hollow_count, loose_causal_count
+
+
+def _quality_gate_and_build(
+    all_scored: List[Tuple[float, str, dict]],
+    id_to_work: Dict[str, Work],
+    theme_profile: Optional[ThemeProfile],
+    *,
+    count: int,
+    gate: float,
+    output_floor: float,
+    emit_fallback: bool,
+    scored_n: int,
+    anomaly_count: int,
+    hollow_count: int,
+    diag: Optional[dict] = None,
+) -> List[OutputEntry]:
+    """Percentile gate + output floor + fallback/M3 + MMR diversity + build entries."""
+    # Step 4: Percentile gate (top-30% or absolute floor, whichever is higher)
+    ser_vals = [x[0] for x in all_scored]
+    effective_gate = _percentile_gate(ser_vals, top_pct=0.30, floor=gate)
+    passed = [(ser, wid, s) for ser, wid, s in all_scored if ser >= effective_gate]
+    qualified = [(ser, wid, s) for ser, wid, s in passed if ser >= output_floor]
+    print(
+        f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
+        f"-> 通過 {len(passed)}/{len(all_scored)} 件; "
+        f"出力品質フロア{output_floor:.2f}超 {len(qualified)} 件 (上限{count})"
+    )
+
+    # Fallback when nothing clears the output-quality bar (M3 suppresses weak single-best).
+    if not qualified:
+        if not emit_fallback:
+            print("[info] Track B: 0件（output_floor超え無し・fallback抑止＝飽和扱い）")
+            _update_diag(diag, status="saturated", reason="no_qualified", scored=scored_n,
+                         anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
+            return []
+        fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
+        best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
+        if best_list:
+            ser, wid, s = best_list[0]
+            s = dict(s)
+            s["serendipity_rationale"] = f"（fallback）{s.get('serendipity_rationale', '')}"
+            work = id_to_work[wid]
+            mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) \
+                if theme_profile is not None and near_domain_signal(work, theme_profile) \
+                else s["mechanism_dist"]
+            print(f"[info] fallback: 1件返却 (ser={ser:.3f}, ゲート未満だが >= {_FALLBACK_FLOOR})")
+            _update_diag(diag, status="fallback", reason="weak_best", scored=scored_n,
+                         anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
+            return [OutputEntry(
+                work=work,
+                relationship="",
+                abstract_summary="",
+                caution="",
+                track="B",
+                label=f"【接続点: {s['connection_label']}（fallback）】",
+                relationship_level="",
+                distance_score=round(mech_dist, 2),
+                structure_score=round(s["purpose_sim"], 2),
+                serendipity_score=round(ser, 2),
+                usefulness_hypothesis=s["serendipity_rationale"],
+            )]
+        print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
+        _update_diag(diag, status="saturated", reason="below_fallback_floor", scored=scored_n,
+                     anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
+        return []
+
+    # Step 5: MMR diversity re-ranking for count > 1 (over the output-qualified set)
+    if count > 1 and len(qualified) > 1:
+        final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
+    else:
+        final = sorted(qualified, key=lambda x: x[0], reverse=True)[:count]
+
+    # Step 6: Build OutputEntry list
+    result: List[OutputEntry] = []
+    for serendipity, wid, s in final:
+        work = id_to_work[wid]
+        is_near = theme_profile is not None and near_domain_signal(work, theme_profile)
+        mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) if is_near else s["mechanism_dist"]
+        result.append(OutputEntry(
+            work=work,
+            relationship="",
+            abstract_summary="",
+            caution="",
+            track="B",
+            label=_b_label(s),
+            relationship_level="",
+            distance_score=round(mech_dist, 2),
+            structure_score=round(s["purpose_sim"], 2),
+            serendipity_score=round(serendipity, 2),
+            usefulness_hypothesis=s.get("serendipity_rationale", ""),
+        ))
+    _update_diag(diag, status="ok", scored=scored_n, anomaly=anomaly_count, hollow=hollow_count,
+                 passed=len(passed), qualified=len(qualified))
+    return result
+
+
+def apply_post_gates(
+    scores: Dict[str, dict],
+    id_to_work: Dict[str, Work],
+    *,
+    theme_profile: Optional[ThemeProfile] = None,
+    count: int = 1,
+    gate: float = _SERENDIPITY_GATE,
+    struct_depth_gate: float = _STRUCT_DEPTH_GATE,
+    output_floor: float = _OUTPUT_FLOOR,
+    emit_fallback: bool = True,
+    diag: Optional[dict] = None,
+) -> List[OutputEntry]:
+    """Deterministic post-gate (no LLM) over agent-supplied score rows (delegation stage b).
+
+    Each row in `scores` (keyed by work id) must carry `purpose_sim`, `mechanism_dist`,
+    `connection_label`, `serendipity_rationale`; optionally `structural_depth` and
+    `has_causal_pm` (the hollow judge's verdict — fail-open if absent). Re-applies the same
+    hard floors as `select_track_b`: anomaly / near-domain cap / serendipity / hollow /
+    percentile / output-floor / fallback / M3. Whatever the agent claims, violations are
+    dropped here — the decision-layer floor under the (smart but fallible) agent layer.
+    """
+    if not scores:
+        _update_diag(diag, status="empty_pool", scored=0, anomaly=0, hollow=0, passed=0, qualified=0)
+        return []
+    all_scored, anomaly_count = _serendipity_scored(scores, id_to_work, theme_profile)
+    if not all_scored:
+        _update_diag(diag, status="saturated", reason="all_anomaly", scored=len(scores),
+                     anomaly=anomaly_count, hollow=0, passed=0, qualified=0)
+        return []
+    kept, hollow_count, _loose = _hollow_filter(all_scored, struct_depth_gate)
+    if not kept:
+        _update_diag(diag, status="saturated", reason="all_hollow", scored=len(scores),
+                     anomaly=anomaly_count, hollow=hollow_count, passed=0, qualified=0)
+        return []
+    return _quality_gate_and_build(
+        kept, id_to_work, theme_profile,
+        count=count, gate=gate, output_floor=output_floor, emit_fallback=emit_fallback,
+        scored_n=len(scores), anomaly_count=anomaly_count, hollow_count=hollow_count, diag=diag,
+    )
+
+
 def select_track_b(
     candidates: List[Work],
     theme: ThemeInput,
@@ -933,157 +1128,48 @@ def select_track_b(
     scores = _score_b_candidates_pm(candidates, theme_schema, theme, model, vote_k=vote_k)
     print(f"[info] スコア取得: {len(scores)} 件")
 
-    # Step 3: Compute serendipity = purpose_sim * mechanism_dist (with near-domain cap)
-    all_scored: List[Tuple[float, str, dict]] = []
-    anomaly_count = 0
-    for wid, s in scores.items():
-        work = id_to_work.get(wid)
-        if work is None:
-            continue
-        purpose_sim = s["purpose_sim"]
-        mechanism_dist = s["mechanism_dist"]
-
-        # Anomaly filter: no genuine purpose-structure alignment
-        if purpose_sim < _PURPOSE_SIM_MIN:
-            anomaly_count += 1
-            continue
-
-        # Near-domain cap: same L0/L1 domain -> cap mechanism_dist to prevent false-serendipity
-        is_near = theme_profile is not None and near_domain_signal(work, theme_profile)
-        if is_near:
-            mechanism_dist = min(mechanism_dist, _NEAR_DOMAIN_MECH_CAP)
-
-        serendipity = purpose_sim * mechanism_dist
-        all_scored.append((serendipity, wid, s))
-
+    # Step 3: anomaly filter + near-domain cap + serendipity (deterministic post-gate).
+    all_scored, anomaly_count = _serendipity_scored(scores, id_to_work, theme_profile)
     print(f"[info] Anomaly除外 (purpose_sim<{_PURPOSE_SIM_MIN}): {anomaly_count} 件")
     print(f"[info] serendipity 候補: {len(all_scored)} 件")
-
     if not all_scored:
         print("[info] Track B: 0件（有効スコア候補なし）")
         _diag(status="saturated", reason="all_anomaly", scored=len(scores),
               anomaly=anomaly_count, hollow=0, passed=0, qualified=0)
         return []
 
-    # Step 3.5 (R2): candidate-level hollow gate. A separate judge pass scores the survivors
-    # on Structural Depth and flags missing causal Purpose-Mechanism links; hollow candidates
-    # (shared-category / observational-only) are rejected BEFORE generation (bynote H3).
-    # Fail-open: candidates the judge did not return a verdict for are kept.
+    # Step 3.5 (R2): candidate-level hollow gate. A separate LLM judge pass scores the
+    # survivors on Structural Depth + causal Purpose-Mechanism; the deterministic
+    # _hollow_filter then drops the hollow ones (fail-open when unjudged).
     print(f"[info] hollow ゲート: {len(all_scored)} 件を judge 評価中 (structural depth)...")
     judged = _judge_b_candidates(
         [(id_to_work[wid], s) for _, wid, s in all_scored], theme_schema, theme, model,
         vote_k=vote_k,
     )
-    kept: List[Tuple[float, str, dict]] = []
-    hollow_count = 0
-    loose_causal_count = 0
-    for ser, wid, s in all_scored:
+    for _ser, wid, s in all_scored:
         j = judged.get(wid)
         if j is not None:
             s["structural_depth"] = j["structural_depth"]
             s["applicability"] = j["applicability"]
             s["has_causal_pm"] = j["has_causal_pm"]
             s["judge_reason"] = j["judge_reason"]
-            # Only truly hollow (shared-category/lexical) are cut. A loose causal link is
-            # surfaced as a caveat (thought-seed), not rejected (user calibration 2026-05-30).
-            if j["structural_depth"] < struct_depth_gate:
-                hollow_count += 1
-                continue
-            if not j["has_causal_pm"]:
-                loose_causal_count += 1
-        kept.append((ser, wid, s))
+    all_scored, hollow_count, loose_causal_count = _hollow_filter(all_scored, struct_depth_gate)
     print(
         f"[info] hollow 除外 (structural_depth<{struct_depth_gate:.2f}): {hollow_count} 件 "
-        f"-> 残 {len(kept)} 件 (うち因果ゆるめ {loose_causal_count} 件=思考のタネとして保持)"
+        f"-> 残 {len(all_scored)} 件 (うち因果ゆるめ {loose_causal_count} 件=思考のタネとして保持)"
     )
-    all_scored = kept
     if not all_scored:
         print("[info] Track B: 0件（全候補が hollow と判定）")
         _diag(status="saturated", reason="all_hollow", scored=len(scores),
               anomaly=anomaly_count, hollow=hollow_count, passed=0, qualified=0)
         return []
 
-    # Step 4: Percentile gate (top-30% or absolute floor, whichever is higher)
-    ser_vals = [x[0] for x in all_scored]
-    effective_gate = _percentile_gate(ser_vals, top_pct=0.30, floor=gate)
-    passed = [(ser, wid, s) for ser, wid, s in all_scored if ser >= effective_gate]
-    # Output-quality bar: count is a MAX cap, not a fixed target. Emit only units clearing
-    # output_floor so thin themes return a few strong analogies, not 0.3-level padding.
-    qualified = [(ser, wid, s) for ser, wid, s in passed if ser >= output_floor]
-    print(
-        f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
-        f"-> 通過 {len(passed)}/{len(all_scored)} 件; "
-        f"出力品質フロア{output_floor:.2f}超 {len(qualified)} 件 (上限{count})"
+    # Steps 4-6: percentile gate / output floor / fallback / MMR / build (deterministic).
+    return _quality_gate_and_build(
+        all_scored, id_to_work, theme_profile,
+        count=count, gate=gate, output_floor=output_floor, emit_fallback=emit_fallback,
+        scored_n=len(scores), anomaly_count=anomaly_count, hollow_count=hollow_count, diag=diag,
     )
-
-    # Fallback when nothing clears the output-quality bar (query relaxation: single best).
-    # M3: when emit_fallback is off (saturation mode), suppress the weak single-best so a
-    # depleted run reports "saturated" instead of a misleadingly thin report.
-    if not qualified:
-        if not emit_fallback:
-            print("[info] Track B: 0件（output_floor超え無し・fallback抑止＝飽和扱い）")
-            _diag(status="saturated", reason="no_qualified", scored=len(scores),
-                  anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
-            return []
-        fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
-        best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
-        if best_list:
-            ser, wid, s = best_list[0]
-            s = dict(s)
-            s["serendipity_rationale"] = f"（fallback）{s.get('serendipity_rationale', '')}"
-            work = id_to_work[wid]
-            mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) \
-                if theme_profile is not None and near_domain_signal(work, theme_profile) \
-                else s["mechanism_dist"]
-            print(f"[info] fallback: 1件返却 (ser={ser:.3f}, ゲート未満だが >= {_FALLBACK_FLOOR})")
-            _diag(status="fallback", reason="weak_best", scored=len(scores),
-                  anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
-            return [OutputEntry(
-                work=work,
-                relationship="",
-                abstract_summary="",
-                caution="",
-                track="B",
-                label=f"【接続点: {s['connection_label']}（fallback）】",
-                relationship_level="",
-                distance_score=round(mech_dist, 2),
-                structure_score=round(s["purpose_sim"], 2),
-                serendipity_score=round(ser, 2),
-                usefulness_hypothesis=s["serendipity_rationale"],
-            )]
-        print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
-        _diag(status="saturated", reason="below_fallback_floor", scored=len(scores),
-              anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
-        return []
-
-    # Step 5: MMR diversity re-ranking for count > 1 (over the output-qualified set; count = cap)
-    if count > 1 and len(qualified) > 1:
-        final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
-    else:
-        final = sorted(qualified, key=lambda x: x[0], reverse=True)[:count]
-
-    # Step 6: Build OutputEntry list
-    result: List[OutputEntry] = []
-    for serendipity, wid, s in final:
-        work = id_to_work[wid]
-        is_near = theme_profile is not None and near_domain_signal(work, theme_profile)
-        mech_dist = min(s["mechanism_dist"], _NEAR_DOMAIN_MECH_CAP) if is_near else s["mechanism_dist"]
-        result.append(OutputEntry(
-            work=work,
-            relationship="",
-            abstract_summary="",
-            caution="",
-            track="B",
-            label=_b_label(s),
-            relationship_level="",
-            distance_score=round(mech_dist, 2),
-            structure_score=round(s["purpose_sim"], 2),
-            serendipity_score=round(serendipity, 2),
-            usefulness_hypothesis=s.get("serendipity_rationale", ""),
-        ))
-    _diag(status="ok", scored=len(scores), anomaly=anomaly_count, hollow=hollow_count,
-          passed=len(passed), qualified=len(qualified))
-    return result
 
 
 def _b_label(s: dict) -> str:
@@ -1144,4 +1230,5 @@ __all__ = [
     "classify_track_a",
     "classify_track_b",
     "select_track_b",
+    "apply_post_gates",
 ]

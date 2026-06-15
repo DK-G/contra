@@ -26,7 +26,7 @@
 
 - [/] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
-    - [ ] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数として切り出し post-gate 化
+    - [x] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数 `apply_post_gates` として切り出し post-gate 化
     - [ ] (c) エージェント採点を受け取る JSON スキーマ定義＋委譲経路を追加
     - [ ] (d) byrepo/Track A の委譲（接地が仕事＝エージェント判定と相性良し）
 - [x] A-RS1: byrepo Pillar 2 (LMA) 改善
@@ -45,6 +45,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 ローカル化 段階(b): 数値ゲートの post-gate 純関数化
+*   `select_track_b` の決定論ゲートを LLM 採点/judge から分離。`_serendipity_scored`（anomaly＋near-cap＋serendipity）/ `_hollow_filter`（hollow 棄却・fail-open）/ `_quality_gate_and_build`（percentile→output_floor→fallback/M3→MMR→構築）を共有純関数化。
+*   `apply_post_gates` を新設＝エージェント採点（purpose_sim/mechanism_dist/structural_depth/has_causal_pm 等）に対し LLM 不使用で全ゲートを再適用する委譲用 post-gate。
+*   `select_track_b` も同じ純関数を呼ぶよう refactor（ゲート実装を一本化、挙動不変）。スコア設計値は不変。
+*   `tests/test_post_gates.py` に6ケース追加（全 185 件 green）。DECISION_LOG に段階(b)を記録。
 
 ### 2026-06-15 ローカル化 段階(a): bybridge キー無し structured 一周
 *   新モジュール `src/pipeline/delegate.py`（純関数）: 決定論選別（near_domain でマイオピア pre-filter ＋共有 bridge 数で順位付け）→ `fill_track_entries(mode="structured")` で 4部構成を充足 → OutputDocument。LLM/API キー不使用で一周完結。

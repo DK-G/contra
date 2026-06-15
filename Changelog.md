@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0081） ローカル化 段階(b): 数値ゲートの post-gate 純関数化
+
+### 概要
+* `select_track_b` の決定論ゲートを LLM 採点/judge から分離し、純関数 `apply_post_gates` として切り出した。エージェント採点に対し LLM 不使用で anomaly/near-cap/serendipity/hollow/percentile/output-floor/fallback/M3 を再適用する「コードの硬い床」。
+* `select_track_b` も同じ純関数を共有するよう refactor（挙動不変・スコア設計値不変）。
+
+### 関連タスク
+* Task: ローカル化（MCPクライアント委譲）段階(b)
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+委譲設計の多層防御として、数値ゲートを LLM 採点から独立した純関数（post-gate）に切り出し、エージェント採点にも同じ硬い床を機械的に適用できるようにする。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/classify.py, tests/test_post_gates.py（新規）, DECISION_LOG.md, task.md, diff.md, Changelog.md
+_serendipity_scored / _hollow_filter / _quality_gate_and_build を共有純関数化し、apply_post_gates を新設。select_track_b も同関数を呼ぶよう refactor。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 185 passed（refactor 後も Track B テスト全 green＝挙動不変）。
+
+# 4. 既知の課題・リスク (必須)
+段階(c)（エージェント採点 JSON スキーマ＋委譲経路）、(d)（byrepo 委譲）は未着手。スコア設計値（0.20/0.50/0.35/0.10/0.5）は不変。
+```
+
+---
+
 ## 2026-06-15（CL-0080） ローカル化 段階(a): bybridge キー無し structured 一周（MCPクライアント委譲）
 
 ### 概要
