@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import base64
 
-from src.core.models import Keywords, Scope, ThemeInput
+from src.core.models import GitRepository, Keywords, Scope, ThemeInput
 from src.pipeline.git_collect import (
     GitCollectConfig,
     _decode_readme,
+    _is_completed_stable,
+    _lma_score,
     build_track_a_git_query,
     collect_track_a_git_repos,
     collect_track_a_git_works,
@@ -145,3 +147,49 @@ def test_collect_track_a_git_works_returns_work_objects():
     works = collect_track_a_git_works(_theme(), client=client)
     assert len(works) == 1
     assert works[0].publication_type == "github_repository"
+
+
+def _stale_repo(**overrides) -> GitRepository:
+    base = dict(
+        full_name="acme/finished-util",
+        html_url="https://github.com/acme/finished-util",
+        stars=300,
+        forks=40,
+        pushed_at="2023-01-01T00:00:00Z",  # >365 days stale
+        issue_open_count=1,
+        issue_closed_count=8,
+    )
+    base.update(overrides)
+    return GitRepository(**base)
+
+
+def test_lma_floor_protects_finished_adopted_library():
+    # Stale but adopted + high close rate: must not drop to the abandoned floor (1).
+    repo = _stale_repo()
+    assert _is_completed_stable(repo) is True
+    assert _lma_score(repo) == 15  # strong adoption (stars >= 200) -> 15
+
+
+def test_lma_floor_moderate_adoption_uses_base_floor():
+    repo = _stale_repo(stars=60)
+    assert _is_completed_stable(repo) is True
+    assert _lma_score(repo) == 12
+
+
+def test_lma_no_floor_for_abandoned_unused_repo():
+    # Stale, no adoption, no issue history: stays at the abandoned floor (1).
+    repo = _stale_repo(stars=3, forks=0, issue_open_count=0, issue_closed_count=0)
+    assert _is_completed_stable(repo) is False
+    assert _lma_score(repo) == 1
+
+
+def test_lma_no_floor_when_issues_pile_up_unresolved():
+    # Adopted but low close rate (open >> closed) signals neglect, not completion.
+    repo = _stale_repo(issue_open_count=9, issue_closed_count=1)
+    assert _is_completed_stable(repo) is False
+    assert _lma_score(repo) == 1
+
+
+def test_lma_floor_never_lowers_a_fresh_score():
+    repo = _stale_repo(pushed_at="2026-06-10T00:00:00Z")
+    assert _lma_score(repo) == 25

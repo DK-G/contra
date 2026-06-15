@@ -251,24 +251,66 @@ def _code_examples_density(readme_text: str) -> int:
     return 0
 
 
+# Completed-state floor thresholds (A-RS1, DECISION_LOG 2026-06-12).
+# A stale but *finished* library (small, perfect, needs no changes) must be
+# distinguished from an abandoned/unused one before its maintenance score is
+# floored. Requires an adoption signal AND past issue activity with a high
+# close rate, mirroring the "Zero Issues Trap" logic in Pillar 3.
+_LMA_COMPLETED_FLOOR = 12
+_LMA_COMPLETED_FLOOR_STRONG = 15
+_LMA_ADOPT_STARS = 50
+_LMA_ADOPT_FORKS = 10
+_LMA_ADOPT_STARS_STRONG = 200
+
+
+def _is_completed_stable(repo: GitRepository) -> bool:
+    """Stale repo that looks finished + adopted + historically maintained.
+
+    "push is old + few open issues" alone cannot tell "finished, needs no
+    changes" apart from "nobody uses it". We require BOTH an adoption signal
+    (stars/forks) AND evidence of past issue activity with a high close rate
+    (people used it and issues got resolved).
+    """
+    adopted = repo.stars >= _LMA_ADOPT_STARS or repo.forks >= _LMA_ADOPT_FORKS
+    has_issue_history = (repo.issue_open_count + repo.issue_closed_count) > 0
+    high_close_rate = (
+        repo.issue_closed_count > 0
+        and repo.issue_closed_count >= repo.issue_open_count
+    )
+    return adopted and has_issue_history and high_close_rate
+
+
 def _lma_score(repo: GitRepository) -> int:
     """Evaluate Level of Maintenance Activity (LMA) (Max 25pts)."""
     days = _days_since(repo.pushed_at or repo.updated_at)
     if days is None:
         return 0
-    
-    # Max consecutive days without pushes heuristics
+
+    # Recency-based freshness (an active-ecosystem proxy).
     if days <= 14:
-        return 25
-    if days <= 45:
-        return 20
-    if days <= 90:
-        return 15
-    if days <= 180:
-        return 10
-    if days <= 365:
-        return 5
-    return 1
+        freshness = 25
+    elif days <= 45:
+        freshness = 20
+    elif days <= 90:
+        freshness = 15
+    elif days <= 180:
+        freshness = 10
+    elif days <= 365:
+        freshness = 5
+    else:
+        freshness = 1
+
+    # Completed-state floor: do not punish a finished, adopted, historically
+    # maintained library as hard as an abandoned/unused one (A-RS1).
+    if _is_completed_stable(repo):
+        floor = (
+            _LMA_COMPLETED_FLOOR_STRONG
+            if repo.stars >= _LMA_ADOPT_STARS_STRONG
+            else _LMA_COMPLETED_FLOOR
+        )
+        return max(freshness, floor)
+
+    return freshness
 
 
 def _fork_to_star_score(repo: GitRepository) -> int:
@@ -312,7 +354,10 @@ def _security_and_practices_score(repo: GitRepository) -> int:
     return score + heur_score + has_research
 
 
-def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, repo_stars: int = 0) -> tuple[int, str]:
+def _fetch_issue_signal(
+    client: GitHubClient, full_name: str, sample_size: int, repo_stars: int = 0
+) -> tuple[int, str, int, int]:
+    """Return (issue_score, summary, open_count, closed_count) from an issue sample."""
     payload = client.get(
         f"/repos/{full_name}/issues",
         {"state": "all", "per_page": sample_size},
@@ -321,9 +366,9 @@ def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, 
     if not issues:
         # Zero Issues Trap check
         if repo_stars >= 50:
-            return 0, "issuesなし (警告: ゼロIssueの罠)"
-        return 3, "issuesなし (小規模または新規)"
-        
+            return 0, "issuesなし (警告: ゼロIssueの罠)", 0, 0
+        return 3, "issuesなし (小規模または新規)", 0, 0
+
     open_count = sum(1 for item in issues if item.get("state") == "open")
     closed_count = sum(1 for item in issues if item.get("state") == "closed")
     body_rich = any((item.get("body") or "").strip() for item in issues)
@@ -342,11 +387,11 @@ def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, 
         score += 3
     if labels:
         score += 1
-        
+
     summary = f"issues {len(issues)}件 / open {open_count} / closed {closed_count}"
     if labels:
         summary += f" / labels: {', '.join(labels[:3])}"
-    return min(score, 10), summary
+    return min(score, 10), summary, open_count, closed_count
 
 
 def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
@@ -418,6 +463,8 @@ def repository_to_work(repo: GitRepository) -> Work:
             "lma_score": repo.lma_score,
             "community_score": repo.community_score,
             "security_score": repo.security_score,
+            "issue_open_count": repo.issue_open_count,
+            "issue_closed_count": repo.issue_closed_count,
         },
     )
 
@@ -456,15 +503,24 @@ def collect_track_a_git_repos(
             except Exception:
                 readme_text = ""
         repo = _normalize_repo(item, readme_text=readme_text)
+        issue_open_count = 0
+        issue_closed_count = 0
         if cfg.include_issues and repo.full_name:
             try:
-                issue_score, issue_signal_summary = _fetch_issue_signal(
+                (
+                    issue_score,
+                    issue_signal_summary,
+                    issue_open_count,
+                    issue_closed_count,
+                ) = _fetch_issue_signal(
                     gh, repo.full_name, cfg.issue_sample_size, repo.stars
                 )
             except Exception:
                 issue_score, issue_signal_summary = 0, "issue取得失敗"
         repo.issue_score = issue_score
         repo.issue_signal_summary = issue_signal_summary
+        repo.issue_open_count = issue_open_count
+        repo.issue_closed_count = issue_closed_count
         repos.append(_apply_reliability(theme, repo))
         if len(repos) >= cfg.max_repos:
             break

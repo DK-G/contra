@@ -23,6 +23,10 @@
 
 ## 未着手 (To Do)
 
+- [/] A-RS1: byrepo Pillar 2 (LMA) 改善
+    - [x] 完成判定の床（採用シグナル＋過去 issue 活動＋高クローズ率の条件付きで 12〜15点床止め）を実装する
+    - [ ] 候補プール内相対正規化（プールをドメインサンプルとみなし相対順位で LMA を付与）を実装する
+- [ ] A-RS2: byrepo Pillar 1 配点移行（README 成熟度 → 時間・他人系シグナル）。GITHUB_TOKEN 事実上必須化とセットで判断する
 - [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する
@@ -31,6 +35,13 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-15 A-RS1: Pillar 2 (LMA) 完成判定の床を実装
+*   `_lma_score` を freshness 算出と完成判定の床に分離。stale でも「採用シグナル（stars>=50 / forks>=10）＋過去 issue 活動＋高クローズ率（closed>=open）」を満たす完成した安定ライブラリは LMA を 12点（強採用は 15点）で床止め。
+*   `_is_completed_stable` を追加し「完成」と「誰も使っていない」を区別（Pillar 3「ゼロIssueの罠」と同型）。`max(freshness, floor)` で新鮮 repo のスコアは不変。
+*   issue サンプルの open/closed 件数を `GitRepository.issue_open_count` / `issue_closed_count` に構造化保持し、`source_meta` へ露出。
+*   `tests/test_git_collect.py` に床の発火/非発火5ケースを追加（全 95 件 green）。
+*   DECISION_LOG 2026-06-15 / roadmap A-RS1 を更新。候補2（プール内相対正規化）と A-RS2 は未着手。
 
 ### 2026-06-09 named flow 追加（byrepo / byserendipity）
 *   Track A Git practical anchors 用の named flow `byrepo` を `docs/agent_rules/byrepo.md` に追加。

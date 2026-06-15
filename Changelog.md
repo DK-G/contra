@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-06-15（CL-0074） A-RS1: Pillar 2 (LMA) 完成判定の床を実装
+
+### 概要
+* byrepo Reliability Score の Pillar 2 (LMA) が「完成した安定ライブラリ」を最も強く罰する問題（DECISION_LOG 2026-06-12 懸念1）を、改善方針候補1「完成判定の床」で緩和した。
+* `_is_completed_stable` を新設し、採用シグナル＋過去 issue 活動＋高クローズ率を満たす stale repo の LMA を 12〜15点で床止め。issue の open/closed 件数を構造化保持。
+
+### 関連タスク
+* Task: A-RS1（byrepo Pillar 2 改善）／ roadmap A-RS1
+
+### Diffスナップショット（要約）
+> `diff.md`を上書きする直前の内容から、以下の要約項目をコピーします。
+
+```text
+# 1. 変更目的 (必須)
+A-RS1: byrepo Reliability Score の Pillar 2 (LMA) が「完成した安定ライブラリ」を最も強く罰する問題を、改善方針候補1「完成判定の床」で緩和する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py, src/core/models.py, tests/test_git_collect.py, DECISION_LOG.md, roadmap.md, task.md, diff.md, Changelog.md
+_lma_score を「鮮度」算出と「完成判定の床」適用の2段構成へ分離。_is_completed_stable を新設。issue の open/closed 件数を GitRepository に構造化保持し source_meta へ露出。
+
+# 3. 確認方法 (必須)
+python3 -m pytest tests/ -q → 95 passed
+
+# 4. 既知の課題・リスク (必須)
+改善方針候補2（プール内相対正規化）と A-RS2（Pillar 1 配点移行）は未着手。close 率は issue サンプルに基づくヒューリスティック。
+```
+
+---
+
 ## 2026-06-09（CL-0073） named flow 追加（byrepo / byserendipity）
 
 ### 概要

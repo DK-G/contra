@@ -41,7 +41,7 @@
 | R5 | 自己一貫性投票（score-votes） | **実装済み** |
 | M3 | テーマ飽和検知（output_floor / saturation report） | **実装済み** |
 | 10 | Phase 1 Done 判断: 複数テーマでの品質レビューと人間評価 | 未完了 |
-| A-RS1 | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | 未着手（DECISION_LOG 2026-06-12 参照） |
+| A-RS1 | byrepo Pillar 2 改善: 完成判定の床（issue履歴+採用シグナル条件付き）＋候補プール内相対正規化 | **完成判定の床 実装済み（2026-06-15）** ／ プール内相対正規化は未着手 |
 | A-RS2 | byrepo Pillar 1 配点移行: README 成熟度 → 時間・他人系シグナル（CI実行履歴/リリース刻み/外部関与） | 未着手（同上、GITHUB_TOKEN 事実上必須化とセット） |
 
 **成果物**

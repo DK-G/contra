@@ -93,6 +93,8 @@ class GitRepository:
     community_score: int = 0
     security_score: int = 0
     issue_signal_summary: str = ""
+    issue_open_count: int = 0
+    issue_closed_count: int = 0
 
 
 @dataclass
