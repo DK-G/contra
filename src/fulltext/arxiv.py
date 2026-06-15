@@ -23,6 +23,7 @@ from typing import Callable, List, Optional
 
 from src.core.models import Work
 from src.fulltext.base import FullText
+from src.fulltext.textutil import extract_excerpt
 
 _USER_AGENT = "contra-cli/0.1 (full-text provider; mailto via OpenAlex politepool)"
 
@@ -182,19 +183,6 @@ def clean_latex(tex: str) -> str:
     tex = tex.replace("{", " ").replace("}", " ").replace("\\", " ")
     tex = re.sub(r"\s+", " ", tex)
     return tex.strip()
-
-
-def extract_excerpt(text: str, max_chars: int = 4000) -> str:
-    """Take the leading (intro/method-heavy) prose up to max_chars, cut at a sentence end."""
-    if not text:
-        return ""
-    if len(text) <= max_chars:
-        return text
-    head = text[:max_chars]
-    cut = head.rfind(". ")
-    if cut > int(max_chars * 0.5):
-        head = head[: cut + 1]
-    return head.strip()
 
 
 def clean_eprint(data: bytes) -> str:

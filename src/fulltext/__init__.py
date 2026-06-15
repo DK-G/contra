@@ -12,14 +12,26 @@ from src.fulltext.base import (
     needs_fulltext,
 )
 from src.fulltext.cache import FulltextCache
+from src.fulltext.core import CoreProvider
+from src.fulltext.europepmc import EuropePmcProvider
+from src.fulltext.oa_pdf import OaPdfProvider
 
 
 def build_default_chain(cache_dir: str = "data/fulltext") -> ProviderChain:
-    """The default resolution chain: arXiv first (keyless), backed by a per-id local cache.
+    """The default OA full-text resolution chain (plan.md provider order), per-id cache backed.
 
-    CORE / Europe PMC / OpenAlex oa_url PDF providers are appended here in later increments.
+      1. arXiv e-print  — keyless, lowest noise (LaTeX source).
+      2. Europe PMC     — keyless, non-arXiv OA full text (JATS XML).
+      3. CORE           — broad OA coverage; only active when CORE_API_KEY is set (else skipped).
+      4. OpenAlex oa_url PDF — generic best-effort fallback (Unpaywall-derived oa_url).
+
+    Each provider returns None when it cannot resolve a work, so the chain degrades gracefully
+    to the abstract-only path. CORE self-disables without its env key.
     """
-    return ProviderChain([ArxivProvider()], cache=FulltextCache(cache_dir))
+    return ProviderChain(
+        [ArxivProvider(), EuropePmcProvider(), CoreProvider(), OaPdfProvider()],
+        cache=FulltextCache(cache_dir),
+    )
 
 
 __all__ = [
@@ -28,6 +40,9 @@ __all__ = [
     "ProviderChain",
     "FulltextCache",
     "ArxivProvider",
+    "EuropePmcProvider",
+    "CoreProvider",
+    "OaPdfProvider",
     "needs_fulltext",
     "effective_abstract",
     "attach_fulltext",
