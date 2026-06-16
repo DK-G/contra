@@ -7,7 +7,7 @@
 ## 特徴
 
 - **Track B 中核**: ドメインは遠いが Purpose/Mechanism 構造が一致する論文（Gentner の Analogy）を選出
-- **Track A Git practical anchors**: GitHub repository から実装・制約・失敗パターンを収集し、4本柱 Reliability Score で評価
+- **Track A practical anchors**: GitHub / GitLab repository、Hugging Face、Zenodo / DataCite から実装・モデル・データ・研究成果物を収集し、source type 別 Reliability Score で評価
 - **質ゲート方式**: 本数は固定でなく、質スコア閾値を超えた候補だけを出力（`serendipity = purpose_sim × mechanism_dist`）
 - **citation 2-hop (bridge) 収集**: 近傍シードの共有引用文献を経由してホームドメイン外の交差論文を収集
 - **Anomaly/マイオピア棄却**: 無意味接続・近接を両方弾く
@@ -22,7 +22,7 @@
 | フロー | MCP ツール | 内容 |
 |---|---|---|
 | `byserendipity` | `byserendipity_discover` | Track B: LLM クエリで遠ドメイン論文を収集し、構造類推で選別 |
-| `byrepo` | `byrepo_search` | Track A: GitHub repository を収集し Reliability Score で評価 |
+| `byrepo` | `byrepo_search` | Track A: repository / model / dataset / research artifact を収集し Reliability Score で評価 |
 | `bybridge` | `bybridge_collect` | citation 2-hop: 共有引用文献(bridge)経由でホームドメイン外の交差論文を収集（`raw_only=true` なら LLM キー不要） |
 | `bynote` | `bynote_link_concepts` | メモを Purpose/Mechanism に分解し、類推ドメインと Serendipity Bridge の問いを提示 |
 
@@ -32,6 +32,7 @@
 - 環境変数 `OPENAI_API_KEY` または `ANTHROPIC_API_KEY`（選別・生成に使用。`--llm-model` / `llm_model` でプロバイダごとゼロコード切替）
 - OpenAlex API（APIキー不要）
 - `GITHUB_TOKEN`（任意。byrepo の GitHub Search レート制限が 10→30 req/min に緩和）
+- `GITLAB_TOKEN`（任意。GitLab public project 検索は無認証でも利用可能）
 
 ## 使い方
 
@@ -80,6 +81,7 @@ src/
   core/          データモデル・入力バリデーション・出力Markdown仕様
   openalex/      OpenAlex HTTPクライアント・レスポンスパーサー
   github/        GitHub Search クライアント（Track A / byrepo）
+  gitlab/        GitLab Projects API クライアント（Track A / byrepo）
   pipeline/      収集 / 選別 / 生成 / エクスポート / 履歴 / 距離計算
   cli/           CLI エントリポイント (main.py)
   mcp_server.py  by シリーズ stdio MCP サーバー
@@ -105,7 +107,7 @@ Phase 2 完了・MCP 化済み（`main` ブランチ）。
 
 主要実装済み:
 - Track B 選別: SOLVENT Purpose-Mechanism 構造類推スコアリング（`select_track_b`）
-- Track A: GitHub 収集 + 4本柱 Reliability Score（byrepo）
+- Track A: GitHub / GitLab 収集 + Hugging Face / Zenodo / DataCite artifact 収集 + source type 別 Reliability Score（byrepo）
 - citation 2-hop 収集（bybridge）・MAX-MIN 多様化
 - hollow gate（Structural Depth judge）・percentile gate・output floor
 - 4部構成生成・数値捏造ガード

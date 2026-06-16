@@ -7,6 +7,133 @@
 
 ---
 
+## 2026-06-16（CL-0076） byrepo Problem-Solution Fit 実装
+
+### 概要
+* `ProblemSearchPlan` / `QuerySpec` / `Problem-Solution Fit Score` を実装し、`byrepo` の検索・順位付けを「問題解決に資する候補」優先へ寄せた。
+* クエリ群の単位と運用判断の幅を `docs/specs/byrepo_problem_solution_fit_spec.md` に仕様化した。
+* Source 別比較を受け、`use_problem_search=True` では `Problem Match=0` の候補を collector 出口で除外し、ハイフン区切り表記も問題語一致として扱うよう調整した。
+* CLI Track A と MCP `byrepo_search` の実行経路で、新検索方式が有効化されることをテストで固定した。
+* 旧新比較を受け、intent ごとに候補を集めてから rerank する方式へ変更し、rank の第一キーを `problem_match_score` にした。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+byrepo がキーワード一致や信頼性スコアだけでなく、「ユーザーの問題解決に資する候補」を優先できるようにする。
+クエリ群の単位と、運用時に解釈の幅が出る判断を仕様書にまとめる。
+
+# 2. 変更概要 (必須)
+ThemeInput -> ProblemSearchPlan -> QuerySpec(source type × intent) の検索計画層を追加。
+GitHub / GitLab / Hugging Face / Zenodo / DataCite collector を use_problem_search=True で複数 query bundle に対応。
+Problem-Solution Fit Score と matched_problem / solution_mechanism / usable_artifact / visible_constraint を source_meta に保存。
+unified collector の rank を (problem_match_score, problem_solution_fit_score, reliability_score) に変更。
+use_problem_search=True の source collector で Problem Match=0 の候補を除外。
+bert-text / digital-twin などのハイフン区切り表記を問題語一致に含めた。
+CLI Track A / MCP byrepo_search が use_problem_search=True で unified collector を呼ぶことをテスト追加。
+use_problem_search=True では最初の query で上限に達しても打ち切らず、intent ごとに候補を集めてから rerank。
+非 Git source の focused query は上位3つの problem_terms を使い、problem_only は上位2語 fallback として最後に回す。
+docs/specs/byrepo_problem_solution_fit_spec.md を追加。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（28件）。
+同じ BERT テーマで use_problem_search=False / True の実API smoke 比較成功。
+GitHub / GitLab / Hugging Face / Zenodo / DataCite の source 別比較成功。
+同一 BERT テーマの unified 旧新比較で、新方式が BERT / text classification / domain shift 全一致候補を1位にし、Problem Match=0 候補を除外することを確認。
+git diff --check 成功。
+
+# 4. 既知の課題・リスク (必須)
+ProblemSearchPlan は現時点ではヒューリスティック抽出。
+GitHub code search / issue search を使った file/path evidence と実運用 issue evidence は未実装。
+複数テーマで score weight の較正が必要。
+GitHub は厳格な問題一致フィルタで 0 件になる場合があり、精度と再現率の追加調整が必要。
+pytest は同梱 Python に未導入のため未実行。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0075） byrepo 問題解決リポジトリ発見戦略調査
+
+### 概要
+* bynote で `byrepo` の精度向上を調査し、キーワード一致ではなく問題解決性で repository / artifact を見つける方法論を整理した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+byrepo の精度向上に向けて、キーワード一致ではなく「ユーザーの問題解決に資する repository / artifact」を見つけるための方法論を整理する。
+
+# 2. 変更概要 (必須)
+NotebookLM ノート Contra byrepo OSS Discovery Strategy を使い、既存ソースと補助Web調査から Problem-Solution Fit、evidence-seeking query expansion、source type 別検索戦略を整理した。
+docs/research/byrepo_problem_solution_discovery.md を追加した。
+
+# 3. 確認方法 (必須)
+Get-Content -Raw docs/research/byrepo_problem_solution_discovery.md
+NotebookLM note 作成結果: 86d8abad-e2e7-4bb9-a9fb-74ebf7f89d24
+
+# 4. 既知の課題・リスク (必須)
+今回は調査・設計メモのみで、Problem-Solution Fit の実装は未着手。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0074） Track A practical anchor sources 拡張
+
+### 概要
+* `byrepo` の名称は維持しつつ、Track A の検索対象を GitHub から GitHub / GitLab / Hugging Face / Zenodo / DataCite へ拡張した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+byrepo の名称は維持したまま、検索対象を GitHub repository だけでなく GitLab / Hugging Face / Zenodo / DataCite へ拡張する。
+Git repository と model / dataset / research artifact を同じ評価軸に押し込まず、source type 別の信頼性評価で Track A practical anchors に流す。
+
+# 2. 変更概要 (必須)
+GitLab Projects API client と GitLab repository 正規化を追加。
+Hugging Face / Zenodo / DataCite の artifact collector を追加。
+CLI / MCP の Track A 収集を unified practical collector に切り替え、DOI / URL / 正規化 title で重複排除。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+GitLab / artifact collector のモックテスト直接実行成功。
+既存 export render テスト直接実行成功。
+GitHub / GitLab / Hugging Face / Zenodo / DataCite の実API smoke test 成功。
+unified practical collector の実API smoke test 成功。
+pytest は同梱 Python に未導入のため未実行。
+
+# 4. 既知の課題・リスク (必須)
+実API smoke test は小件数のみ。レートリミット、検索品質、source type ごとのスコア較正は複数テーマで追加確認が必要。
+名称変更（byrepo -> byanchor 等）は今回の対象外。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
 ## 2026-06-09（CL-0073） named flow 追加（byrepo / byserendipity）
 
 ### 概要

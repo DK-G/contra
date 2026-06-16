@@ -9,6 +9,8 @@ from src.pipeline.git_collect import (
     GitCollectConfig,
     _decode_readme,
     build_track_a_git_query,
+    build_track_a_gitlab_query,
+    collect_track_a_gitlab_repos,
     collect_track_a_git_repos,
     collect_track_a_git_works,
     repository_to_work,
@@ -36,6 +38,13 @@ def test_build_track_a_git_query_includes_theme_and_exclude_terms():
     assert "NOT gamification" in query
     assert "demo in:readme" in query
     assert "pushed:>2025-01-01" in query
+
+
+def test_build_track_a_gitlab_query_uses_plain_search_terms():
+    query = build_track_a_gitlab_query(_theme())
+    assert query == "digital twin"
+    assert "pushed:" not in query
+    assert "in:readme" not in query
 
 
 
@@ -94,6 +103,41 @@ class _FakeGitHubClient:
         raise AssertionError(path)
 
 
+class _FakeGitLabClient:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def get(self, path, params=None):
+        self.calls.append((path, params))
+        if path == "/projects":
+            return [
+                {
+                    "id": 42,
+                    "path_with_namespace": "lab/grid-twin",
+                    "web_url": "https://gitlab.com/lab/grid-twin",
+                    "description": "digital twin grid toolkit",
+                    "star_count": 80,
+                    "forks_count": 8,
+                    "open_issues_count": 2,
+                    "license": {"key": "apache-2.0"},
+                    "default_branch": "main",
+                    "last_activity_at": "2026-06-02T00:00:00Z",
+                    "topics": ["digital-twin", "grid"],
+                }
+            ]
+        if path == "/projects/42/issues":
+            return [
+                {"state": "closed", "body": "documented setup failure", "labels": [{"name": "docs"}]},
+            ]
+        raise AssertionError(path)
+
+    def get_text(self, path, params=None):
+        self.calls.append((path, params))
+        if path == "/projects/42/repository/files/README.md/raw":
+            return "# Grid Twin\nInstall and usage\n```bash\nrun\n```"
+        raise AssertionError(path)
+
+
 def test_collect_track_a_git_repos_fetches_search_and_readme():
     client = _FakeGitHubClient()
     repos = collect_track_a_git_repos(
@@ -138,6 +182,56 @@ def test_repository_to_work_maps_repo_fields():
     assert work.source_meta["lma_score"] > 0
     assert work.source_meta["community_score"] > 0
     assert work.source_meta["security_score"] > 0
+    assert "problem_solution_fit_score" in work.source_meta
+
+
+def test_collect_track_a_gitlab_repos_maps_project_fields():
+    client = _FakeGitLabClient()
+    repos = collect_track_a_gitlab_repos(
+        _theme(),
+        config=GitCollectConfig(per_page=5, max_repos=3, include_readme=True),
+        client=client,
+    )
+    assert len(repos) == 1
+    repo = repos[0]
+    assert repo.provider == "gitlab"
+    assert repo.full_name == "lab/grid-twin"
+    assert repo.license_name == "apache-2.0"
+    assert repo.issue_score > 0
+    work = repository_to_work(repo)
+    assert work.venue == "GitLab"
+    assert work.publication_type == "gitlab_repository"
+    assert work.source_meta["provider"] == "gitlab"
+    assert "problem_solution_fit_score" in work.source_meta
+
+
+def test_collect_track_a_git_repos_can_use_problem_search_queries():
+    client = _FakeGitHubClient()
+    repos = collect_track_a_git_repos(
+        _theme(),
+        config=GitCollectConfig(per_page=5, max_repos=1, include_readme=True, use_problem_search=True),
+        client=client,
+    )
+    assert len(repos) == 1
+    assert repos[0].problem_solution_fit_score >= 0
+
+
+def test_problem_search_queries_are_not_stopped_by_first_full_page():
+    client = _FakeGitHubClient()
+    collect_track_a_git_repos(
+        _theme(),
+        config=GitCollectConfig(
+            per_page=1,
+            max_repos=1,
+            include_readme=False,
+            include_issues=False,
+            use_problem_search=True,
+        ),
+        client=client,
+    )
+    search_calls = [params for path, params in client.calls if path == "/search/repositories"]
+    assert len(search_calls) > 1
+    assert len({params["q"] for params in search_calls}) > 1
 
 
 def test_collect_track_a_git_works_returns_work_objects():

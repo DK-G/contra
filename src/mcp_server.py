@@ -20,7 +20,9 @@ from src.pipeline.collect import (
 )
 from src.pipeline.concept_distance import build_theme_profile
 from src.pipeline.generate import GenerationConfig, fill_track_entries
-from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
+from src.pipeline.artifact_collect import ArtifactCollectConfig
+from src.pipeline.git_collect import GitCollectConfig
+from src.pipeline.practical_collect import PracticalCollectConfig, collect_track_a_practical_works
 
 
 def _log(msg: str) -> None:
@@ -103,7 +105,7 @@ class StdinMcpServer:
             },
             {
                 "name": "byrepo_search",
-                "description": "Run the Track A Git practical-anchors pipeline to discover functional GitHub repositories matching the theme, evaluated and ranked by the 4-pillar reliability score.",
+                "description": "Run the Track A practical-anchors pipeline to discover functional repositories, models, datasets, and research artifacts matching the theme.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -118,7 +120,7 @@ class StdinMcpServer:
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
-                        "track_a_count": {"type": "integer", "description": "Maximum number of practical repositories to return.", "default": 3}
+                        "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -259,19 +261,32 @@ class StdinMcpServer:
     def _execute_byrepo(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
         target_count = args.get("track_a_count") or 3
-        git_config = GitCollectConfig(per_page=target_count * 2, max_repos=target_count * 2)
+        pool = max(target_count * 2, 10)
+        practical_config = PracticalCollectConfig(
+            git=GitCollectConfig(per_page=pool, max_repos=pool, include_gitlab=True, use_problem_search=True),
+            artifacts=ArtifactCollectConfig(per_page=pool, max_items=pool, use_problem_search=True),
+            max_items=pool,
+        )
 
-        _log("Byrepo: collecting Git repositories...")
-        works = collect_track_a_git_works(theme, git_config)
+        _log("Byrepo: collecting practical anchors...")
+        works = collect_track_a_practical_works(theme, practical_config)
         
         if not works:
             return {
-                "content": [{"type": "text", "text": "条件に合致するGitHubリポジトリが見つかりませんでした。"}],
+                "content": [{"type": "text", "text": "条件に合致する practical anchor が見つかりませんでした。"}],
                 "isError": False
             }
 
         # Select & rank works based on reliability score
-        works = sorted(works, key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True)[:target_count]
+        works = sorted(
+            works,
+            key=lambda w: (
+                w.source_meta.get("problem_match_score", 0),
+                w.source_meta.get("problem_solution_fit_score", 0),
+                w.source_meta.get("reliability_score", 0),
+            ),
+            reverse=True,
+        )[:target_count]
         
         # Convert to entries / fill text
         from src.pipeline.classify import classify_track_a
@@ -284,10 +299,22 @@ class StdinMcpServer:
             meta = entry.work.source_meta
             lines.append(f"### {i}. {entry.work.title}")
             lines.append(f"- **関係軸**: {entry.label} (関係度: {entry.relationship_level})")
+            lines.append(f"- **Problem-Solution Fit**: {meta.get('problem_solution_fit_score', 0)} "
+                         f"(Problem: {meta.get('problem_match_score', 0)}, Solution: {meta.get('solution_mechanism_score', 0)}, "
+                         f"Execution: {meta.get('execution_evidence_score', 0)}, Evaluation: {meta.get('evaluation_evidence_score', 0)}, "
+                         f"Constraint: {meta.get('constraint_visibility_score', 0)})")
             lines.append(f"- **Reliability Score**: {meta.get('reliability_score', 0)} "
-                         f"(Impl/Doc: {meta.get('impl_doc_score', 0)}, LMA: {meta.get('lma_score', 0)}, "
-                         f"Comm: {meta.get('community_score', 0)}, Sec: {meta.get('security_score', 0)})")
-            lines.append(f"- 更新年: {entry.work.year} | 種別: {entry.work.venue} | stars: {entry.work.cited_by_count}")
+                         f"(Impl/Doc: {meta.get('impl_doc_score', meta.get('completeness_score', 0))}, "
+                         f"Activity: {meta.get('lma_score', meta.get('activity_score', 0))}, "
+                         f"Adoption: {meta.get('community_score', meta.get('adoption_score', 0))}, "
+                         f"Sec/Link: {meta.get('security_score', meta.get('linkage_score', 0))})")
+            lines.append(f"- 更新年: {entry.work.year} | 種別: {entry.work.venue} | signal: {entry.work.cited_by_count}")
+            if meta.get("matched_problem") or meta.get("solution_mechanism") or meta.get("usable_artifact"):
+                lines.append(
+                    f"- Why selected: problem={meta.get('matched_problem') or '—'} / "
+                    f"solution={meta.get('solution_mechanism') or '—'} / "
+                    f"artifact={meta.get('usable_artifact') or '—'}"
+                )
             lines.append(f"- リンク: {entry.work.id}")
             lines.append("")
             lines.append(f"1) 概要: {entry.abstract_summary}")

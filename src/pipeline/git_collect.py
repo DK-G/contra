@@ -5,10 +5,19 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 from src.core.models import GitRepository, ThemeInput, Work
 from src.github.client import GitHubClient
+from src.gitlab.client import GitLabClient, quote_project_id
+from src.pipeline.problem_search import (
+    ProblemSearchPlan,
+    QuerySpec,
+    build_github_query_specs,
+    build_plain_query_specs,
+    build_problem_search_plan,
+    score_problem_solution_fit,
+)
 
 _RESEARCH_TASK_TERMS = [
     "benchmark",
@@ -39,6 +48,8 @@ class GitCollectConfig:
     include_readme: bool = True
     include_issues: bool = True
     issue_sample_size: int = 5
+    include_gitlab: bool = False
+    use_problem_search: bool = False
 
 
 def _clean_token(token: str) -> str:
@@ -87,6 +98,17 @@ def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[st
     return " ".join(all_parts)
 
 
+def build_track_a_gitlab_query(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> str:
+    tokens: List[str] = []
+    if theme.keywords.include:
+        tokens.append(theme.keywords.include[0])
+    elif theme.scope.field:
+        tokens.append(theme.scope.field)
+    if extra_terms:
+        tokens.extend(extra_terms)
+    return " ".join(token.strip() for token in tokens if token.strip())
+
+
 
 
 def _decode_readme(payload: dict) -> str:
@@ -104,6 +126,8 @@ def _normalize_repo(item: dict, readme_text: str = "") -> GitRepository:
     return GitRepository(
         full_name=str(item.get("full_name", "")),
         html_url=str(item.get("html_url", "")),
+        provider="github",
+        api_id=str(item.get("full_name", "")),
         description=str(item.get("description") or ""),
         stars=int(item.get("stargazers_count") or 0),
         forks=int(item.get("forks_count") or 0),
@@ -114,6 +138,30 @@ def _normalize_repo(item: dict, readme_text: str = "") -> GitRepository:
         updated_at=str(item.get("updated_at") or ""),
         pushed_at=str(item.get("pushed_at") or ""),
         topics=[str(t) for t in (item.get("topics") or []) if t],
+        readme_text=readme_text,
+    )
+
+
+def _normalize_gitlab_project(item: dict, readme_text: str = "") -> GitRepository:
+    license_info = item.get("license") or {}
+    path = str(item.get("path_with_namespace") or item.get("name_with_namespace") or item.get("name") or "")
+    web_url = str(item.get("web_url") or item.get("http_url_to_repo") or "")
+    last_activity = str(item.get("last_activity_at") or item.get("updated_at") or "")
+    return GitRepository(
+        full_name=path,
+        html_url=web_url,
+        provider="gitlab",
+        api_id=str(item.get("id") or path),
+        description=str(item.get("description") or ""),
+        stars=int(item.get("star_count") or 0),
+        forks=int(item.get("forks_count") or 0),
+        watchers=0,
+        open_issues=int(item.get("open_issues_count") or 0),
+        license_name=str(license_info.get("key") or license_info.get("name") or ""),
+        default_branch=str(item.get("default_branch") or ""),
+        updated_at=last_activity,
+        pushed_at=last_activity,
+        topics=[str(t) for t in (item.get("topics") or item.get("tag_list") or []) if t],
         readme_text=readme_text,
     )
 
@@ -312,11 +360,9 @@ def _security_and_practices_score(repo: GitRepository) -> int:
     return score + heur_score + has_research
 
 
-def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, repo_stars: int = 0) -> tuple[int, str]:
-    payload = client.get(
-        f"/repos/{full_name}/issues",
-        {"state": "all", "per_page": sample_size},
-    )
+def _issue_signal_from_payload(payload: Any, sample_size: int, repo_stars: int = 0) -> tuple[int, str]:
+    if not isinstance(payload, list):
+        payload = []
     issues = [item for item in payload if "pull_request" not in item]
     if not issues:
         # Zero Issues Trap check
@@ -349,7 +395,58 @@ def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, 
     return min(score, 10), summary
 
 
-def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
+def _fetch_issue_signal(client: GitHubClient, full_name: str, sample_size: int, repo_stars: int = 0) -> tuple[int, str]:
+    payload = client.get(
+        f"/repos/{full_name}/issues",
+        {"state": "all", "per_page": sample_size},
+    )
+    return _issue_signal_from_payload(payload, sample_size, repo_stars)
+
+
+def _fetch_gitlab_issue_signal(
+    client: GitLabClient,
+    project_id: str,
+    sample_size: int,
+    repo_stars: int = 0,
+) -> tuple[int, str]:
+    payload = client.get(
+        f"/projects/{quote_project_id(project_id)}/issues",
+        {"state": "all", "per_page": sample_size},
+    )
+    return _issue_signal_from_payload(payload, sample_size, repo_stars)
+
+
+def _apply_problem_solution_fit(
+    theme: ThemeInput,
+    repo: GitRepository,
+    plan: Optional[ProblemSearchPlan] = None,
+) -> GitRepository:
+    fit = score_problem_solution_fit(
+        theme,
+        text="\n".join([repo.full_name, repo.description, repo.readme_text[:4000]]),
+        source_type=f"{repo.provider}_repository",
+        tags=repo.topics,
+        metadata_text=repo.issue_signal_summary,
+        plan=plan,
+    )
+    repo.problem_solution_fit_score = fit.score
+    repo.problem_match_score = fit.problem_score
+    repo.solution_mechanism_score = fit.solution_score
+    repo.execution_evidence_score = fit.execution_score
+    repo.evaluation_evidence_score = fit.evaluation_score
+    repo.constraint_visibility_score = fit.constraint_score
+    repo.matched_problem = fit.matched_problem
+    repo.solution_mechanism = fit.solution_mechanism
+    repo.usable_artifact = fit.usable_artifact
+    repo.visible_constraint = fit.visible_constraint
+    return repo
+
+
+def _apply_reliability(
+    theme: ThemeInput,
+    repo: GitRepository,
+    plan: Optional[ProblemSearchPlan] = None,
+) -> GitRepository:
     # Pillar 1 (Max 30)
     readme_comp = _readme_completeness_and_mature_categories(repo.readme_text)
     code_dens = _code_examples_density(repo.readme_text)
@@ -381,10 +478,12 @@ def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
     repo.research_linkage_score = _research_linkage_score(repo)
     
     repo.reliability_score = min(total, 100)
-    return repo
+    return _apply_problem_solution_fit(theme, repo, plan=plan)
 
 
 def repository_to_work(repo: GitRepository) -> Work:
+    venue = "GitLab" if repo.provider == "gitlab" else "GitHub"
+    publication_type = f"{repo.provider}_repository"
     abstract_parts = [repo.description.strip()]
     if repo.readme_text.strip():
         abstract_parts.append(repo.readme_text.strip()[:2000])
@@ -393,13 +492,15 @@ def repository_to_work(repo: GitRepository) -> Work:
         id=repo.html_url,
         title=repo.full_name,
         year=_updated_year(repo.updated_at),
-        venue="GitHub",
+        venue=venue,
         doi=None,
         cited_by_count=repo.stars,
         abstract=abstract,
         concepts=list(repo.topics),
-        publication_type="github_repository",
+        publication_type=publication_type,
         source_meta={
+            "source_type": publication_type,
+            "provider": repo.provider,
             "license_name": repo.license_name,
             "updated_at": repo.updated_at,
             "open_issues": repo.open_issues,
@@ -418,6 +519,16 @@ def repository_to_work(repo: GitRepository) -> Work:
             "lma_score": repo.lma_score,
             "community_score": repo.community_score,
             "security_score": repo.security_score,
+            "problem_solution_fit_score": repo.problem_solution_fit_score,
+            "problem_match_score": repo.problem_match_score,
+            "solution_mechanism_score": repo.solution_mechanism_score,
+            "execution_evidence_score": repo.execution_evidence_score,
+            "evaluation_evidence_score": repo.evaluation_evidence_score,
+            "constraint_visibility_score": repo.constraint_visibility_score,
+            "matched_problem": repo.matched_problem,
+            "solution_mechanism": repo.solution_mechanism,
+            "usable_artifact": repo.usable_artifact,
+            "visible_constraint": repo.visible_constraint,
         },
     )
 
@@ -427,55 +538,180 @@ def _fetch_readme_text(client: GitHubClient, full_name: str) -> str:
     return _decode_readme(payload)
 
 
+def _fetch_gitlab_readme_text(client: GitLabClient, project_id: str, default_branch: str) -> str:
+    branch = default_branch or "main"
+    try:
+        return client.get_text(
+            f"/projects/{quote_project_id(project_id)}/repository/files/README.md/raw",
+            {"ref": branch},
+        )
+    except Exception:
+        if branch != "master":
+            return client.get_text(
+                f"/projects/{quote_project_id(project_id)}/repository/files/README.md/raw",
+                {"ref": "master"},
+            )
+        raise
+
+
+def _rank_repositories(repos: List[GitRepository], cfg: GitCollectConfig) -> List[GitRepository]:
+    ranked = sorted(
+        repos,
+        key=lambda repo: (
+            repo.problem_match_score,
+            repo.problem_solution_fit_score,
+            repo.reliability_score,
+        ),
+        reverse=True,
+    )
+    if cfg.use_problem_search:
+        matched = [repo for repo in ranked if repo.problem_match_score > 0]
+        return matched
+    return ranked
+
+
+def _query_candidate_budget(limit: int, query_specs: Sequence[QuerySpec], use_problem_search: bool) -> int:
+    if not use_problem_search:
+        return limit
+    return max(limit, limit * max(len(query_specs), 1))
+
+
 def collect_track_a_git_repos(
     theme: ThemeInput,
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
+    gitlab_client: Optional[GitLabClient] = None,
 ) -> List[GitRepository]:
     cfg = config or GitCollectConfig()
+    plan = build_problem_search_plan(theme) if cfg.use_problem_search else None
     gh = client or GitHubClient()
-    query = build_track_a_git_query(theme)
-    payload = gh.get(
-        "/search/repositories",
-        {
-            "q": query,
-            "sort": "stars",
-            "order": "desc",
-            "per_page": cfg.per_page,
-        },
-    )
-    items = payload.get("items") or []
+    query_specs = build_github_query_specs(theme, plan) if plan else [
+        QuerySpec("github_repository", "default", build_track_a_git_query(theme))
+    ]
+    candidate_budget = _query_candidate_budget(cfg.max_repos, query_specs, cfg.use_problem_search)
     repos: List[GitRepository] = []
-    for item in items:
-        readme_text = ""
-        issue_score = 0
-        issue_signal_summary = ""
-        if cfg.include_readme and item.get("full_name"):
-            try:
-                readme_text = _fetch_readme_text(gh, str(item["full_name"]))
-            except Exception:
-                readme_text = ""
-        repo = _normalize_repo(item, readme_text=readme_text)
-        if cfg.include_issues and repo.full_name:
-            try:
-                issue_score, issue_signal_summary = _fetch_issue_signal(
-                    gh, repo.full_name, cfg.issue_sample_size, repo.stars
-                )
-            except Exception:
-                issue_score, issue_signal_summary = 0, "issue取得失敗"
-        repo.issue_score = issue_score
-        repo.issue_signal_summary = issue_signal_summary
-        repos.append(_apply_reliability(theme, repo))
-        if len(repos) >= cfg.max_repos:
+    seen: set[str] = set()
+    for spec in query_specs:
+        payload = gh.get(
+            "/search/repositories",
+            {
+                "q": spec.query,
+                "sort": "stars",
+                "order": "desc",
+                "per_page": cfg.per_page,
+            },
+        )
+        items = payload.get("items") or []
+        for item in items:
+            full_name = str(item.get("full_name") or "")
+            if not full_name or full_name in seen:
+                continue
+            seen.add(full_name)
+            readme_text = ""
+            issue_score = 0
+            issue_signal_summary = ""
+            if cfg.include_readme and item.get("full_name"):
+                try:
+                    readme_text = _fetch_readme_text(gh, str(item["full_name"]))
+                except Exception:
+                    readme_text = ""
+            repo = _normalize_repo(item, readme_text=readme_text)
+            if cfg.include_issues and repo.full_name:
+                try:
+                    issue_score, issue_signal_summary = _fetch_issue_signal(
+                        gh, repo.full_name, cfg.issue_sample_size, repo.stars
+                    )
+                except Exception:
+                    issue_score, issue_signal_summary = 0, "issue取得失敗"
+            repo.issue_score = issue_score
+            repo.issue_signal_summary = issue_signal_summary
+            repos.append(_apply_reliability(theme, repo, plan=plan))
+            if len(repos) >= candidate_budget:
+                break
+        if len(repos) >= candidate_budget:
             break
-    repos.sort(key=lambda repo: repo.reliability_score, reverse=True)
-    return repos
+    if cfg.include_gitlab:
+        gl_repos = collect_track_a_gitlab_repos(theme, cfg, client=gitlab_client, plan=plan)
+        seen = {repo.html_url or repo.full_name for repo in repos}
+        for repo in gl_repos:
+            key = repo.html_url or repo.full_name
+            if key not in seen:
+                seen.add(key)
+                repos.append(repo)
+    return _rank_repositories(repos, cfg)[: cfg.max_repos]
+
+
+def collect_track_a_gitlab_repos(
+    theme: ThemeInput,
+    config: Optional[GitCollectConfig] = None,
+    client: Optional[GitLabClient] = None,
+    plan: Optional[ProblemSearchPlan] = None,
+) -> List[GitRepository]:
+    cfg = config or GitCollectConfig()
+    plan = plan or (build_problem_search_plan(theme) if cfg.use_problem_search else None)
+    gl = client or GitLabClient()
+    query_specs = build_plain_query_specs("gitlab_repository", theme, plan) if plan else [
+        QuerySpec("gitlab_repository", "default", build_track_a_gitlab_query(theme))
+    ]
+    if not query_specs:
+        return []
+    candidate_budget = _query_candidate_budget(cfg.max_repos, query_specs, cfg.use_problem_search)
+    repos: List[GitRepository] = []
+    seen: set[str] = set()
+    for spec in query_specs:
+        if not spec.query:
+            continue
+        payload = gl.get(
+            "/projects",
+            {
+                "search": spec.query,
+                "order_by": "star_count",
+                "sort": "desc",
+                "simple": "true",
+                "per_page": cfg.per_page,
+            },
+        )
+        items = payload if isinstance(payload, list) else []
+        for item in items:
+            project_id = str(item.get("id") or item.get("path_with_namespace") or "")
+            if not project_id or project_id in seen:
+                continue
+            seen.add(project_id)
+            readme_text = ""
+            issue_score = 0
+            issue_signal_summary = ""
+            if cfg.include_readme and project_id:
+                try:
+                    readme_text = _fetch_gitlab_readme_text(
+                        gl,
+                        project_id,
+                        str(item.get("default_branch") or "main"),
+                    )
+                except Exception:
+                    readme_text = ""
+            repo = _normalize_gitlab_project(item, readme_text=readme_text)
+            if cfg.include_issues and project_id:
+                try:
+                    issue_score, issue_signal_summary = _fetch_gitlab_issue_signal(
+                        gl, project_id, cfg.issue_sample_size, repo.stars
+                    )
+                except Exception:
+                    issue_score, issue_signal_summary = 0, "issue取得失敗"
+            repo.issue_score = issue_score
+            repo.issue_signal_summary = issue_signal_summary
+            repos.append(_apply_reliability(theme, repo, plan=plan))
+            if len(repos) >= candidate_budget:
+                break
+        if len(repos) >= candidate_budget:
+            break
+    return _rank_repositories(repos, cfg)
 
 
 def collect_track_a_git_works(
     theme: ThemeInput,
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
+    gitlab_client: Optional[GitLabClient] = None,
 ) -> List[Work]:
-    repos = collect_track_a_git_repos(theme, config=config, client=client)
+    repos = collect_track_a_git_repos(theme, config=config, client=client, gitlab_client=gitlab_client)
     return [repository_to_work(repo) for repo in repos]

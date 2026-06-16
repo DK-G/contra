@@ -105,7 +105,14 @@ def _llm_generate_track_a_text(
     model: str,
 ) -> Optional[tuple]:
     """Return 4-part (relationship, summary, hypothesis, caution) for a Track A paper."""
-    source_kind = "GitHubリポジトリ" if work.publication_type == "github_repository" else "研究論文"
+    if work.publication_type and work.publication_type.endswith("_repository"):
+        source_kind = f"{work.venue}リポジトリ"
+    elif work.publication_type in {"hf_model", "hf_dataset", "hf_space"}:
+        source_kind = work.venue
+    elif work.publication_type in {"zenodo_record", "datacite_doi"}:
+        source_kind = "研究成果物"
+    else:
+        source_kind = "研究論文"
     source_body = (work.abstract or "")[:_GEN_ABSTRACT_CHARS]
     payload = {
         "model": model,

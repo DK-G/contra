@@ -12,6 +12,15 @@
     - [x] Git 由来情報の信頼性評価（stars / activity / license / issue quality / last commit / README completeness）を設計する
     - [x] Track B の遠類推と混同しない表示区分・出力フォーマットを設計する
     - [x] 設計結果を `plan.md` 変更案または `docs/specs/` の設計メモにまとめる（`docs/specs/track_a_git_anchor_design.md`）
+    - [x] GitLab を既存 Git repository フローに合流し、GitHub / GitLab を同じ repository anchor として正規化する
+    - [x] Hugging Face / Zenodo / DataCite を Track A practical artifact collector として追加する
+    - [x] DOI / URL / 正規化 title による artifact 重複排除を追加する
+    - [x] bynote で「問題解決に資するリポジトリ発見」の方法論を調査し、`docs/research/byrepo_problem_solution_discovery.md` に整理する
+    - [x] `ProblemSearchPlan` / `QuerySpec` / `Problem-Solution Fit Score` を実装し、source type × intent 単位のクエリ群で byrepo を rerank する
+    - [x] 運用時に解釈の幅が出る部分を `docs/specs/byrepo_problem_solution_fit_spec.md` に仕様化する
+    - [x] GitHub / GitLab / Hugging Face / Zenodo / DataCite を source 別に比較し、問題一致ゼロ候補の除外とハイフン表記一致を反映する
+    - [x] CLI Track A と MCP `byrepo_search` で新検索方式が有効化されることをテストで固定する
+    - [x] 同一テーマの旧新比較を行い、intent-balanced collection と `problem_match_score` 優先 rank を反映する
 - [/] Phase 1 Done 判断: Track B 品質評価
     - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
     - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する

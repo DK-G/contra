@@ -32,8 +32,10 @@ from src.pipeline.collect import (
 from src.pipeline.concept_distance import ThemeProfile, build_theme_profile
 from src.pipeline.export import export_markdown
 from src.pipeline.generate import GenerationConfig, fill_track_entries
-from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
 from src.pipeline.history import compute_theme_hash, load_history, save_history
+from src.pipeline.artifact_collect import ArtifactCollectConfig
+from src.pipeline.git_collect import GitCollectConfig
+from src.pipeline.practical_collect import PracticalCollectConfig, collect_track_a_practical_works
 
 
 def _load_json(path: Path) -> dict:
@@ -310,7 +312,12 @@ def main(argv: list[str]) -> int:
     use_llm = gen_mode == "llm"
 
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
-    git_config = GitCollectConfig(per_page=max(args.track_a_count * 2, 10), max_repos=max(args.track_a_count * 2, 10))
+    anchor_pool = max(args.track_a_count * 2, 10)
+    practical_config = PracticalCollectConfig(
+        git=GitCollectConfig(per_page=anchor_pool, max_repos=anchor_pool, include_gitlab=True, use_problem_search=True),
+        artifacts=ArtifactCollectConfig(per_page=anchor_pool, max_items=anchor_pool, use_problem_search=True),
+        max_items=anchor_pool,
+    )
 
     # MVP (--single): the single best Track B serendipity unit. Track A is an optional anchor.
     track_b_target = 1 if args.single else args.track_b_count
@@ -320,8 +327,8 @@ def main(argv: list[str]) -> int:
     track_a_entries: list = []
     try:
         if track_a_target > 0:
-            print("[info] collecting Track A Git practical anchors...")
-            track_a_works = collect_track_a_git_works(theme, git_config)
+            print("[info] collecting Track A practical anchors...")
+            track_a_works = collect_track_a_practical_works(theme, practical_config)
             track_a_works = filter_by_used_ids(track_a_works, used_ids, used_titles, used_dois)
             print(f"[ok] Track A candidates: {len(track_a_works)}")
 
@@ -339,7 +346,7 @@ def main(argv: list[str]) -> int:
         print(f"[error] openalex: {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"[error] track-a git collect: {exc}", file=sys.stderr)
+        print(f"[error] track-a practical collect: {exc}", file=sys.stderr)
         return 1
 
     if track_a_target > 0:

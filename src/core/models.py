@@ -69,6 +69,8 @@ class Work:
 class GitRepository:
     full_name: str
     html_url: str
+    provider: str = "github"
+    api_id: str = ""
     description: str = ""
     stars: int = 0
     forks: int = 0
@@ -88,11 +90,56 @@ class GitRepository:
     readme_score: int = 0
     issue_score: int = 0
     research_linkage_score: int = 0
+    problem_solution_fit_score: int = 0
+    problem_match_score: int = 0
+    solution_mechanism_score: int = 0
+    execution_evidence_score: int = 0
+    evaluation_evidence_score: int = 0
+    constraint_visibility_score: int = 0
+    matched_problem: str = ""
+    solution_mechanism: str = ""
+    usable_artifact: str = ""
+    visible_constraint: str = ""
     impl_doc_score: int = 0
     lma_score: int = 0
     community_score: int = 0
     security_score: int = 0
     issue_signal_summary: str = ""
+
+
+@dataclass
+class PracticalArtifact:
+    artifact_id: str
+    title: str
+    url: str
+    source: str
+    source_type: str
+    description: str = ""
+    year: int = 0
+    license_name: str = ""
+    doi: Optional[str] = None
+    downloads: int = 0
+    likes: int = 0
+    updated_at: str = ""
+    tags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    reliability_score: int = 0
+    completeness_score: int = 0
+    activity_score: int = 0
+    adoption_score: int = 0
+    license_score: int = 0
+    linkage_score: int = 0
+    risk_penalty: int = 0
+    problem_solution_fit_score: int = 0
+    problem_match_score: int = 0
+    solution_mechanism_score: int = 0
+    execution_evidence_score: int = 0
+    evaluation_evidence_score: int = 0
+    constraint_visibility_score: int = 0
+    matched_problem: str = ""
+    solution_mechanism: str = ""
+    usable_artifact: str = ""
+    visible_constraint: str = ""
 
 
 @dataclass

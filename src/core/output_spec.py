@@ -47,8 +47,18 @@ def _link_for_work(work: Work) -> str:
     return "TBD"
 
 
-def _is_github_work(work: Work) -> bool:
-    return work.publication_type == "github_repository"
+def _is_repository_work(work: Work) -> bool:
+    return bool(work.publication_type and work.publication_type.endswith("_repository"))
+
+
+def _is_practical_artifact(work: Work) -> bool:
+    return bool(work.publication_type and work.publication_type in {
+        "hf_model",
+        "hf_dataset",
+        "hf_space",
+        "zenodo_record",
+        "datacite_doi",
+    })
 
 
 def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
@@ -76,8 +86,9 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append("")
     lines.append(f"- **関係度**: {entry.relationship_level or '—'}")
     lines.append(f"- **関係軸**: {entry.label or '—'}")
-    if _is_github_work(entry.work):
+    if _is_repository_work(entry.work):
         score = entry.work.source_meta.get("reliability_score", "—")
+        fit_score = entry.work.source_meta.get("problem_solution_fit_score", "—")
         issue_signal = entry.work.source_meta.get("issue_signal_summary", "—")
         license_name = entry.work.source_meta.get("license_name", "—")
         impl_doc = entry.work.source_meta.get("impl_doc_score")
@@ -91,7 +102,60 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
             )
         else:
             lines.append(f"- Reliability Score: {score}  |  License: {license_name}")
+        lines.append(
+            f"- Problem-Solution Fit: {fit_score} "
+            f"(Problem: {entry.work.source_meta.get('problem_match_score', 0)}, "
+            f"Solution: {entry.work.source_meta.get('solution_mechanism_score', 0)}, "
+            f"Execution: {entry.work.source_meta.get('execution_evidence_score', 0)}, "
+            f"Evaluation: {entry.work.source_meta.get('evaluation_evidence_score', 0)}, "
+            f"Constraint: {entry.work.source_meta.get('constraint_visibility_score', 0)})"
+        )
+        if (
+            entry.work.source_meta.get("matched_problem")
+            or entry.work.source_meta.get("solution_mechanism")
+            or entry.work.source_meta.get("usable_artifact")
+        ):
+            lines.append(
+                f"- Why selected: problem={entry.work.source_meta.get('matched_problem') or '—'} / "
+                f"solution={entry.work.source_meta.get('solution_mechanism') or '—'} / "
+                f"artifact={entry.work.source_meta.get('usable_artifact') or '—'}"
+            )
         lines.append(f"- Issue Signal: {issue_signal}")
+    elif _is_practical_artifact(entry.work):
+        meta = entry.work.source_meta
+        score = meta.get("reliability_score", "—")
+        fit_score = meta.get("problem_solution_fit_score", "—")
+        license_name = meta.get("license_name", "—")
+        downloads = meta.get("downloads", 0)
+        likes = meta.get("likes", 0)
+        completeness = meta.get("completeness_score")
+        activity = meta.get("activity_score")
+        adoption = meta.get("adoption_score")
+        linkage = meta.get("linkage_score")
+        risk = meta.get("risk_penalty")
+        lines.append(
+            f"- 年: {entry.work.year or '—'}  |  種別: {entry.work.venue}  |  downloads/likes: {downloads}/{likes}"
+        )
+        if completeness is not None and activity is not None and adoption is not None and linkage is not None:
+            lines.append(
+                f"- Reliability Score: {score} (Card/Meta: {completeness}, Activity: {activity}, Adoption: {adoption}, Linkage: {linkage}, Risk-: {risk})  |  License: {license_name}"
+            )
+        else:
+            lines.append(f"- Reliability Score: {score}  |  License: {license_name}")
+        lines.append(
+            f"- Problem-Solution Fit: {fit_score} "
+            f"(Problem: {meta.get('problem_match_score', 0)}, "
+            f"Solution: {meta.get('solution_mechanism_score', 0)}, "
+            f"Execution: {meta.get('execution_evidence_score', 0)}, "
+            f"Evaluation: {meta.get('evaluation_evidence_score', 0)}, "
+            f"Constraint: {meta.get('constraint_visibility_score', 0)})"
+        )
+        if meta.get("matched_problem") or meta.get("solution_mechanism") or meta.get("usable_artifact"):
+            lines.append(
+                f"- Why selected: problem={meta.get('matched_problem') or '—'} / "
+                f"solution={meta.get('solution_mechanism') or '—'} / "
+                f"artifact={meta.get('usable_artifact') or '—'}"
+            )
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")

@@ -59,7 +59,9 @@ contra は、研究テーマに対して**一見関係が薄いが構造的に�
 ### 4.1 採用（確定）
 - **OpenAlex**（無料・分野横断・abstract取得可・citation付加情報・APIキー不要）。
 - abstract あり論文を優先（「1点接続」の識別には本文情報が要る）。
-- **GitHub API (Track A Git 実装アンカー)**: 実装上の制約やサンプルコードを収集するため、GitHub REST API を用いた Track A 収集に対応。
+- **GitHub / GitLab API (Track A Git 実装アンカー)**: 実装上の制約やサンプルコードを収集するため、GitHub REST API と GitLab Projects API を用いた Track A 収集に対応。
+- **Hugging Face Hub API (Track A model / dataset / demo アンカー)**: ML 系テーマで実際に触れる model / dataset / Space を収集し、model card / dataset card / downloads / license から実用性を評価する。
+- **Zenodo / DataCite (Track A research artifact アンカー)**: DOI 付きの研究ソフトウェア・データセット・再現パッケージを収集し、repository だけでは拾えない研究成果物を補完する。
 
 ### 4.2 収集ソースの信頼性評価 (byrepo パイプライン)
 Git リポジトリなどの外部実装コードベースは品質のノイズ（stale コードやドキュメント不在）が多いため、**マルチディメンショナルな 100点満点の信頼性スコア (4 Pillars)** に基づく評価アルゴリズムを導入し、実用性の高いコードベースのみを選別する：
@@ -68,6 +70,8 @@ Git リポジトリなどの外部実装コードベースは品質のノイズ�
 3. **コミュニティヘルス & エンゲージメント (20点)**: Fork-to-Star 比率、Issue のアクティビティ評価。
 4. **セキュリティ & 成熟度 (25点)**: ライセンス明記、CI/CD テスト構成、論文への Citation リンク。
 ※上記 Heuristics により、スター数偏重を抑止し「Zero Issues Trap（人気に見えて活動が死んでいる罠）」などを自動的に回避する。
+
+Hugging Face / Zenodo / DataCite の artifact は Git repository と同じ指標に押し込まず、card / metadata completeness、license clarity、activity、downloads / likes、DOI / paper / benchmark linkage、gated / no-license などの risk penalty を source type 別に評価する。Zenodo と DataCite は DOI / URL / 正規化 title による重複排除を必須とする。
 
 ## 5. 全体構成（1テーマあたり）
 ### 5.1 二層構造
