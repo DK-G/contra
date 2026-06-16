@@ -138,6 +138,46 @@ def test_render_track_a_github_entry_with_rich_breakdown():
     assert "Third-Party Signal: 5/6 (ext. contributors: 7, non-owner reporters: 4)" in md
 
 
+def test_render_track_a_huggingface_entry():
+    work = Work(
+        id="https://huggingface.co/user/mahjong-tile-detector",
+        title="user/mahjong-tile-detector",
+        year=2025,
+        venue="HuggingFace",
+        doi=None,
+        cited_by_count=42,
+        abstract="A YOLO model for mahjong tile detection.",
+        publication_type="huggingface_model",
+        source_meta={
+            "reliability_score": 67,
+            "hf_kind": "model",
+            "downloads": 1500,
+            "likes": 42,
+            "license_name": "apache-2.0",
+            "pipeline_tag": "object-detection",
+            "adoption_score": 18,
+            "activity_score": 20,
+            "license_score": 15,
+            "theme_fit_score": 14,
+        },
+    )
+    entry = OutputEntry(
+        work=work, relationship="関連性", abstract_summary="概要",
+        caution="注意点", usefulness_hypothesis="仮説テキスト",
+        track="A", label="実装アンカー", relationship_level="中",
+    )
+    section = OutputSection(title="Track A: Practical Anchors（1件）", track="A", entries=[entry])
+    md = render_markdown(OutputDocument(theme=_theme(), sections=[section]))
+    assert "user/mahjong-tile-detector" in md
+    assert "HuggingFace/model" in md
+    assert "DL: 1500" in md
+    assert "likes: 42" in md
+    assert "Reliability Score: 67/100" in md
+    assert "Adoption: 18/40, Activity: 20/25, License: 15/15, Theme-fit: 14/20" in md
+    assert "object-detection" in md
+    assert "apache-2.0" in md
+
+
 def test_render_empty_section_shows_placeholder():
     section = OutputSection(title="Track B: 接続点フィーチャー（0本）", track="B", entries=[])
     doc = OutputDocument(theme=_theme(), sections=[section])

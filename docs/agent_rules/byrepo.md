@@ -10,9 +10,18 @@ description: contra の Track A Git practical anchors を収集・評価・出�
 
 ## Purpose
 
-- 研究テーマに近い **実装・制約・失敗パターン** を GitHub repository から拾う
+- 研究テーマに近い **実装・制約・失敗パターン** を収集源から拾う
 - Track B の遠い発想に対して、今すぐ触れる現実の足場を与える
 - 論文アンカーではなく、**実務アンカー** を作る
+
+## Sources
+
+実務アンカーの収集源は差し替え可能で、既定では次の 2 つを併用する（`src/pipeline/track_a.py` が統合）。
+
+- `github` — GitHub repository（実装・ツール・フレームワーク）
+- `huggingface` — Hugging Face Hub の **model / dataset**（学習済みモデル・データセット）
+
+各収集源は同一の `Work` に正規化され、`source_meta["reliability_score"]`（0-100）で統合ランキングする。片方の収集源が落ちても他方のアンカーは返す（障害分離）。`sources` で対象を絞れる（例: `["huggingface"]`）。
 
 ## Invocation
 
@@ -31,24 +40,25 @@ description: contra の Track A Git practical anchors を収集・評価・出�
 - `keywords.include`
 - `keywords.exclude`
 - 必要なら `track_a_count`
+- 必要なら `sources`（既定 `["github", "huggingface"]`）
 
 ## Workflow
 
-1. `keywords.include` を主軸に GitHub repository 検索クエリを組む
-2. GitHub Search API で repository 候補を収集する
-3. README を取得して、用途・導入手順・制約の匂いを読む
-4. issue を少数サンプル取得して、詰まりどころ・運用ノイズを観測する
-5. Reliability Score を算出する
-6. `GitRepository -> Work` に正規化して Track A の既存分類・生成・出力へ流す
+1. `keywords.include` を主軸に各収集源の検索クエリを組む
+2. 収集源から候補を収集する
+   - GitHub: Search API で repository を集め、README / issue を読む
+   - Hugging Face: Hub API で model / dataset を集め、card(README) を読む
+3. 収集源ごとの Reliability Score を算出する（GitHub=4 Pillar / HF=adoption・activity・license・theme-fit）
+4. `Work` に正規化し、`source_meta["reliability_score"]` で統合ランキングして Track A の既存分類・生成・出力へ流す
 
 ## Output Expectations
 
 - Track A section に practical anchors を出力する
 - 最低限、次を含める
-  - repository 名
-  - stars
+  - 名称（GitHub=repository 名 / HF=model・dataset id）
+  - 採用度シグナル（GitHub=stars / HF=downloads・likes）
   - license
-  - issue signal
+  - GitHub のときは issue signal
   - Reliability Score
 
 ## Non Goals

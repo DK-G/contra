@@ -32,7 +32,9 @@ from src.pipeline.collect import (
 from src.pipeline.concept_distance import ThemeProfile, build_theme_profile
 from src.pipeline.export import export_markdown
 from src.pipeline.generate import GenerationConfig, fill_track_entries
-from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
+from src.pipeline.git_collect import GitCollectConfig
+from src.pipeline.hf_collect import HFCollectConfig
+from src.pipeline.track_a import collect_track_a_works, normalize_sources
 from src.pipeline.history import compute_theme_hash, load_history, save_history
 
 
@@ -234,6 +236,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
     parser.add_argument(
+        "--track-a-sources",
+        default="github,huggingface",
+        help="Comma-separated Track A practical-anchor sources: github, huggingface (default: both). Anchors from all sources merge and rank by their reliability score.",
+    )
+    parser.add_argument(
         "--git-rich-signals",
         dest="git_rich_signals",
         default=None,
@@ -326,6 +333,13 @@ def main(argv: list[str]) -> int:
         max_repos=max(args.track_a_count * 2, 10),
         include_rich_signals=args.git_rich_signals,
     )
+    hf_config = HFCollectConfig(
+        limit=max(args.track_a_count * 2, 10),
+        max_works=max(args.track_a_count * 2, 10),
+    )
+    track_a_sources = normalize_sources(
+        [s.strip() for s in args.track_a_sources.split(",") if s.strip()]
+    )
 
     # MVP (--single): the single best Track B serendipity unit. Track A is an optional anchor.
     track_b_target = 1 if args.single else args.track_b_count
@@ -335,8 +349,14 @@ def main(argv: list[str]) -> int:
     track_a_entries: list = []
     try:
         if track_a_target > 0:
-            print("[info] collecting Track A Git practical anchors...")
-            track_a_works = collect_track_a_git_works(theme, git_config)
+            print(f"[info] collecting Track A practical anchors (sources: {', '.join(track_a_sources)})...")
+            track_a_works = collect_track_a_works(
+                theme,
+                sources=track_a_sources,
+                git_config=git_config,
+                hf_config=hf_config,
+                on_error=lambda src, exc: print(f"[warn] track-a source '{src}' failed: {exc}", file=sys.stderr),
+            )
             track_a_works = filter_by_used_ids(track_a_works, used_ids, used_titles, used_dois)
             print(f"[ok] Track A candidates: {len(track_a_works)}")
 

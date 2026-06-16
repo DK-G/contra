@@ -51,6 +51,10 @@ def _is_github_work(work: Work) -> bool:
     return work.publication_type == "github_repository"
 
 
+def _is_hf_work(work: Work) -> bool:
+    return (work.publication_type or "").startswith("huggingface_")
+
+
 def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
     """Render the shared 4-part body: 概要 / 関連性 / 役に立つ可能性の仮説 / 注意点."""
     lines = []
@@ -112,6 +116,35 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
                 f"- Third-Party Signal: {third_party}/6 (ext. contributors: {contributors}, non-owner reporters: {reporters})"
             )
         lines.append(f"- Issue Signal: {issue_signal}")
+    elif _is_hf_work(entry.work):
+        score = entry.work.source_meta.get("reliability_score", "—")
+        license_name = entry.work.source_meta.get("license_name") or "—"
+        downloads = entry.work.source_meta.get("downloads", "—")
+        likes = entry.work.source_meta.get("likes", "—")
+        kind = entry.work.source_meta.get("hf_kind", "—")
+        pipeline_tag = entry.work.source_meta.get("pipeline_tag") or "—"
+        adoption = entry.work.source_meta.get("adoption_score")
+        activity = entry.work.source_meta.get("activity_score")
+        license_pts = entry.work.source_meta.get("license_score")
+        theme_fit = entry.work.source_meta.get("theme_fit_score")
+        lines.append(
+            f"- 更新年: {entry.work.year or '—'}  |  種別: {entry.work.venue}/{kind}  |  "
+            f"DL: {downloads}  |  likes: {likes}"
+        )
+        if (
+            adoption is not None
+            and activity is not None
+            and license_pts is not None
+            and theme_fit is not None
+        ):
+            lines.append(
+                f"- Reliability Score: {score}/100 "
+                f"(Adoption: {adoption}/40, Activity: {activity}/25, "
+                f"License: {license_pts}/15, Theme-fit: {theme_fit}/20)  |  License: {license_name}"
+            )
+        else:
+            lines.append(f"- Reliability Score: {score}/100  |  License: {license_name}")
+        lines.append(f"- Task/Pipeline: {pipeline_tag}")
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")

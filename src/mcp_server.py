@@ -25,7 +25,9 @@ from src.pipeline.delegate import (
     finalize_delegated_document,
 )
 from src.pipeline.generate import GenerationConfig, fill_track_entries
-from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
+from src.pipeline.git_collect import GitCollectConfig
+from src.pipeline.hf_collect import HFCollectConfig
+from src.pipeline.track_a import collect_track_a_works, normalize_sources
 from src.core.output_spec import render_markdown
 
 
@@ -109,7 +111,7 @@ class StdinMcpServer:
             },
             {
                 "name": "byrepo_search",
-                "description": "Run the Track A Git practical-anchors pipeline to discover functional GitHub repositories matching the theme, evaluated and ranked by the 4-pillar reliability score.",
+                "description": "Run the Track A practical-anchors pipeline to discover functional implementations, models and datasets matching the theme from GitHub repositories and the Hugging Face Hub, evaluated and ranked by a 0-100 reliability score.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -124,8 +126,9 @@ class StdinMcpServer:
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
-                        "track_a_count": {"type": "integer", "description": "Maximum number of practical repositories to return.", "default": 3},
-                        "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic 4-pillar reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
+                        "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
+                        "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface"]}, "description": "Practical-anchor sources to search: 'github' (repositories) and/or 'huggingface' (Hub models + datasets). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface"]},
+                        "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -325,13 +328,21 @@ class StdinMcpServer:
         theme = _build_theme_input(args)
         target_count = args.get("track_a_count") or 3
         git_config = GitCollectConfig(per_page=target_count * 2, max_repos=target_count * 2)
+        hf_config = HFCollectConfig(limit=target_count * 2, max_works=target_count * 2)
+        sources = normalize_sources(args.get("sources"))
 
-        _log("Byrepo: collecting Git repositories...")
-        works = collect_track_a_git_works(theme, git_config)
-        
+        _log(f"Byrepo: collecting practical anchors (sources: {', '.join(sources)})...")
+        works = collect_track_a_works(
+            theme,
+            sources=sources,
+            git_config=git_config,
+            hf_config=hf_config,
+            on_error=lambda src, exc: _log(f"Byrepo: source '{src}' failed: {exc}"),
+        )
+
         if not works:
             return {
-                "content": [{"type": "text", "text": "条件に合致するGitHubリポジトリが見つかりませんでした。"}],
+                "content": [{"type": "text", "text": "条件に合致する実装・モデル・データセットが見つかりませんでした。"}],
                 "isError": False
             }
 
