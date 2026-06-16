@@ -213,6 +213,22 @@ def build_github_query_specs(theme: ThemeInput, plan: ProblemSearchPlan | None =
         QuerySpec("github_repository", "implementation_evidence", base([anchor, p.artifact_terms[0], "demo", "in:readme"])),
         QuerySpec("github_repository", "evaluation_evidence", base([anchor, p.evidence_terms[0], "benchmark", "in:readme"])),
     ]
+    if len(p.problem_terms) >= 3:
+        specs.append(
+            QuerySpec(
+                "github_repository",
+                "problem_specific_relaxed",
+                base([p.problem_terms[0], p.problem_terms[2]]),
+            )
+        )
+    if len(p.problem_terms) >= 2:
+        specs.append(
+            QuerySpec(
+                "github_repository",
+                "problem_pair_relaxed",
+                base(p.problem_terms[:2]),
+            )
+        )
     if p.ecosystem_terms:
         specs.append(
             QuerySpec(
@@ -225,7 +241,30 @@ def build_github_query_specs(theme: ThemeInput, plan: ProblemSearchPlan | None =
     excludes = " ".join(f"NOT {_quote_if_needed(term)}" for term in theme.keywords.exclude if term.strip())
     out = []
     for spec in specs:
-        query = " ".join([spec.query] + ([excludes] if excludes else []) + [suffix])
+        relaxed = spec.intent.endswith("_relaxed")
+        query = " ".join([spec.query] + ([excludes] if excludes else []) + ([] if relaxed else [suffix]))
+        out.append(QuerySpec(spec.source_type, spec.intent, query))
+    return out
+
+
+def build_github_code_query_specs(theme: ThemeInput, plan: ProblemSearchPlan | None = None) -> List[QuerySpec]:
+    p = plan or build_problem_search_plan(theme)
+    focused_anchor = _anchor_terms(p, theme.scope.field, limit=2)
+    fallback_anchor = p.problem_terms[0] if p.problem_terms else theme.scope.field
+
+    def base(parts: Sequence[str]) -> str:
+        return " ".join(_quote_if_needed(part) for part in parts if part)
+
+    excludes = " ".join(f"NOT {_quote_if_needed(term)}" for term in theme.keywords.exclude if term.strip())
+    specs = [
+        QuerySpec("github_code", "code_example_path", base([focused_anchor, "path:examples"])),
+        QuerySpec("github_code", "code_notebook", base([focused_anchor, "extension:ipynb"])),
+        QuerySpec("github_code", "code_package", base([focused_anchor, "filename:pyproject.toml"])),
+        QuerySpec("github_code", "code_fallback", base([fallback_anchor, p.artifact_terms[0]])),
+    ]
+    out = []
+    for spec in specs:
+        query = " ".join([spec.query] + ([excludes] if excludes else []))
         out.append(QuerySpec(spec.source_type, spec.intent, query))
     return out
 

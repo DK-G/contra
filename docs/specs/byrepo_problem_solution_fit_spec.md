@@ -59,7 +59,8 @@ ThemeInput
 GitHub:
 
 - repository search を使うため、`in:readme`, `stars`, `pushed`, `archived:false` など repository search に合う qualifier を使う。
-- `filename:` や `path:` は code search 向けなので、現行 collector では使わない。
+- strict query で recall が落ちるため、`problem_specific_relaxed` / `problem_pair_relaxed` のような repository fallback query は `pushed` / `in:readme` を外して検索する。
+- `filename:` や `path:` は code search 向けなので、`GITHUB_TOKEN` がある場合のみ補助的に使う。未認証では GitHub code search API が 401 を返すため、repository fallback を主経路にする。
 - `awesome` 系リストは discovery seed としては有用だが、Track A practical anchor そのものではないため、Problem-Solution Fit に上限ペナルティをかける。
 
 GitLab:
@@ -76,6 +77,8 @@ Zenodo / DataCite:
 
 - DOI 付き artifact を重視する。
 - DataCite は同一 DOI の重複候補が返ることがあるため、unified collector で DOI / URL / 正規化 title dedup を必須とする。
+- `resource_type`, files, related identifiers から `artifact_kind_score` を付け、Dataset / Software / Model / files / code link を持つ record を優先する。
+- Text / publication / preprint だけで files や related identifiers がないものは `paper_only` として扱い、Track A では他の artifact より後ろへ回す。
 
 ## 5. Problem-Solution Fit Score
 
@@ -106,6 +109,11 @@ Zenodo / DataCite:
 
 - `problem_solution_fit_score`
 - `problem_match_score`
+- `field_problem_score`
+- `title_problem_score`
+- `description_problem_score`
+- `artifact_kind_score`
+- `artifact_kind_label`
 - `solution_mechanism_score`
 - `execution_evidence_score`
 - `evaluation_evidence_score`
@@ -171,7 +179,12 @@ Zenodo / DataCite は artifact ではなく paper-only record も返す。
 運用ルール:
 
 - files / resource type / related identifiers / GitHub link / dataset/software type があるものを優先。
-- paper-only record は、Track B 論文探索に近いため Track A では低めに扱う。
+- paper-only record は、Track B 論文探索に近いため `paper_only` として risk penalty を加え、artifact / repository 候補の後ろへ回す。
+- `artifact_kind_score` は Problem Match の代替ではなく、同じ Track A 内で「触れる成果物」かを見分けるための補助 rank として使う。
+- DOI source では metadata subject だけの問題一致を弱く扱い、`title` / `description` / `tags` に十分な問題語が見えない候補は `use_problem_search=True` で除外する。
+- `field_problem_score` は title を最重視、description を次点、tags を補助として計算する。
+- DataCite は metadata subject が広いため、`title` / `description` に見える問題語を threshold に使う。multi-term theme では原則2語以上、paper-only record は最大3語まで要求する。
+- Zenodo は files を持つ record が多いため、non-paper artifact は `title` / `description` / `tags` のどれかに1語以上見えれば残す。paper-only record は DataCite より厳しめに扱う。
 
 ### 7.6 クエリ数とレートリミット
 
@@ -192,6 +205,10 @@ source type × intent でクエリを増やすと、API 呼び出しが増える
 - `ProblemSearchPlan`
 - `QuerySpec`
 - GitHub / GitLab / Hugging Face / Zenodo / DataCite の query bundle 対応
+- GitHub repository search の relaxed fallback query
+- 認証時の GitHub code search による repository recovery と code path evidence 保存
+- Zenodo / DataCite の artifact kind scoring と paper-only 降格
+- Zenodo / DataCite の title / description / tags に基づく visible problem match filtering
 - `Problem-Solution Fit Score`
 - `source_meta` への fit score / rationale 保存
 - unified collector の `(Problem-Solution Fit, Reliability)` rank
@@ -200,10 +217,11 @@ source type × intent でクエリを増やすと、API 呼び出しが増える
 未実装:
 
 - LLM による `ProblemSearchPlan` 抽出
-- GitHub code search API による file/path evidence の直接取得
+- GitHub code search API の実ファイル内容・snippet 抽出
 - issue 本文検索による problem symptom evidence
 - maintainer diversity / release recency の詳細 LMA
 - score weight の複数テーマ較正
+- GitHub code search API の `GITHUB_TOKEN` あり smoke test
 
 ## 9. 次の改善候補
 

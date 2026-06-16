@@ -53,6 +53,25 @@ def test_query_specs_are_source_type_and_intent_units():
     assert "medical imaging domain shift" in plain_specs[0].query
 
 
+def test_github_query_specs_include_relaxed_problem_fallbacks():
+    theme = ThemeInput(
+        theme_overview="We need robust BERT text classification under domain shift.",
+        goal="Find reusable benchmark implementations.",
+        why_problem="Domain shift reduces classifier reliability.",
+        approach_type="application",
+        assumptions=[],
+        scope=Scope(field="nlp", scale="small", time_range="recent"),
+        keywords=Keywords(include=["bert", "text classification", "domain shift"], exclude=["course"]),
+    )
+    specs = build_github_query_specs(theme, build_problem_search_plan(theme))
+    by_intent = {spec.intent: spec.query for spec in specs}
+    assert "problem_specific_relaxed" in by_intent
+    assert "problem_pair_relaxed" in by_intent
+    assert "pushed:" not in by_intent["problem_specific_relaxed"]
+    assert "bert" in by_intent["problem_specific_relaxed"]
+    assert "domain shift" in by_intent["problem_specific_relaxed"]
+
+
 def test_score_problem_solution_fit_prefers_problem_solving_evidence():
     theme = _theme()
     plan = build_problem_search_plan(theme)

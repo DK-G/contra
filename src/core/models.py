@@ -100,6 +100,7 @@ class GitRepository:
     solution_mechanism: str = ""
     usable_artifact: str = ""
     visible_constraint: str = ""
+    code_search_paths: List[str] = field(default_factory=list)
     impl_doc_score: int = 0
     lma_score: int = 0
     community_score: int = 0
@@ -130,6 +131,16 @@ class PracticalArtifact:
     license_score: int = 0
     linkage_score: int = 0
     risk_penalty: int = 0
+    artifact_kind_score: int = 0
+    artifact_kind_label: str = ""
+    field_problem_score: int = 0
+    title_problem_score: int = 0
+    description_problem_score: int = 0
+    visible_problem_terms: List[str] = field(default_factory=list)
+    title_description_problem_terms: List[str] = field(default_factory=list)
+    visible_problem_term_count: int = 0
+    title_description_problem_term_count: int = 0
+    problem_term_count: int = 0
     problem_solution_fit_score: int = 0
     problem_match_score: int = 0
     solution_mechanism_score: int = 0

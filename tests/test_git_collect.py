@@ -82,6 +82,23 @@ class _FakeGitHubClient:
                     }
                 ]
             }
+        if path == "/search/code":
+            return {"items": []}
+        if path == "/repos/acme/grid-twin":
+            return {
+                "full_name": "acme/grid-twin",
+                "html_url": "https://github.com/acme/grid-twin",
+                "description": "grid twin toolkit",
+                "stargazers_count": 120,
+                "forks_count": 20,
+                "watchers_count": 10,
+                "open_issues_count": 4,
+                "license": {"spdx_id": "MIT"},
+                "default_branch": "main",
+                "updated_at": "2026-06-01T00:00:00Z",
+                "pushed_at": "2026-06-01T00:00:00Z",
+                "topics": ["digital-twin", "power-grid"],
+            }
         if path == "/repos/acme/grid-twin/readme":
             return {
                 "encoding": "base64",
@@ -101,6 +118,24 @@ class _FakeGitHubClient:
                 },
             ]
         raise AssertionError(path)
+
+
+class _CodeSearchOnlyGitHubClient(_FakeGitHubClient):
+    def get(self, path, params=None):
+        self.calls.append((path, params))
+        if path == "/search/repositories":
+            return {"items": []}
+        if path == "/search/code":
+            return {
+                "items": [
+                    {
+                        "name": "evaluate.py",
+                        "path": "examples/domain_shift/evaluate.py",
+                        "repository": {"full_name": "acme/grid-twin"},
+                    }
+                ]
+            }
+        return super().get(path, params)
 
 
 class _FakeGitLabClient:
@@ -232,6 +267,27 @@ def test_problem_search_queries_are_not_stopped_by_first_full_page():
     search_calls = [params for path, params in client.calls if path == "/search/repositories"]
     assert len(search_calls) > 1
     assert len({params["q"] for params in search_calls}) > 1
+
+
+def test_problem_search_can_recover_github_repo_from_code_search():
+    client = _CodeSearchOnlyGitHubClient()
+    repos = collect_track_a_git_repos(
+        _theme(),
+        config=GitCollectConfig(
+            per_page=1,
+            max_repos=1,
+            include_readme=False,
+            include_issues=False,
+            use_problem_search=True,
+            include_code_search=True,
+        ),
+        client=client,
+    )
+    assert len(repos) == 1
+    assert repos[0].full_name == "acme/grid-twin"
+    assert repos[0].code_search_paths == ["examples/domain_shift/evaluate.py"]
+    work = repository_to_work(repos[0])
+    assert work.source_meta["code_search_paths"] == ["examples/domain_shift/evaluate.py"]
 
 
 def test_collect_track_a_git_works_returns_work_objects():

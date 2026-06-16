@@ -13,6 +13,7 @@ from src.gitlab.client import GitLabClient, quote_project_id
 from src.pipeline.problem_search import (
     ProblemSearchPlan,
     QuerySpec,
+    build_github_code_query_specs,
     build_github_query_specs,
     build_plain_query_specs,
     build_problem_search_plan,
@@ -50,6 +51,7 @@ class GitCollectConfig:
     issue_sample_size: int = 5
     include_gitlab: bool = False
     use_problem_search: bool = False
+    include_code_search: bool = True
 
 
 def _clean_token(token: str) -> str:
@@ -423,7 +425,14 @@ def _apply_problem_solution_fit(
 ) -> GitRepository:
     fit = score_problem_solution_fit(
         theme,
-        text="\n".join([repo.full_name, repo.description, repo.readme_text[:4000]]),
+        text="\n".join(
+            [
+                repo.full_name,
+                repo.description,
+                repo.readme_text[:4000],
+                " ".join(repo.code_search_paths),
+            ]
+        ),
         source_type=f"{repo.provider}_repository",
         tags=repo.topics,
         metadata_text=repo.issue_signal_summary,
@@ -529,6 +538,7 @@ def repository_to_work(repo: GitRepository) -> Work:
             "solution_mechanism": repo.solution_mechanism,
             "usable_artifact": repo.usable_artifact,
             "visible_constraint": repo.visible_constraint,
+            "code_search_paths": repo.code_search_paths,
         },
     )
 
@@ -536,6 +546,10 @@ def repository_to_work(repo: GitRepository) -> Work:
 def _fetch_readme_text(client: GitHubClient, full_name: str) -> str:
     payload = client.get(f"/repos/{full_name}/readme")
     return _decode_readme(payload)
+
+
+def _fetch_repo_detail(client: GitHubClient, full_name: str) -> dict:
+    return client.get(f"/repos/{full_name}")
 
 
 def _fetch_gitlab_readme_text(client: GitLabClient, project_id: str, default_branch: str) -> str:
@@ -574,6 +588,89 @@ def _query_candidate_budget(limit: int, query_specs: Sequence[QuerySpec], use_pr
     if not use_problem_search:
         return limit
     return max(limit, limit * max(len(query_specs), 1))
+
+
+def _append_code_evidence(repo: GitRepository, paths: Sequence[str]) -> GitRepository:
+    repo.code_search_paths = [path for path in paths if path]
+    if repo.code_search_paths:
+        evidence = "\nCode search evidence paths:\n" + "\n".join(repo.code_search_paths[:8])
+        repo.readme_text = "\n\n".join(part for part in [repo.readme_text, evidence] if part)
+    return repo
+
+
+def _collect_github_code_search_repos(
+    theme: ThemeInput,
+    cfg: GitCollectConfig,
+    client: GitHubClient,
+    plan: ProblemSearchPlan,
+    seen: set[str],
+) -> List[GitRepository]:
+    if not cfg.include_code_search:
+        return []
+    if isinstance(client, GitHubClient) and not client.config.token:
+        return []
+    query_specs = build_github_code_query_specs(theme, plan)
+    candidate_budget = _query_candidate_budget(cfg.max_repos, query_specs, True)
+    path_hits: dict[str, List[str]] = {}
+    for spec in query_specs:
+        try:
+            payload = client.get(
+                "/search/code",
+                {
+                    "q": spec.query,
+                    "sort": "indexed",
+                    "order": "desc",
+                    "per_page": cfg.per_page,
+                },
+            )
+        except Exception:
+            continue
+        items = payload.get("items") or []
+        for item in items:
+            repo_info = item.get("repository") or {}
+            full_name = str(repo_info.get("full_name") or "")
+            if not full_name:
+                continue
+            paths = path_hits.setdefault(full_name, [])
+            path = str(item.get("path") or item.get("name") or "")
+            if path and path not in paths:
+                paths.append(path)
+            if len(path_hits) >= candidate_budget:
+                break
+        if len(path_hits) >= candidate_budget:
+            break
+
+    repos: List[GitRepository] = []
+    for full_name, paths in path_hits.items():
+        if full_name in seen:
+            continue
+        try:
+            item = _fetch_repo_detail(client, full_name)
+        except Exception:
+            continue
+        readme_text = ""
+        issue_score = 0
+        issue_signal_summary = ""
+        if cfg.include_readme:
+            try:
+                readme_text = _fetch_readme_text(client, full_name)
+            except Exception:
+                readme_text = ""
+        repo = _append_code_evidence(_normalize_repo(item, readme_text=readme_text), paths)
+        if cfg.include_issues and repo.full_name:
+            try:
+                issue_score, issue_signal_summary = _fetch_issue_signal(
+                    client, repo.full_name, cfg.issue_sample_size, repo.stars
+                )
+            except Exception:
+                issue_score, issue_signal_summary = 0, "issue取得失敗"
+        repo.issue_score = issue_score
+        repo.issue_signal_summary = issue_signal_summary
+        repos.append(_apply_reliability(theme, repo, plan=plan))
+        seen.add(full_name)
+        if len(repos) >= cfg.max_repos:
+            break
+    return repos
 
 
 def collect_track_a_git_repos(
@@ -630,6 +727,8 @@ def collect_track_a_git_repos(
                 break
         if len(repos) >= candidate_budget:
             break
+    if plan:
+        repos.extend(_collect_github_code_search_repos(theme, cfg, gh, plan, seen))
     if cfg.include_gitlab:
         gl_repos = collect_track_a_gitlab_repos(theme, cfg, client=gitlab_client, plan=plan)
         seen = {repo.html_url or repo.full_name for repo in repos}

@@ -173,6 +173,101 @@ def _linkage_score(artifact: PracticalArtifact) -> int:
     return min(score, 20)
 
 
+def _metadata_values(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)) and not value:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False).lower()
+    return str(value).lower()
+
+
+def _contains_problem_term(text: str, term: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (text or "").casefold())
+    cleaned = re.sub(r"\s+", " ", (term or "").casefold().strip())
+    if not normalized or not cleaned:
+        return False
+    if " " in cleaned:
+        pieces = [re.escape(piece) for piece in cleaned.split() if piece]
+        pattern = r"(?<![a-zA-Z0-9])" + r"[^a-zA-Z0-9]+".join(pieces) + r"(?![a-zA-Z0-9])"
+    else:
+        pattern = r"(?<![a-zA-Z0-9])" + re.escape(cleaned) + r"(?![a-zA-Z0-9])"
+    return bool(re.search(pattern, normalized))
+
+
+def _field_problem_scores(
+    artifact: PracticalArtifact,
+    plan: ProblemSearchPlan,
+) -> tuple[int, int, int, List[str], List[str]]:
+    terms = plan.problem_terms
+    title_hits = sum(1 for term in terms if _contains_problem_term(artifact.title, term))
+    description_hits = sum(1 for term in terms if _contains_problem_term(artifact.description, term))
+    tag_text = " ".join(artifact.tags)
+    tag_hits = sum(1 for term in terms if _contains_problem_term(tag_text, term))
+    visible_terms = [
+        term
+        for term in terms
+        if (
+            _contains_problem_term(artifact.title, term)
+            or _contains_problem_term(artifact.description, term)
+            or _contains_problem_term(tag_text, term)
+        )
+    ]
+    title_description_terms = [
+        term
+        for term in terms
+        if _contains_problem_term(artifact.title, term) or _contains_problem_term(artifact.description, term)
+    ]
+    title_score = min(title_hits * 10, 30)
+    description_score = min(description_hits * 6, 18)
+    tag_score = min(tag_hits * 4, 12)
+    return (
+        min(title_score + description_score + tag_score, 40),
+        title_score,
+        description_score,
+        visible_terms,
+        title_description_terms,
+    )
+
+
+def _artifact_kind(artifact: PracticalArtifact) -> tuple[int, str]:
+    if artifact.source == "huggingface":
+        return 15, artifact.source_type
+
+    resource_type = _metadata_values(artifact.metadata.get("resource_type"))
+    related = _metadata_values(
+        artifact.metadata.get("related_identifiers") or artifact.metadata.get("relatedIdentifiers")
+    )
+    files = artifact.metadata.get("files") or []
+    text = f"{artifact.title} {artifact.description} {' '.join(artifact.tags)} {resource_type} {related}".lower()
+
+    score = 0
+    labels: List[str] = []
+    if files:
+        score += 8
+        labels.append("files")
+    if any(term in resource_type for term in ("dataset", "software", "model", "workflow", "physicalobject")):
+        score += 10
+        labels.append(resource_type.strip('"') or "artifact")
+    if any(term in related for term in ("github", "gitlab", "source code", "software", "repository")):
+        score += 5
+        labels.append("code-link")
+    if any(term in text for term in ("dataset", "software", "source code", "repository", "script", "notebook", "model")):
+        score += 4
+        labels.append("artifact-text")
+
+    paper_only = (
+        any(term in resource_type for term in ("text", "publication", "journalarticle", "conferencepaper", "preprint"))
+        and not files
+        and not related
+        and score < 8
+    )
+    if paper_only:
+        return 0, "paper_only"
+    return min(score, 20), ", ".join(labels[:3]) or "metadata"
+
+
 def _risk_penalty(artifact: PracticalArtifact) -> int:
     text = f"{artifact.license_name} {' '.join(artifact.tags)} {artifact.metadata}".lower()
     penalty = 0
@@ -182,10 +277,13 @@ def _risk_penalty(artifact: PracticalArtifact) -> int:
         penalty += 5
     if "deprecated" in text or "yanked" in text:
         penalty += 7
+    if artifact.artifact_kind_label == "paper_only":
+        penalty += 12
     return min(penalty, 20)
 
 
 def _apply_artifact_reliability(artifact: PracticalArtifact) -> PracticalArtifact:
+    artifact.artifact_kind_score, artifact.artifact_kind_label = _artifact_kind(artifact)
     artifact.completeness_score = _completeness_score(artifact)
     artifact.activity_score = _activity_score(artifact.updated_at)
     artifact.adoption_score = _adoption_score(artifact.downloads, artifact.likes)
@@ -198,6 +296,7 @@ def _apply_artifact_reliability(artifact: PracticalArtifact) -> PracticalArtifac
         + artifact.adoption_score
         + artifact.license_score
         + artifact.linkage_score
+        + artifact.artifact_kind_score
         - artifact.risk_penalty
     )
     artifact.reliability_score = max(min(total, 100), 0)
@@ -209,14 +308,25 @@ def _apply_problem_solution_fit(
     artifact: PracticalArtifact,
     plan: Optional[ProblemSearchPlan] = None,
 ) -> PracticalArtifact:
+    p = plan or build_problem_search_plan(theme)
     fit = score_problem_solution_fit(
         theme,
         text="\n".join([artifact.title, artifact.description]),
         source_type=artifact.source_type,
         tags=artifact.tags,
         metadata_text=json.dumps(artifact.metadata, ensure_ascii=False),
-        plan=plan,
+        plan=p,
     )
+    (
+        artifact.field_problem_score,
+        artifact.title_problem_score,
+        artifact.description_problem_score,
+        artifact.visible_problem_terms,
+        artifact.title_description_problem_terms,
+    ) = _field_problem_scores(artifact, p)
+    artifact.visible_problem_term_count = len(artifact.visible_problem_terms)
+    artifact.title_description_problem_term_count = len(artifact.title_description_problem_terms)
+    artifact.problem_term_count = len(p.problem_terms)
     artifact.problem_solution_fit_score = fit.score
     artifact.problem_match_score = fit.problem_score
     artifact.solution_mechanism_score = fit.solution_score
@@ -234,15 +344,32 @@ def _rank_artifacts(artifacts: List[PracticalArtifact], cfg: ArtifactCollectConf
     ranked = sorted(
         artifacts,
         key=lambda item: (
+            item.artifact_kind_label != "paper_only",
+            item.field_problem_score,
             item.problem_match_score,
+            item.artifact_kind_score,
             item.problem_solution_fit_score,
             item.reliability_score,
         ),
         reverse=True,
     )
     if cfg.use_problem_search:
-        return [item for item in ranked if item.problem_match_score > 0]
+        return [item for item in ranked if item.problem_match_score > 0 and _has_visible_problem_match(item)]
     return ranked
+
+
+def _has_visible_problem_match(item: PracticalArtifact) -> bool:
+    if item.source_type not in {"zenodo_record", "datacite_doi"}:
+        return True
+    required_terms = min(2, max(item.problem_term_count, 1))
+    if item.source_type == "datacite_doi":
+        if item.artifact_kind_label == "paper_only":
+            paper_required = min(3, max(item.problem_term_count, 1))
+            return item.field_problem_score >= 20 and item.title_description_problem_term_count >= paper_required
+        return item.field_problem_score >= 10 and item.title_description_problem_term_count >= required_terms
+    if item.artifact_kind_label == "paper_only":
+        return item.field_problem_score >= 20 and item.visible_problem_term_count >= required_terms
+    return item.field_problem_score >= 10 and item.visible_problem_term_count >= 1
 
 
 def _query_candidate_budget(limit: int, query_specs: List[QuerySpec], use_problem_search: bool) -> int:
@@ -283,6 +410,16 @@ def artifact_to_work(artifact: PracticalArtifact) -> Work:
             "license_score": artifact.license_score,
             "linkage_score": artifact.linkage_score,
             "risk_penalty": artifact.risk_penalty,
+            "artifact_kind_score": artifact.artifact_kind_score,
+            "artifact_kind_label": artifact.artifact_kind_label,
+            "field_problem_score": artifact.field_problem_score,
+            "title_problem_score": artifact.title_problem_score,
+            "description_problem_score": artifact.description_problem_score,
+            "visible_problem_terms": artifact.visible_problem_terms,
+            "title_description_problem_terms": artifact.title_description_problem_terms,
+            "visible_problem_term_count": artifact.visible_problem_term_count,
+            "title_description_problem_term_count": artifact.title_description_problem_term_count,
+            "problem_term_count": artifact.problem_term_count,
             "problem_solution_fit_score": artifact.problem_solution_fit_score,
             "problem_match_score": artifact.problem_match_score,
             "solution_mechanism_score": artifact.solution_mechanism_score,

@@ -281,7 +281,10 @@ class StdinMcpServer:
         works = sorted(
             works,
             key=lambda w: (
+                0 if w.source_meta.get("artifact_kind_label") == "paper_only" else 1,
+                w.source_meta.get("field_problem_score", 0),
                 w.source_meta.get("problem_match_score", 0),
+                w.source_meta.get("artifact_kind_score", 0),
                 w.source_meta.get("problem_solution_fit_score", 0),
                 w.source_meta.get("reliability_score", 0),
             ),

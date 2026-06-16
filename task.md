@@ -32,6 +32,17 @@
 
 ## 未着手 (To Do)
 
+- [ ] byrepo 名称変更の再検討（`byrepo` のまま継続するか、`byanchor` 等へ変更するかを判断する）
+- [ ] byrepo の `ProblemSearchPlan` 抽出を、現行ヒューリスティックに加えて LLM 支援でも生成できるようにする
+- [x] byrepo の GitHub recall 改善として、repository relaxed fallback と認証時 code search repository recovery を追加する
+- [ ] byrepo に GitHub code search の実ファイル内容・snippet 取得を追加し、`path:examples` / `filename:pyproject.toml` / `Dockerfile` / package metadata などの実装証拠を直接拾う
+- [ ] byrepo に issue / discussion 検索を追加し、問題症状・制約・失敗パターンを `visible_constraint` に反映する
+- [ ] `GITHUB_TOKEN` ありの環境で GitHub code search smoke test を実行し、実APIでの recall 改善を確認する
+- [x] Zenodo / DataCite の resource type / files / related identifiers から artifact kind を評価し、paper-only record を降格する
+- [x] Zenodo / DataCite の title / description / tags の問題語重み付けを改善し、metadata-only problem match を除外する
+- [x] Zenodo / DataCite の広すぎる dataset record を複数テーマで確認し、source type 別 visible problem threshold を調整する
+- [x] byrepo の Problem-Solution Fit / DOI visible match threshold を複数テーマ（医療画像、エネルギー、ロボティクス、NLP）で比較・較正する
+- [ ] byrepo の Problem-Solution Fit weight を GitHub / Hugging Face も含めた複数テーマ統合結果で再較正する
 - [ ] Track A Git practical anchors に discussion 観測や score 内訳表示の改善を追加する
 - [x] LLMモックを使った `fill_track_entries` の統合テストを追加する
 - [x] `roadmap.md` の Phase 1 現況を、Step 9 / R2 / R3 / R5 / M3 実装済みの状態に同期する

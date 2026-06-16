@@ -30,6 +30,14 @@ def _norm_doi(doi: Optional[str]) -> str:
     return text
 
 
+def _track_a_kind_priority(work: Work) -> int:
+    if (work.publication_type or "").endswith("_repository"):
+        return 1
+    if work.source_meta.get("artifact_kind_label") == "paper_only":
+        return 0
+    return 1
+
+
 def collect_track_a_practical_works(
     theme: ThemeInput,
     config: PracticalCollectConfig,
@@ -45,7 +53,10 @@ def collect_track_a_practical_works(
     for work in sorted(
         works,
         key=lambda w: (
+            _track_a_kind_priority(w),
+            w.source_meta.get("field_problem_score", 0),
             w.source_meta.get("problem_match_score", 0),
+            w.source_meta.get("artifact_kind_score", 0),
             w.source_meta.get("problem_solution_fit_score", 0),
             w.source_meta.get("reliability_score", 0),
         ),

@@ -93,6 +93,123 @@ class _FakeDataCiteClient:
         }
 
 
+class _MixedDataCiteClient:
+    def get(self, path, params=None):
+        assert path == "/dois"
+        return {
+            "data": [
+                {
+                    "id": "10.0000/paper-only",
+                    "attributes": {
+                        "doi": "10.0000/paper-only",
+                        "titles": [{"title": "Medical Imaging Domain Shift Review Paper"}],
+                        "descriptions": [{"description": "A text publication about medical imaging domain shift."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/paper-only",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "medical imaging"}, {"subject": "domain shift"}],
+                        "types": {"resourceTypeGeneral": "Text"},
+                    },
+                },
+                {
+                    "id": "10.0000/dataset",
+                    "attributes": {
+                        "doi": "10.0000/dataset",
+                        "titles": [{"title": "Medical Imaging Domain Shift Benchmark Dataset"}],
+                        "descriptions": [{"description": "Dataset and scripts for medical imaging domain shift evaluation."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/dataset",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "medical imaging"}, {"subject": "domain shift"}],
+                        "types": {"resourceTypeGeneral": "Dataset"},
+                        "relatedIdentifiers": [
+                            {"relatedIdentifier": "https://github.com/acme/med-shift", "relationType": "IsSupplementTo"}
+                        ],
+                    },
+                },
+            ]
+        }
+
+
+class _FieldWeightedDataCiteClient:
+    def get(self, path, params=None):
+        assert path == "/dois"
+        return {
+            "data": [
+                {
+                    "id": "10.0000/metadata-only",
+                    "attributes": {
+                        "doi": "10.0000/metadata-only",
+                        "titles": [{"title": "Generic Benchmark Dataset"}],
+                        "descriptions": [{"description": "Dataset release with benchmark metadata."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/metadata-only",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "medical imaging"}, {"subject": "domain shift"}],
+                        "types": {"resourceTypeGeneral": "Dataset"},
+                    },
+                },
+                {
+                    "id": "10.0000/title-visible",
+                    "attributes": {
+                        "doi": "10.0000/title-visible",
+                        "titles": [{"title": "Medical Imaging Domain Shift Dataset"}],
+                        "descriptions": [{"description": "Benchmark data and scripts for evaluation."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/title-visible",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "benchmark"}],
+                        "types": {"resourceTypeGeneral": "Dataset"},
+                    },
+                },
+            ]
+        }
+
+
+class _MetadataOnlyDataCiteClient:
+    def get(self, path, params=None):
+        assert path == "/dois"
+        return {
+            "data": [
+                {
+                    "id": "10.0000/metadata-only",
+                    "attributes": {
+                        "doi": "10.0000/metadata-only",
+                        "titles": [{"title": "Generic Benchmark Dataset"}],
+                        "descriptions": [{"description": "Dataset release with benchmark metadata."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/metadata-only",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "medical imaging"}, {"subject": "domain shift"}],
+                        "types": {"resourceTypeGeneral": "Dataset"},
+                    },
+                }
+            ]
+        }
+
+
+class _SingleVisibleTermDataCiteClient:
+    def get(self, path, params=None):
+        assert path == "/dois"
+        return {
+            "data": [
+                {
+                    "id": "10.0000/single-visible",
+                    "attributes": {
+                        "doi": "10.0000/single-visible",
+                        "titles": [{"title": "Digital Twin Dataset"}],
+                        "descriptions": [{"description": "Dataset release for simulation artifacts."}],
+                        "publicationYear": 2026,
+                        "url": "https://doi.org/10.0000/single-visible",
+                        "rightsList": [{"rightsIdentifier": "cc-by-4.0"}],
+                        "subjects": [{"subject": "power grid"}, {"subject": "fault recovery"}],
+                        "types": {"resourceTypeGeneral": "Dataset"},
+                    },
+                }
+            ]
+        }
+
+
 def test_collect_huggingface_artifacts_maps_model_card_signals():
     artifacts = collect_huggingface_artifacts(
         _theme(),
@@ -136,6 +253,57 @@ def test_collect_track_a_artifact_works_deduplicates_zenodo_datacite_doi():
     assert {work.publication_type for work in works} == {"hf_model", "zenodo_record"}
     assert all(work.source_meta["reliability_score"] > 0 for work in works)
     assert all("problem_solution_fit_score" in work.source_meta for work in works)
+
+
+def test_datacite_prefers_dataset_artifact_over_paper_only_record():
+    artifacts = collect_datacite_artifacts(
+        _theme(),
+        ArtifactCollectConfig(per_page=5, max_items=2, use_problem_search=True),
+        client=_MixedDataCiteClient(),
+    )
+    assert len(artifacts) == 2
+    assert artifacts[0].doi == "10.0000/dataset"
+    assert artifacts[0].artifact_kind_score > artifacts[1].artifact_kind_score
+    assert artifacts[1].artifact_kind_label == "paper_only"
+    assert artifacts[1].risk_penalty >= 12
+
+
+def test_datacite_prefers_title_description_problem_match_over_metadata_only():
+    artifacts = collect_datacite_artifacts(
+        _theme(),
+        ArtifactCollectConfig(per_page=5, max_items=2, use_problem_search=True),
+        client=_FieldWeightedDataCiteClient(),
+    )
+    assert len(artifacts) == 1
+    assert artifacts[0].doi == "10.0000/title-visible"
+    assert artifacts[0].title_problem_score > 0
+
+
+def test_datacite_filters_metadata_only_problem_match_in_problem_search():
+    artifacts = collect_datacite_artifacts(
+        _theme(),
+        ArtifactCollectConfig(per_page=5, max_items=2, use_problem_search=True),
+        client=_MetadataOnlyDataCiteClient(),
+    )
+    assert artifacts == []
+
+
+def test_datacite_requires_multiple_visible_problem_terms_for_multi_term_theme():
+    energy_theme = ThemeInput(
+        theme_overview="Use digital twins to improve power-grid fault recovery.",
+        goal="Find practical datasets and software artifacts.",
+        why_problem="Operational constraints block deployment.",
+        approach_type="application",
+        assumptions=[],
+        scope=Scope(field="energy systems", scale="small", time_range="recent"),
+        keywords=Keywords(include=["digital twin", "power grid", "fault recovery"], exclude=[]),
+    )
+    artifacts = collect_datacite_artifacts(
+        energy_theme,
+        ArtifactCollectConfig(per_page=5, max_items=2, use_problem_search=True),
+        client=_SingleVisibleTermDataCiteClient(),
+    )
+    assert artifacts == []
 
 
 def test_collect_track_a_artifact_works_can_use_problem_search_queries():

@@ -7,6 +7,183 @@
 
 ---
 
+## 2026-06-16（CL-0081） byrepo DOI threshold 複数テーマ較正
+
+### 概要
+* 医療画像 / エネルギー / ロボティクス / NLP の4テーマで Zenodo / DataCite を smoke 比較し、DOI source の visible problem match threshold を source 別に較正した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+DOI source の visible problem match threshold が厳しすぎる / 緩すぎる問題を、複数テーマの実API smoke で較正する。
+
+# 2. 変更概要 (必須)
+title_description_problem_terms / title_description_problem_term_count を追加。
+DataCite では metadata subject ではなく title / description に見える問題語数で threshold を判定するようにした。
+DataCite は multi-term theme で原則2語以上、paper-only record は最大3語まで要求。
+Zenodo は files を持つ artifact が多いため、non-paper artifact は title / description / tags のどれかに1語以上見えれば残す source-specific threshold とした。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（34件）。
+医療画像 / エネルギー / ロボティクス / NLP の4テーマで Zenodo / DataCite を実API smoke 比較した。
+
+# 4. 既知の課題・リスク (必須)
+DataCite は厳しく絞られるため recall が下がる可能性がある。
+Zenodo は recall 維持のため1語 visible match を許容しており、source-specific な追加較正余地が残る。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0080） byrepo DOI field-level 問題一致改善
+
+### 概要
+* Zenodo / DataCite の metadata subject だけで問題一致した広い候補を抑えるため、title / description / tags に基づく field-level problem score を追加した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+Zenodo / DataCite の metadata subject だけで問題一致した広い候補を抑え、title / description / tags に問題語が見える候補を優先する。
+
+# 2. 変更概要 (必須)
+PracticalArtifact に field_problem_score / title_problem_score / description_problem_score を追加。
+DOI source では title / description / tags の問題語一致を rank に入れ、metadata-only problem match を use_problem_search=True で除外するようにした。
+unified collector と MCP byrepo_search の rank でも field_problem_score を見るようにした。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（33件）。
+同じ BERT テーマで DataCite を確認し、metadata-only の広い candidate が除外されることを確認。
+
+# 4. 既知の課題・リスク (必須)
+DataCite の候補が厳しく絞られるため、複数テーマで source type 別 threshold の較正が必要。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0079） byrepo DOI artifact 精密化
+
+### 概要
+* Zenodo / DataCite の DOI record で paper-only record と実 artifact が混ざる問題を抑えるため、artifact kind scoring と paper-only 降格を追加した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+Zenodo / DataCite の DOI record で paper-only record と実 artifact が混ざる問題を抑え、Track A practical anchor を「触れる成果物」寄りにする。
+
+# 2. 変更概要 (必須)
+PracticalArtifact に artifact_kind_score / artifact_kind_label を追加。
+resource_type, files, related identifiers, code link, dataset/software/model 語から artifact kind を評価。
+Text / publication / preprint だけで files や related identifiers がないものを paper_only として risk penalty を加え、artifact / unified / MCP rank で後ろに回すようにした。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（31件）。
+同じ BERT テーマで DataCite を確認し、paper_only record が non-paper artifact より後ろに回ることを確認。
+
+# 4. 既知の課題・リスク (必須)
+DataCite では Dataset record でもテーマから広い候補が残るため、title / description の問題語重み付け改善は別タスクとして残す。
+artifact_kind_score は触れる成果物かどうかの補助評価であり、問題一致そのものの代替ではない。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0078） byrepo GitHub recall 改善
+
+### 概要
+* `use_problem_search=True` で GitHub repository が 0 件になりやすいケースを緩和するため、repository relaxed fallback と認証時 code search repository recovery を追加した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+use_problem_search=True の厳格な問題一致フィルタにより、GitHub repository が 0 件になりやすいケースを緩和する。
+
+# 2. 変更概要 (必須)
+GitHub repository search に problem_specific_relaxed / problem_pair_relaxed fallback query を追加。
+GITHUB_TOKEN がある場合のみ GitHub code search を補助的に使い、code search result の repository を詳細取得して通常の repository scoring / ranking に流すようにした。
+code search path を GitRepository.code_search_paths と Work.source_meta["code_search_paths"] に保存し、Problem-Solution Fit の text evidence に含めるようにした。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（30件）。
+GitHub code search 実API確認: 未認証では 401 になることを確認し、token なしでは code search をスキップする仕様にした。
+
+# 4. 既知の課題・リスク (必須)
+GITHUB_TOKEN ありの code search smoke test は未実行。
+code search は repository recovery と path evidence までで、ファイル内容・snippet の直接抽出は未実装。
+unauthenticated GitHub repository search は rate limit に到達しやすく、実APIでの旧新比較は rate limit 回復後または token ありで再確認が必要。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
+## 2026-06-16（CL-0077） byrepo 残タスク整理
+
+### 概要
+* 会話上で後回し・未実装となっている byrepo 改善項目を `task.md` の To Do に整理した。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+これまでの会話で明示的に後回し・未実装となっている byrepo 改善項目を、次回以降に拾えるよう task.md に整理する。
+
+# 2. 変更概要 (必須)
+変更ファイル: task.md, diff.md, Changelog.md
+byrepo 名称変更、LLM 支援 ProblemSearchPlan、GitHub code search、issue / discussion 検索、GitHub recall 改善、Zenodo / DataCite 精密化、複数テーマでの score 較正を To Do に追加した。
+
+# 3. 確認方法 (必須)
+Get-Content -Path task.md
+
+# 4. 既知の課題・リスク (必須)
+今回はタスク整理のみで、実装変更は行っていない。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
 ## 2026-06-16（CL-0076） byrepo Problem-Solution Fit 実装
 
 ### 概要
