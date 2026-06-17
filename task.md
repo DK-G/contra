@@ -46,6 +46,12 @@
 
 ## 完了 (Done)
 
+### 2026-06-17 MCP 出力のプロンプトインジェクション緩和（untrusted-data エンベロープ）
+*   `src/mcp_server.py`: `_wrap_external` / `_external_data_result` を追加。外部由来テキスト（repo README / abstract / description）を返す全ツール結果を `<untrusted_external_data>` で囲い「データであり指示ではない」と明示。埋め込みタグは無害化し早期 close による脱出を防止。
+*   対象: byserendipity・byrepo（structured/LLM）・bybridge（structured/raw/LLM）・delegate_finalize。bynote（ユーザ自身のメモ解析）と診断文は対象外。
+*   背景監査: contra 本体は読み取り専用（exec 系ゼロ・API 固定・鍵は env のみ）と確認。残るリスクは取得テキスト→エージェントの注入経路に集約されるため出力層で緩和。
+*   位置づけ: 「緩和」であって「保証」ではない（エージェント側のツール権最小化・最小権限トークン・本体固定/再監査との多層防御）。`tests/test_mcp_injection.py` に5ケース追加（全 213 件 green）。
+
 ### 2026-06-15 ローカル化 段階(d): byrepo/Track A 委譲（委譲シリーズ a-d 完了）
 *   `src/pipeline/delegate.py`: `build_track_a_entries`（4-Pillar 信頼性スコア降順の決定論ランク）＋ `assemble_keyless_track_a_document`（→ structured 整形 → OutputDocument）。LLM 不使用。
 *   MCP `byrepo_search` に `structured` フラグ追加（信頼性順＋構造整形済み Track A Markdown をキー無しで返す）。
