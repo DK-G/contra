@@ -87,6 +87,20 @@ def _get_source_meta(work: Dict[str, Any]) -> Dict[str, Any]:
             meta["pdf_url"] = str(ploc.get("pdf_url"))
         if ploc.get("landing_page_url"):
             meta["landing_page_url"] = str(ploc.get("landing_page_url"))
+    # primary_topic.field: the work's home Field in OpenAlex's active Topic hierarchy
+    # (Domain>Field>Subfield>Topic). Stored bare ('17') for home-domain resolution/exclusion
+    # (src/pipeline/query.dominant_field_ids); concepts are deprecated so this is the durable
+    # domain signal. Non-breaking source_meta enrichment, no new Work field.
+    ptopic = work.get("primary_topic") or {}
+    if isinstance(ptopic, dict):
+        fld = ptopic.get("field") or {}
+        if isinstance(fld, dict):
+            fid = fld.get("id")
+            if fid:
+                meta["primary_topic_field_id"] = str(fid).rsplit("/", 1)[-1]
+            fname = fld.get("display_name")
+            if fname:
+                meta["primary_topic_field_name"] = str(fname)
     locations = work.get("locations") or []
     if isinstance(locations, list):
         for loc in locations:
