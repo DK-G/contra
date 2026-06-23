@@ -168,7 +168,7 @@
 
 ### 2026-06-01 全ブランチ統合・構成整備
 *   全ブランチ（claude/contra-step9-gate-tuning・claude/implementation-status-701DK）を main にマージし origin へ push。
-*   構成点検レポート作成（`docs/structure_inspection_2026-06-01.md`）。
+*   構成点検レポート作成（`docs/archive/structure_inspection_2026-06-01.md`）。
 *   **A（ドキュメント同期）**: README.md 全面改稿（contrarian CLI・Track B 中核・実装済み機能）。spec.md: ディレクトリ図・生成モード・§6 落とし穴（実装済みに訂正）・§7 決定ログ（R2/R3/R5/M3）・§8 未解決リスト を現状に同期。
 *   **B（デッドコード削除）**: 旧 surface×structure スコアリング・classify_stub・generate_entries（3行生成）・build_minimal_document・domain_distance 等を削除。未使用 import を除去。
 *   **C（ドキュメント重複解消）**: docs/ 直下の重複 3 ファイルを削除（正本は docs/specs/ に統一）。
@@ -178,7 +178,7 @@
 *   生成済み `output/` を Git 管理対象から外し、今後の実行結果が公開差分に混ざらないよう `.gitignore` に追加。
 
 ### インフラ（再利用可能・変更不要）
-*   入力仕様の最小セットを確定（`docs/input_min_spec.md`）
+*   入力仕様の最小セットを確定（`docs/archive/input_min_spec.md`）
 *   入力→内部表現のスキーマ定義（`src/core/input_schema.py`, `src/core/models.py`）
 *   OpenAlex APIクライアント実装（`src/openalex/client.py`, `parser.py`）
 *   OpenAlex検索クエリ設計・拡張（include/exclude/field/goalの重み付け）
