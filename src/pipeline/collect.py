@@ -9,6 +9,13 @@ from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig
 from src.openalex.parser import normalize_results
 from src.pipeline.filter import filter_retracted, filter_has_abstract, limit_count
+from src.pipeline.query import (
+    ROUTE_FILTER,
+    ROUTE_SEARCH,
+    StructuredQuery,
+    structured_query_from_theme,
+    structured_query_variants,
+)
 
 
 @dataclass
@@ -24,49 +31,36 @@ class Collector:
         self.config = config or CollectConfig()
         self.client = OpenAlexClient(OpenAlexConfig(mailto=self.config.mailto))
 
-    def _query_from_theme(self, theme: ThemeInput) -> str:
-        # Minimal query builder: use include keywords if present; otherwise fallback.
-        tokens: List[str] = []
-        tokens.extend(theme.keywords.include)
-        if not tokens:
-            if theme.scope.field:
-                tokens.append(theme.scope.field)
-            if theme.goal:
-                tokens.append(theme.goal)
-        return " ".join(t for t in tokens if t)
-
-    def _query_variants(self, theme: ThemeInput) -> List[str]:
-        tokens = [t for t in theme.keywords.include if t]
-        variants: List[str] = []
-        if tokens:
-            for k in range(len(tokens), 0, -1):
-                variants.append(" ".join(tokens[:k]))
-        fallback: List[str] = []
-        if theme.scope.field:
-            fallback.append(theme.scope.field)
-        if theme.goal:
-            fallback.append(theme.goal)
-        if fallback:
-            variants.append(" ".join(fallback))
-        seen = set()
-        ordered: List[str] = []
-        for q in variants:
-            if q and q not in seen:
-                seen.add(q)
-                ordered.append(q)
-        return ordered
-
     def collect(self, theme: ThemeInput) -> List[Work]:
-        query = self._query_from_theme(theme)
-        works: List[Work] = []
-        for page in range(1, self.config.max_pages + 1):
-            payload = self.client.get(
-                {"search": query, "per-page": self.config.per_page, "page": page}
-            )
-            works.extend(normalize_results(payload))
-            if len(works) >= self.config.per_page * page:
-                continue
-        return works
+        sq = structured_query_from_theme(theme)
+        return _collect_with_fallback(
+            self.client, sq, per_page=self.config.per_page, max_pages=self.config.max_pages
+        )
+
+
+def _page_through(client, sq: StructuredQuery, *, per_page: int, max_pages: int) -> List[Work]:
+    """Page through one StructuredQuery, stopping at the first empty page."""
+    works: List[Work] = []
+    for page in range(1, max_pages + 1):
+        payload = client.get(sq.to_params(per_page=per_page, page=page))
+        page_works = normalize_results(payload)
+        works.extend(page_works)
+        if not page_works:
+            break
+    return works
+
+
+def _collect_with_fallback(client, sq: StructuredQuery, *, per_page: int, max_pages: int) -> List[Work]:
+    """Run a field-scoped query; if a ``filter`` route returns nothing, retry as generic search.
+
+    This is the recall floor: a precise ``title_and_abstract.search`` can legitimately miss a
+    thin theme, so an empty filter result transparently falls back to the legacy generic-search
+    behaviour instead of returning zero candidates.
+    """
+    works = _page_through(client, sq, per_page=per_page, max_pages=max_pages)
+    if not works and sq.route == ROUTE_FILTER:
+        works = _page_through(client, sq.fallback(), per_page=per_page, max_pages=max_pages)
+    return works
 
 
 def collect_candidates(theme: ThemeInput, config: Optional[CollectConfig] = None) -> List[Work]:
@@ -87,19 +81,24 @@ def collect_and_filter(
     collected: List[Work] = []
     seen_ids: Set[str] = set()
 
-    base_queries = (
-        collector._query_variants(theme) if cfg.relax_search else [collector._query_from_theme(theme)]
+    base_variants = (
+        structured_query_variants(theme) if cfg.relax_search
+        else [structured_query_from_theme(theme)]
     )
+    # Assumption queries are sentence-like LLM output, so they run as generic full-text
+    # (route="search") rather than being squeezed into a field-scoped phrase filter.
+    base_anchors = {sq.anchor_string() for sq in base_variants}
     assumption_queries = generate_assumption_queries(theme) if use_assumption_queries else []
-    all_queries = base_queries + [q for q in assumption_queries if q not in base_queries]
+    assumption_variants = [
+        StructuredQuery(anchor_terms=[q], route=ROUTE_SEARCH)
+        for q in assumption_queries
+        if q and q not in base_anchors
+    ]
 
-    for query in all_queries:
-        works: List[Work] = []
-        for page in range(1, cfg.max_pages + 1):
-            payload = collector.client.get(
-                {"search": query, "per-page": cfg.per_page, "page": page}
-            )
-            works.extend(normalize_results(payload))
+    for sq in base_variants + assumption_variants:
+        works = _collect_with_fallback(
+            collector.client, sq, per_page=cfg.per_page, max_pages=cfg.max_pages
+        )
         works = filter_retracted(works)
         if require_abstract:
             works = filter_has_abstract(works)
@@ -398,20 +397,21 @@ def collect_citation_candidates(
         return []
 
     exclude: Set[str] = {s.id for s in seeds} | set(used_ids or set())
-    filter_parts = ["cites:" + "|".join(bridges)]
-    for cid in _seed_l0_concept_ids(seeds):
-        filter_parts.append(f"concepts.id:!{cid}")
-    filter_parts.append("type:article")
-    filter_parts.append(f"referenced_works_count:<{max_refs}")
-    filter_str = ",".join(filter_parts)
+    # Build the home-domain-excluding bridge filter through the shared StructuredQuery renderer
+    # (one filter-construction path for every collection route). Home exclusion stays on the
+    # seeds' L0 concepts here; switching it to primary_topic.field exclusion is Phase 2.
+    sq = StructuredQuery(
+        cites=bridges,
+        exclude_concept_ids=_seed_l0_concept_ids(seeds),
+        work_type="article",
+        max_referenced_works=max_refs,
+    )
 
     collector = Collector(cfg)
     out: List[Work] = []
     seen: Set[str] = set()
     for page in range(1, cfg.max_pages + 1):
-        payload = collector.client.get(
-            {"filter": filter_str, "per-page": cfg.per_page, "page": page}
-        )
+        payload = collector.client.get(sq.to_params(per_page=cfg.per_page, page=page))
         new = 0
         for w in filter_retracted(normalize_results(payload)):
             if w.id in exclude or w.id in seen:

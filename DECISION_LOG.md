@@ -4,6 +4,64 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — Phase 1 仕上げ：Topic ID 解決インフラ＋citation 統合。「フィールド強制」は実測で棄却
+
+**決定**: Phase 1 の Topic ID 解決を、**収集にフィールドを強制する形では実装しない**。実 OpenAlex 計測で「anchor 精密な種/Track-A クエリへの field-REQUIRE は net-negative（精度は上がらず recall だけ落ちる）」と判明したため。代わりに **解決インフラ**（parser の primary_topic 抽出＋静的/データ駆動の Field 解決＋`StructuredQuery` の field include/**exclude** 対応）を整備し、その正しい消費先＝**ホームドメイン除外**（Phase 2/3）へ向けて用意した。あわせて citation 経路を共有ビルダへ統合した。
+
+**根拠（実測）**: テーマ「graph neural network × drug discovery」で、anchor-only（`title_and_abstract.search`）の上位25件中 **24件が既に CS**＝anchor の語自体がドメインを内包。`primary_topic.field.id:17` を足すと total **2,377→1,695（約30%減）**で、減少分は他分野へクロス掲載された論文＝**contra が狙う異分野クロス掲載を削る**だけで上位の的中は不変。よって field-REQUIRE をデフォルト適用しない。
+
+**実装**:
+- `src/openalex/parser.py`: `primary_topic.field`（id を bare `17` 化＋name）を `source_meta` へ抽出（非破壊・新 Work フィールド無し）。concepts は OpenAlex で非推奨のため、これが恒久的なドメイン信号。
+- `src/pipeline/query.py`: `OPENALEX_FIELDS`（26 Field の id↔name）、`resolve_field_ids`（`theme.scope.field` 等を静的・無ネットワークで Field id 群へ。エイリアス＋単語境界マッチで `chemistry`⊂`biochemistry` 等の語中誤一致を回避）、`dominant_field_ids`（種プールの primary_topic からデータ駆動のホーム Field を多数決）。`StructuredQuery` に `exclude_field_ids`（→`primary_topic.field.id:!`）と `max_referenced_works`（→`referenced_works_count:<N`）を追加。
+- `src/pipeline/collect.py`: `collect_citation_candidates` のフィルタ手組みを `StructuredQuery`（cites＋exclude_concept_ids＋type＋max_referenced_works）へ統合。**フィルタ構築を全収集経路で単一ビルダに集約**（二重実装の乖離防止＝委譲設計と同じ philosophy）。挙動・出力フィルタ文字列は保存（citation の home 除外は当面 L0 concepts のまま。primary_topic.field 除外への移行は Phase 2）。
+
+**検証**: 実データで parser が 25/25 に `primary_topic_field_id` を付与、`dominant_field_ids`＝`17`、静的 `resolve_field_ids("computer science")`＝`["17"]` と一致。`tests/test_query.py` に5ケース追加（exclude_field_ids/max_referenced_works 描画・resolve・dominant・parser 抽出）。全 **227 件 green**。
+
+**未着手 / 次**: citation/Track B のホームドメイン除外を L0 concepts から `dominant_field_ids`（primary_topic.field 除外）へ移行（Phase 2 で behavior 変更を伴うため分離）。続いて Phase 2 本体（co-citation＋betweenness centrality＋PRF）→ Phase 3（byserendipity）。
+
+---
+
+## 2026-06-23 — Phase 1（共有クエリ精度レイヤ）実装完了：収集を汎用 `search=` からフィールド限定 `filter=` 主体へ
+
+**決定**: 同日の戦略（直下エントリ）の Phase 1 を実装した。新規 `src/pipeline/query.py` に `StructuredQuery` を定義し、収集経路を OpenAlex の汎用 `search=`（全文・浅い共起・10倍課金）から **`title_and_abstract.search` のフィールド限定 `filter=`** 主体へ切替えた。
+
+**実装**:
+- `src/pipeline/query.py`（新規）: `StructuredQuery`（`anchor_terms` / `field_ids`=Topic Field id / `concept_ids` / `exclude_concept_ids` / `cites` / `year_from`-`year_to` / `work_type` / `route`）＋ `to_params()`（filter 主体描画）＋ `fallback()`（recall 安全な generic-search 双子）＋ `sanitize_filter_value`（`,|!:` の混入で filter 文法が壊れるのを防ぐ）＋ `structured_query_from_theme` / `structured_query_variants`（旧 `_query_variants` のプレフィックス梯子を踏襲）。**前方互換フック**: `route` に `semantic`（Phase 3 HyDE 用、現状は generic search へ描画）、`cites`/`exclude_concept_ids`（Phase 2 引用ブリッジ用）を最初から保持。
+- `src/pipeline/collect.py`: 旧 `Collector._query_from_theme`/`_query_variants` を撤去し、`collect()`・`collect_and_filter()` を `StructuredQuery` 経由へ。新ヘルパ `_collect_with_fallback`＝**filter で 0 件なら generic search へ透過フォールバック（recall 床の保護）**。assumption クエリは文章状の LLM 出力ゆえ `route="search"` のまま。OpenAlex client は無改修（任意 params を通す）。
+- スコープを最小に保つため Topic ID 解決（テーマ→Field id）は本スライス対象外（`field_ids` フックのみ用意）。シード由来 ID 解決は後続。
+
+**根拠 / 検証（実データ）**: テーマ「graph neural network × drug discovery」で実 OpenAlex 比較 = **filter（field-scoped）total 2,377 vs generic search total 68,288（約28倍タイト）**、上位の的中は保持・generic 側は本文共起ノイズ（題/抄に創薬を含まない量子化学論文）が3位に混入。フィールド限定＞汎用全文を実証。
+
+**可逆性 / 安全性**: クエリ構築層の差し替えのみ（client・選別・スコア設計値は不変、`spec.md` 禁則順守）。filter 0 件は generic へフォールバックするので recall は旧挙動を下回らない。filter 主体化で OpenAlex クレジット減。
+
+**検証**: `tests/test_query.py` 新設（15 ケース: filter 描画/sanitize/年境界/route 別/fallback/梯子/collect の filter-first＋空時 search フォールバック）。全 **223 件 green**（旧 191→+test_query 等）。
+
+**未着手 / 次**: 同スライスの全経路展開（assumption 以外も含む点検）、Topic ID 解決（テーマ/シード→Field id で `field_ids` を実投入）。その後 Phase 2（bybridge: co-citation＋betweenness＋PRF）→ Phase 3（byserendipity: 標的化抽象＋HyDE/QA-Expand＋round-trip 検証）。
+
+---
+
+## 2026-06-23 — 情報収集クエリ精度の向上を「全経路の基盤レイヤ」として先行導入し、その上に bybridge / byserendipity を載せる（戦略確定・実装未着手）
+
+**決定**: contra の **論文検索クエリそのものの精度** を上げるための方針を確定した。選別段（purpose_sim × mechanism_dist）・生成3部は過去 bynote で成熟済みだが、**収集クエリ**は専用調査が無かった。これを **Phase 1 = 全 collect 経路（Track A シード / Track B / bybridge シード / byrepo）が呼ぶ共有クエリ精度レイヤ**として先に導入し、その上に **Phase 2 = bybridge**、**Phase 3 = byserendipity** の精度向上を載せる。実装は未着手。
+
+**根拠**: bynote 調査（NotebookLM Deep Research 77ソース、ノート `Contra Search Query Precision` `145af5df`、一次資料 `docs/research/search_query_precision_strategy.md`）＋ Consensus / alphaXiv の実走実測。ボトルネックは**語彙でなくクエリの構造化と接地**だと判明:
+- **フィールド限定 ＞ 汎用全文**: OpenAlex 公式が「`search=` は語レベルの浅い一致、`filter=`（Topic 等）で正確に絞れ」と明言。さらに `search=` は `filter=` の **10倍課金**。現状の `{"search": kw}` 丸投げは精度・コスト両面で不利。
+- **near-purpose / far-mechanism はクエリ時にも適用すべき**: cross-domain 類推検索（Analogy Search Engine / ARCS）の確立原理だが、contra は選別でしか使っていない。
+- **LLM 自由生成クエリは byserendipity の使用域でこそ失敗**: IR 研究が名指しする失敗域＝「未知（hallucinated entities）」「曖昧（popularity bias で人気解釈へ収束）」が遠ドメイン生成の条件そのもの。
+
+**処方（要点）**:
+1. **Phase 1**: 新規 `src/pipeline/query.py` に `StructuredQuery`（anchor_terms / Topic Field・Subfield ID / year / route）＋ OpenAlex filter 主体の param 描画。`collect.py` の `_query_from_theme`/`_query_variants` を置換。Topic ID は近傍シードの `primary_topic` から解決（名前 filter は曖昧ゆえ ID 化）。client 改修不要。
+2. **Phase 2（bybridge）**: 現行 bibliographic coupling（共有 referenced_works）は妥当。**Document Co-Citation Analysis ＋ betweenness centrality** で cross-domain ブリッジを順位付け、PRF で bridge クエリ拡張。古典引用指標は強紐帯偏重で弱紐帯ブリッジを取りこぼす → **byserendipity 併用が正当**。
+3. **Phase 3（byserendipity）**: ①「テーマ語排除・全抽象化」を **標的化抽象（機能語へ再記述＋構造制約は保持）**へ是正（過抽象が現ノイズ源）②HyDE/Query2doc 接地＋OpenAlex semantic search ③QA-Expand 多面化で popularity-bias を回避 ④**実行前検証**（round-trip / 非空・home収束チェック / quality-gate でベースラインへフォールバック）。選別段とスコア設計値（0.20/0.50/0.35 等）は不変（`spec.md` 禁則順守）。
+
+**ユーザー合意**: 「情報収集の精度向上は本プロジェクト全体に転用可能。それの導入の後に bybridge / byserendipity の2つを進めたい」との方針に沿い、基盤先行の3フェーズ順を確定。
+
+**トレードオフ / 可逆性**: 可逆性高（Phase 1 はクエリ構築層の差し替え、選別/スコア設計値不変）。filter 主体化で OpenAlex クレジット減。HyDE/QA-Expand は LLM 呼び出し増（委譲経路でエージェント側に吸収可）。標的化抽象の構造制約のさじ加減・round-trip 閾値は校正対象。
+
+**未着手 / 次**: Phase 1 の `query.py` 実装着手（ユーザー承認後）。
+
+---
+
 ## 2026-06-15 — ローカル化 段階(d): byrepo/Track A の委譲（キー無し構造組み立て）。委譲シリーズ(a-d)完了
 
 **決定**: Track A（byrepo）のキー無し経路を実装し、委譲シリーズ(a)〜(d)を完了とする。

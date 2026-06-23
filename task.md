@@ -24,6 +24,8 @@
 
 ## 未着手 (To Do)
 
+- [ ] 検索クエリ精度 Phase 2（bybridge）: co-citation 解析＋betweenness centrality で異分野ブリッジを順位付け、PRF で bridge クエリ拡張、ホームドメイン除外を L0 concepts から `dominant_field_ids`（primary_topic.field 除外）へ移行
+- [ ] 検索クエリ精度 Phase 3（byserendipity）: 標的化抽象（機能語へ再記述＋構造制約保持）、HyDE/Query2doc 接地＋OpenAlex semantic search、QA-Expand 多面化、round-trip / quality-gate の実行前検証
 - [x] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
     - [x] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数 `apply_post_gates` として切り出し post-gate 化
@@ -45,6 +47,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-23 検索クエリ精度 Phase 1（基盤レイヤ・bynote 145af5df 由来）
+*   bynote（NotebookLM Deep Research 77ソース＋Consensus/alphaXiv 実測）で「収集クエリそのものの精度」の戦略を確定。`docs/research/search_query_precision_strategy.md` ＋ DECISION_LOG 3エントリ。
+*   新規 `src/pipeline/query.py`: `StructuredQuery`（フィールド限定 `title_and_abstract.search` 主体描画＋recall 安全な generic-search fallback＋`sanitize_filter_value`）。`collect.py` を汎用 `search=` から filter 主体へ配線し、`collect_citation_candidates` を共有 `StructuredQuery` ビルダへ統合（フィルタ構築を全経路で単一化・挙動保存）。
+*   Topic ID 解決インフラ: parser `primary_topic.field`→`source_meta`、`OPENALEX_FIELDS`/`resolve_field_ids`（静的・単語境界）/`dominant_field_ids`（データ駆動ホーム）、`StructuredQuery.exclude_field_ids`/`max_referenced_works`。**field-REQUIRE は実測 net-negative（GNN×創薬で 2,377→1,695・異分野クロス掲載を削る）ゆえデフォルト不採用**、消費先＝ホームドメイン除外（Phase 2/3）。
+*   実データ検証: filter で候補 **68,288→2,377（約28倍タイト）**・上位的中保持、parser 25/25 に field_id・`dominant_field_ids`=17。`tests/test_query.py` 20ケース・全 **227 green**。
 
 ### 2026-06-15 ローカル化 段階(d): byrepo/Track A 委譲（委譲シリーズ a-d 完了）
 *   `src/pipeline/delegate.py`: `build_track_a_entries`（4-Pillar 信頼性スコア降順の決定論ランク）＋ `assemble_keyless_track_a_document`（→ structured 整形 → OutputDocument）。LLM 不使用。
