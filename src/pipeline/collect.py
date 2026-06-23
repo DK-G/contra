@@ -9,10 +9,12 @@ from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig
 from src.openalex.parser import normalize_results
 from src.pipeline.filter import filter_retracted, filter_has_abstract, limit_count
+from src.pipeline.bridges import annotate_bridge_signals
 from src.pipeline.query import (
     ROUTE_FILTER,
     ROUTE_SEARCH,
     StructuredQuery,
+    dominant_field_ids,
     structured_query_from_theme,
     structured_query_variants,
 )
@@ -397,12 +399,15 @@ def collect_citation_candidates(
         return []
 
     exclude: Set[str] = {s.id for s in seeds} | set(used_ids or set())
-    # Build the home-domain-excluding bridge filter through the shared StructuredQuery renderer
-    # (one filter-construction path for every collection route). Home exclusion stays on the
-    # seeds' L0 concepts here; switching it to primary_topic.field exclusion is Phase 2.
+    # Home-domain exclusion (Phase 2): prefer the seeds' dominant primary_topic Field — OpenAlex's
+    # active taxonomy and *less* aggressive than L0 concepts (it only drops papers whose PRIMARY
+    # field is home, keeping cross-listed cross-domain work). Fall back to L0 concepts when the
+    # seeds carry no primary_topic (older data) so exclusion is never silently lost.
+    home_field_ids = dominant_field_ids(seeds)
     sq = StructuredQuery(
         cites=bridges,
-        exclude_concept_ids=_seed_l0_concept_ids(seeds),
+        exclude_field_ids=home_field_ids,
+        exclude_concept_ids=[] if home_field_ids else _seed_l0_concept_ids(seeds),
         work_type="article",
         max_referenced_works=max_refs,
     )
@@ -420,9 +425,13 @@ def collect_citation_candidates(
             out.append(w)
             new += 1
             if len(out) >= max_count:
+                annotate_bridge_signals(out, bridges)
                 return out
         if new == 0:
             break
+    # Stamp co-citation strength + cross-community betweenness (Phase 2) so every consumer
+    # ranks bridge candidates off one signal (src/pipeline/bridges.py). Zero extra API cost.
+    annotate_bridge_signals(out, bridges)
     return out
 
 

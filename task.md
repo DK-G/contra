@@ -24,7 +24,7 @@
 
 ## 未着手 (To Do)
 
-- [ ] 検索クエリ精度 Phase 2（bybridge）: co-citation 解析＋betweenness centrality で異分野ブリッジを順位付け、PRF で bridge クエリ拡張、ホームドメイン除外を L0 concepts から `dominant_field_ids`（primary_topic.field 除外）へ移行
+- [x] 検索クエリ精度 Phase 2（bybridge）: co-citation 強度＋betweenness 代理（分野多様性）でブリッジ再ランク、ホームドメイン除外を L0 concepts → `dominant_field_ids`（primary_topic.field 除外）へ移行（**PRF は bybridge の異分野目的と衝突のため不採用＝Track A 収集へ再配置**）
 - [ ] 検索クエリ精度 Phase 3（byserendipity）: 標的化抽象（機能語へ再記述＋構造制約保持）、HyDE/Query2doc 接地＋OpenAlex semantic search、QA-Expand 多面化、round-trip / quality-gate の実行前検証
 - [x] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
@@ -47,6 +47,12 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-23 検索クエリ精度 Phase 2（bybridge: co-citation＋betweenness）
+*   新規 `src/pipeline/bridges.py`（全純関数・API 追加コスト 0）: `shared_bridge_count`（co-citation 強度）／`bridge_field_diversity`＋`annotate_bridge_signals`（各 bridge を引用する候補の primary_topic Field 多様性＝betweenness 代理を source_meta に刻む）／`bridge_rank_key`（betweenness→共有数→被引用）。mcp/delegate の重複 `shared_bridge_count` を一本化。
+*   ホームドメイン除外を L0 concepts → `dominant_field_ids`（primary_topic.field 除外、無ければ concepts フォールバック）へ移行。`collect_citation_candidates` が収集時に候補を注記。delegate/mcp を betweenness 優先ランク＋「異分野 N」表示へ更新。
+*   PRF は bybridge の異分野目的と衝突のため不採用（Track A 収集へ再配置）。
+*   実データ検証: seeds home=CS+Materials を除外し Biochem/Medicine 候補、betweenness=5（共有 ML 基礎文献で 5 分野連結）が上位。`tests/test_bridges.py` 6ケース＋citation field 除外テスト・全 **233 green**。
 
 ### 2026-06-23 検索クエリ精度 Phase 1（基盤レイヤ・bynote 145af5df 由来）
 *   bynote（NotebookLM Deep Research 77ソース＋Consensus/alphaXiv 実測）で「収集クエリそのものの精度」の戦略を確定。`docs/research/search_query_precision_strategy.md` ＋ DECISION_LOG 3エントリ。

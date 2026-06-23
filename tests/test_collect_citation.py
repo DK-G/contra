@@ -126,6 +126,27 @@ def test_collect_citation_candidates_builds_cites_filter(monkeypatch):
     assert [w.id for w in out] == ["WX"]   # seed WA excluded, WX returned
 
 
+def test_collect_citation_candidates_excludes_by_dominant_field_when_available(monkeypatch):
+    # Phase 2: seeds carrying a dominant primary_topic Field exclude the home domain by
+    # primary_topic.field (less aggressive, non-deprecated) INSTEAD OF L0 concepts.
+    client = _FakeClient()
+    _patch_collector(monkeypatch, client)
+
+    def _seed_with_field(wid, refs, fid):
+        s = _seed(wid, refs, ["C1"])
+        s.source_meta = {"primary_topic_field_id": fid}
+        return s
+
+    seeds = [_seed_with_field("WA", ["W100", "W101"], "17"),
+             _seed_with_field("WB", ["W100"], "17")]
+    out = collect_citation_candidates(seeds, CollectConfig(max_pages=2), max_count=10)
+
+    flt = client.calls[0]["filter"]
+    assert "primary_topic.field.id:!17" in flt
+    assert "concepts.id:!" not in flt          # field exclusion replaces concept exclusion
+    assert "shared_bridge_count" in out[0].source_meta   # candidates annotated (Phase 2)
+
+
 def test_collect_citation_candidates_excludes_seeds_and_used(monkeypatch):
     # Make the fake return a seed id and a used id; both must be filtered out.
     class _C(_FakeClient):

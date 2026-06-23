@@ -26,13 +26,9 @@ from src.core.models import (
     Work,
 )
 from src.pipeline.classify import apply_post_gates
+from src.pipeline.bridges import annotate_bridge_signals, bridge_rank_key, shared_bridge_count
 from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
 from src.pipeline.generate import GenerationConfig, fill_track_entries
-
-
-def _shared_bridge_count(work: Work, bridges: Set[str]) -> int:
-    """How many of the work's references sit in the shared citation-bridge pool."""
-    return sum(1 for ref in (work.referenced_works or []) if ref in bridges)
 
 
 def _l01_jaccard(work: Work, profile: Optional[ThemeProfile]) -> float:
@@ -64,7 +60,11 @@ def select_bridge_candidates_raw(
     pool = list(cands)
     if drop_near_domain and profile is not None and not profile.is_empty():
         pool = [w for w in pool if not near_domain_signal(w, profile)]
-    pool.sort(key=lambda w: _shared_bridge_count(w, bridges), reverse=True)
+    # Rank by cross-community betweenness first, then co-citation strength (Phase 2):
+    # a candidate routing through a bridge that connects many fields beats one whose shared
+    # bridge only circulates inside a single field, even at equal shared-bridge count.
+    annotate_bridge_signals(pool, bridges)
+    pool.sort(key=bridge_rank_key, reverse=True)
     return pool[: max(count, 0)]
 
 
@@ -84,7 +84,8 @@ def build_bridge_entries(
     chosen = select_bridge_candidates_raw(cands, bridges, profile=profile, count=count)
     entries: List[OutputEntry] = []
     for work in chosen:
-        shared = _shared_bridge_count(work, bridges)
+        shared = shared_bridge_count(work, bridges)
+        betweenness = int((work.source_meta or {}).get("bridge_betweenness", 0) or 0)
         distance = round(1.0 - _l01_jaccard(work, profile), 2)
         entries.append(
             OutputEntry(
@@ -93,7 +94,7 @@ def build_bridge_entries(
                 abstract_summary="",
                 caution="",
                 track="B",
-                label=f"引用ブリッジ（共有 {shared} 本）",
+                label=f"引用ブリッジ（共有 {shared} 本 / 異分野 {betweenness}）",
                 distance_score=distance,
                 structure_score=0.0,
                 serendipity_score=0.0,

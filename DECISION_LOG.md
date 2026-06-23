@@ -4,6 +4,28 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — Phase 2（bybridge）：co-citation 強度＋betweenness 代理でブリッジ再ランク、ホーム除外を primary_topic.field へ移行
+
+**決定**: bybridge の引用ブリッジ精度を上げる。(1) **co-citation 強度**（候補が踏む共有 bridge 数）と (2) **betweenness 代理**（各 bridge を引用する候補の primary_topic Field 多様性＝分断コミュニティの連結度）を新規 `src/pipeline/bridges.py` に集約し、候補注記＋**betweenness 優先**の再ランクに使う。(3) ホームドメイン除外を L0 concepts から **`dominant_field_ids`（primary_topic.field 除外）**へ移行（seeds に primary_topic が無い場合のみ concepts へフォールバック）。**PRF は不採用**。
+
+**根拠**: NotebookLM 調査（Document Co-Citation Analysis＋betweenness centrality が異分野ブリッジ＝"concept symbol" を特定／古典引用指標は強紐帯偏重で弱紐帯ブリッジを取りこぼす）。実データ（GNN×分子ML、seeds home=CS+Materials Science）で、betweenness=5 の候補（SCANPY 単一細胞 / 皮膚がん DL / BioBERT など生医学への転用）が上位＝**共有 ML 基礎文献を介した遠分野連結**を正しく surface。
+
+**実装**:
+- `src/pipeline/bridges.py`（新規・全純関数・API 追加コスト 0）: `shared_bridge_count`／`bridge_field_diversity`／`annotate_bridge_signals`（source_meta に `shared_bridge_count`＋`bridge_betweenness` を刻む）／`bridge_rank_key`（betweenness→共有数→被引用）／`rank_bridge_candidates`。mcp と delegate に重複していた `shared_bridge_count` を一本化。
+- `src/pipeline/collect.py`: `collect_citation_candidates` のホーム除外を `dominant_field_ids(seeds)` へ（無ければ concepts フォールバック）＋収集時に候補を注記。
+- `src/pipeline/delegate.py`: `select_bridge_candidates_raw` を betweenness 優先で再ランク、entry ラベルに「異分野 N」を追加。
+- `src/mcp_server.py`: `_execute_bybridge` のローカル `shared_bridge_count` を撤去し共有モジュールへ、raw／entry 出力に betweenness を表示。
+
+**PRF 不採用の根拠**: bybridge は cross-domain が目的。上位シードの salient 語で `cites:` クエリを拡張すると**ホームへ引き戻す**ため逆効果。PRF はホーム語彙拡張が recall を上げる Track A シード収集向き（そちらへ再配置）。
+
+**可逆性 / 安全性**: 注記は source_meta 追記のみ（非破壊）。除外移行は field 優先・concepts フォールバックで除外を喪失しない。field 除外は L0 concepts より緩く（PRIMARY field のみ除外）cross 掲載を残す＝Phase 1 の知見と整合。
+
+**検証**: 実データで home（CS+Materials）を除外し Biochem/Medicine 候補を取得、betweenness ランク機能。`tests/test_bridges.py` 6ケース＋citation の field 除外テスト追加・全 **233 green**。
+
+**未着手 / 次**: PRF を Track A 収集へ（別途）。Phase 3（byserendipity: 標的化抽象＋HyDE/QA-Expand＋round-trip 検証）。
+
+---
+
 ## 2026-06-23 — Phase 1 仕上げ：Topic ID 解決インフラ＋citation 統合。「フィールド強制」は実測で棄却
 
 **決定**: Phase 1 の Topic ID 解決を、**収集にフィールドを強制する形では実装しない**。実 OpenAlex 計測で「anchor 精密な種/Track-A クエリへの field-REQUIRE は net-negative（精度は上がらず recall だけ落ちる）」と判明したため。代わりに **解決インフラ**（parser の primary_topic 抽出＋静的/データ駆動の Field 解決＋`StructuredQuery` の field include/**exclude** 対応）を整備し、その正しい消費先＝**ホームドメイン除外**（Phase 2/3）へ向けて用意した。あわせて citation 経路を共有ビルダへ統合した。

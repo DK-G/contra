@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from src.core.input_schema import validate_and_normalize
 from src.core.models import Keywords, Scope, ThemeInput
+from src.pipeline.bridges import bridge_rank_key, shared_bridge_count
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
     CollectConfig,
@@ -461,9 +462,6 @@ class StdinMcpServer:
                 "isError": False
             }
 
-        def shared_bridge_count(work) -> int:
-            return sum(1 for r in (work.referenced_works or []) if r in bridges)
-
         diag_line = f"収集診断: シード {len(seeds)} 件 / bridge プール {len(bridges)} 本 / 交差候補 {len(cands)} 件"
 
         if raw_only:
@@ -481,10 +479,11 @@ class StdinMcpServer:
                     "isError": False
                 }
             lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
-            ranked = sorted(cands, key=shared_bridge_count, reverse=True)
+            ranked = sorted(cands, key=bridge_rank_key, reverse=True)
             for i, w in enumerate(ranked[:max(target_count, 10)], 1):
+                betw = int((w.source_meta or {}).get("bridge_betweenness", 0) or 0)
                 lines.append(f"{i}. {w.title}")
-                lines.append(f"   - 共有bridge: {shared_bridge_count(w)}本 | 年: {w.year} | 掲載: {w.venue} | 被引用: {w.cited_by_count}")
+                lines.append(f"   - 共有bridge: {shared_bridge_count(w, bridges)}本 | 異分野ブリッジ: {betw} | 年: {w.year} | 掲載: {w.venue} | 被引用: {w.cited_by_count}")
                 lines.append(f"   - リンク: {w.id}")
             return {
                 "content": [{"type": "text", "text": "\n".join(lines)}],
@@ -513,7 +512,7 @@ class StdinMcpServer:
         for i, entry in enumerate(entries, 1):
             lines.append(f"### {i}. {entry.work.title}")
             lines.append(f"- **接続点**: {entry.label}")
-            lines.append(f"- **共有bridge**: {shared_bridge_count(entry.work)}本")
+            lines.append(f"- **共有bridge**: {shared_bridge_count(entry.work, bridges)}本 / 異分野ブリッジ: {int((entry.work.source_meta or {}).get('bridge_betweenness', 0) or 0)}")
             lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 構造: {entry.structure_score:.2f})")
             lines.append(f"- 年: {entry.work.year} | 掲載: {entry.work.venue} | 被引用: {entry.work.cited_by_count}")
             lines.append(f"- リンク: {entry.work.id}")
