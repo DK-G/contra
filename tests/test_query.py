@@ -92,11 +92,32 @@ def test_search_route_emits_generic_search():
     assert "filter" not in params
 
 
-def test_semantic_route_currently_renders_as_search():
-    # Forward-compat: the semantic endpoint is not wired yet (Phase 3), so it must stay
-    # recall-safe by executing as generic search rather than emitting an unknown param.
-    sq = StructuredQuery(anchor_terms=["foo"], route="semantic")
-    assert sq.to_params() == {"per-page": 50, "page": 1, "search": "foo"}
+def test_semantic_route_renders_search_semantic_endpoint():
+    # Phase 3: the semantic route is wired to OpenAlex's real embedding/ANN endpoint
+    # `search.semantic` (verified 2026-06-23). It must NOT emit a generic `search` param.
+    sq = StructuredQuery(anchor_terms=["how do proteins fold into native structure"],
+                         route="semantic")
+    params = sq.to_params(per_page=50)
+    assert params["search.semantic"] == "how do proteins fold into native structure"
+    assert "search" not in params and "filter" not in params
+
+
+def test_semantic_route_clamps_per_page_and_composes_safe_filters_only():
+    # search.semantic is capped at 50 and composes with type/year, but 400s on a field-id
+    # negation — so per-page is clamped to 50 and only type/year render; field exclusion is
+    # deliberately dropped (handled client-side).
+    sq = StructuredQuery(
+        anchor_terms=["coupled oscillator synchronization"],
+        route="semantic",
+        work_type="article",
+        year_from=2015,
+        year_to=2024,
+        exclude_field_ids=["31"],   # must NOT leak into the semantic filter
+    )
+    params = sq.to_params(per_page=200)
+    assert params["per-page"] == 50
+    assert params["filter"] == "publication_year:2015-2024,type:article"
+    assert "primary_topic.field.id" not in params["filter"]
 
 
 def test_fallback_is_recall_safe_search_twin():
