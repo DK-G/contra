@@ -74,7 +74,7 @@
 /data                 # 入力JSONサンプル（theme.json等）
 /output               # 生成結果（run_*/brainstorm_output.md, gemini_materials.jsonl）
 /scripts              # 実行スクリプト（run_cli.ps1等）
-/docs                 # 仕様メモ（input_min_spec.md, output_markdown_spec.md等）
+/docs                 # 仕様・参照（INDEX.md, specs/, research/, quality_eval.md 等）
 ```
 
 ### データの流れ
