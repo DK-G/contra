@@ -9,18 +9,21 @@ import traceback
 from typing import Any, Dict, List, Optional
 
 from src.core.input_schema import validate_and_normalize
-from src.core.models import Keywords, Scope, ThemeInput
+from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
 from src.pipeline.bridges import bridge_rank_key, shared_bridge_count
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
     CollectConfig,
     _bridge_pool_from_seeds,
+    _norm_doi,
+    _norm_title,
     collect_and_filter,
     collect_citation_candidates,
     collect_track_b,
     collect_track_b_from_spec,
 )
 from src.pipeline.concept_distance import build_theme_profile
+from src.pipeline.history import compute_theme_hash, load_history, save_history
 from src.pipeline.delegate import (
     assemble_keyless_bridge_document,
     assemble_keyless_track_a_document,
@@ -83,6 +86,49 @@ def _build_theme_input(args: Dict[str, Any]) -> ThemeInput:
     return validate_and_normalize(raw_payload)
 
 
+# --- Cross-run history dedup (parity with the CLI) --------------------------
+# The CLI excludes already-surfaced papers per theme and records adopted ones (src/pipeline/
+# history.py). The MCP/delegation path historically did not, so re-running a theme repeated the
+# same report. These helpers wire the same per-theme history into the MCP handlers, keyed by
+# compute_theme_hash(theme_overview). `no_history` disables it; optional used_ids/used_titles/
+# used_dois args merge agent-managed exclusions on top of the file history.
+
+def _history_exclusions(theme: ThemeInput, args: Dict[str, Any], *, history_dir=None):
+    """Load prior-run exclusions (file history ∪ agent-supplied) unless ``no_history``."""
+    used_ids = {str(x) for x in (args.get("used_ids") or [])}
+    used_titles = {str(x) for x in (args.get("used_titles") or [])}
+    used_dois = {str(x) for x in (args.get("used_dois") or [])}
+    if not args.get("no_history"):
+        h = load_history(compute_theme_hash(theme.theme_overview),
+                         **({} if history_dir is None else {"history_dir": history_dir}))
+        used_ids |= set(h.used_ids)
+        used_titles |= set(h.used_titles)
+        used_dois |= set(h.used_dois)
+    return used_ids, used_titles, used_dois
+
+
+def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_dir=None) -> int:
+    """Persist the adopted entries' id / norm_title / DOI to the theme's history (unless disabled).
+
+    Mirrors the CLI's post-run ``save_history`` so the next run on the same theme excludes what
+    was just surfaced. Returns the number of ids recorded.
+    """
+    if args.get("no_history") or not entries:
+        return 0
+    ids = [e.work.id for e in entries if e.work and e.work.id]
+    if not ids:
+        return 0
+    titles = [_norm_title(e.work.title) for e in entries if e.work]
+    dois = [_norm_doi(e.work.doi) for e in entries if e.work and e.work.doi]
+    theme_hash = compute_theme_hash(theme.theme_overview)
+    save_history(
+        ThemeHistory(theme_hash=theme_hash, used_ids=[], generated_at=""),
+        ids, titles, dois,
+        **({} if history_dir is None else {"history_dir": history_dir}),
+    )
+    return len(ids)
+
+
 class StdinMcpServer:
     def __init__(self) -> None:
         self.initialized = False
@@ -111,7 +157,11 @@ class StdinMcpServer:
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
                         "raw_only": {"type": "boolean", "description": "Key-free DELEGATION (no contra API key): contra runs only OpenAlex semantic retrieval and returns raw candidate MATERIALS for the CALLING AGENT to score, then pass to delegate_finalize. Requires `facets` (and ideally `structure`). The agent does the targeted-abstraction + scoring + prose with its OWN inference, so no LLM is billed.", "default": False},
                         "structure": {"type": "string", "description": "When raw_only: the theme's relational structure re-described in DOMAIN-NEUTRAL function words (keep the structural constraints, drop the theme's surface topic words). Concatenated with each facet's pseudo-abstract for semantic retrieval."},
-                        "facets": {"type": "array", "description": "When raw_only: up to 3 DISTINCT distant-domain facets the agent generated via targeted abstraction. contra runs OpenAlex search.semantic on each (no LLM) and excludes the home domain client-side.", "items": {"type": "object", "properties": {"domain": {"type": "string", "description": "The distant domain/discipline."}, "pseudo_abstract": {"type": "string", "description": "A short (~80-word) hypothetical abstract of a paper in THAT domain exhibiting the shared structure, in that domain's own vocabulary."}}}}
+                        "facets": {"type": "array", "description": "When raw_only: up to 3 DISTINCT distant-domain facets the agent generated via targeted abstraction. contra runs OpenAlex search.semantic on each (no LLM) and excludes the home domain client-side.", "items": {"type": "object", "properties": {"domain": {"type": "string", "description": "The distant domain/discipline."}, "pseudo_abstract": {"type": "string", "description": "A short (~80-word) hypothetical abstract of a paper in THAT domain exhibiting the shared structure, in that domain's own vocabulary."}}}},
+                        "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
+                        "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
+                        "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
+                        "used_dois": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed DOI exclusions, merged with the file history."}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -174,7 +224,9 @@ class StdinMcpServer:
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
                         "structured": {"type": "boolean", "description": "When raw_only is true, format the deterministic bridge candidates into the full 4-part Track B document (key-free structured assembly; no LLM). The agent can then refine the prose/scores.", "default": False},
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
-                        "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0}
+                        "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
+                        "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, cross-domain candidates already surfaced for this theme are excluded and adopted ones recorded (data/history/), so re-runs return NEW papers.", "default": False},
+                        "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -206,6 +258,7 @@ class StdinMcpServer:
                         "count": {"type": "integer", "description": "Max entries to emit (cap, not target).", "default": 1},
                         "output_floor": {"type": "number", "description": "Output-quality floor for serendipity.", "default": 0.35},
                         "emit_fallback": {"type": "boolean", "description": "If false, a run with nothing above output_floor reports saturation instead of a weak single-best (M3).", "default": True},
+                        "no_history": {"type": "boolean", "description": "Skip recording adopted papers to this theme's history. By default the entries that pass the post-gate are recorded (data/history/, keyed by theme_overview hash) so the matching raw-collect on the next run excludes them.", "default": False},
                         "candidates": {
                             "type": "array",
                             "description": (
@@ -283,10 +336,14 @@ class StdinMcpServer:
         target_count = args.get("track_b_count") or 1
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.0
 
-        # Run pipeline
+        # Run pipeline (exclude papers already surfaced for this theme in prior runs)
+        used_ids, used_titles, used_dois = _history_exclusions(theme, args)
         _log("Byserendipity: collecting candidates...")
-        works = collect_track_b(theme, CollectConfig(), model=model)
-        
+        works = collect_track_b(
+            theme, CollectConfig(), model=model,
+            used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
+        )
+
         # Build theme profile & citation expansion
         _log("Byserendipity: classifying and selecting serendipity candidates...")
         theme_profile = build_theme_profile(works)
@@ -307,7 +364,8 @@ class StdinMcpServer:
         # Fill text
         _log("Byserendipity: generating text for entries...")
         entries = fill_track_entries(entries, GenerationConfig(llm_model=model), theme=theme, mode="llm")
-        
+        _history_adopt(theme, args, entries)   # record surfaced papers so the next run won't repeat them
+
         # Build markdown response
         lines = []
         for i, entry in enumerate(entries, 1):
@@ -356,21 +414,27 @@ class StdinMcpServer:
                 "content": [{"type": "text", "text": "有効な facets がありません（各 facet に非空の pseudo_abstract が必要）。"}],
                 "isError": False,
             }
+        used_ids, used_titles, used_dois = _history_exclusions(theme, args)
         _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
-        works = collect_track_b_from_spec(theme, spec, CollectConfig())
+        works = collect_track_b_from_spec(
+            theme, spec, CollectConfig(),
+            used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
+        )
         if not works:
             return {
                 "content": [{"type": "text", "text": (
-                    f"semantic 収集で候補が0件でした（facet {len(spec.facets)} 件・ホーム収束/非空ゲートで全滅）。"
-                    "facet をより遠い/具体的なドメインへ見直してください。"
+                    f"semantic 収集で候補が0件でした（facet {len(spec.facets)} 件・ホーム収束/非空ゲート"
+                    f"または履歴除外 {len(used_ids)} 件で全滅）。facet をより遠い/具体的なドメインへ見直すか、"
+                    "テーマが飽和している可能性があります。"
                 )}],
                 "isError": False,
             }
         materials = [material_from_work(w) for w in works]
+        hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
         diag = (
             f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
-            "（semantic・ホームドメイン除外済・キー無し）。各候補を purpose_sim/mechanism_dist 等で採点し、"
-            "同じ材料を echo して delegate_finalize へ渡してください。"
+            f"（semantic・ホームドメイン除外済・キー無し{hist_note}）。各候補を purpose_sim/mechanism_dist 等で"
+            "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
         )
         return {
             "content": [{"type": "text", "text": diag + "\n\n" + json.dumps(materials, ensure_ascii=False)}],
@@ -506,8 +570,10 @@ class StdinMcpServer:
 
         bridges = set(_bridge_pool_from_seeds(seeds, cap=50))
 
+        # Exclude cross-domain candidates already surfaced for this theme in prior runs.
+        used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
-        cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60)
+        cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60, used_ids=used_ids)
         if not cands:
             return {
                 "content": [{"type": "text", "text": f"citation 2-hop で交差候補が見つかりませんでした（シード {len(seeds)} 件 / bridge {len(bridges)} 本。ホームドメイン除外で全滅した可能性があります）。"}],
@@ -559,6 +625,7 @@ class StdinMcpServer:
 
         _log("Bybridge: generating text for entries...")
         entries = fill_track_entries(entries, GenerationConfig(llm_model=model), theme=theme, mode="llm")
+        _history_adopt(theme, args, entries)   # record surfaced papers so the next run won't repeat them
 
         lines = [diag_line, ""]
         for i, entry in enumerate(entries, 1):
@@ -614,6 +681,11 @@ class StdinMcpServer:
                 "content": [{"type": "text", "text": f"{diag_line}\n\n決定論ゲートを通過した候補がありませんでした（飽和または全棄却）。"}],
                 "isError": False
             }
+        # Record adopted papers so the next run on this theme excludes them (closes the
+        # delegation loop's cross-run dedup: raw-collect excludes, finalize records).
+        adopted = _history_adopt(theme, args, entries)
+        if adopted:
+            diag_line += f" / 履歴記録 {adopted} 件"
         md = render_markdown(doc)
         return {
             "content": [{"type": "text", "text": f"{diag_line}\n\n{md}"}],
