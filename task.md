@@ -48,6 +48,11 @@
 
 ## 完了 (Done)
 
+### 2026-06-23 横断重複回避（履歴 dedup）を MCP/委譲経路へ配線
+*   「同じレポートを繰り返さない」履歴 dedup（history.py）は **CLI 専用**で MCP/委譲経路に未配線だった（再実行で同じ論文が再出＝ユーザー指摘で発覚）。`mcp_server` に `compute_theme_hash(theme_overview)` キーで配線。
+*   ヘルパ `_history_exclusions`（file history∪agent供給 used_ids/titles/dois・`no_history`で無効）／`_history_adopt`（post-gate通過分の id/正規化title/DOI を save_history）。収集時に除外（`_byserendipity_raw`/自己完結byserendipity/bybridge）、採用時に記録（自己完結＋`delegate_finalize`）。委譲は収集と finalize が別呼び出しでも同一ハッシュで自動整合。3ツールに `no_history`＋任意 `used_*` パラメータ追加。
+*   検証: `tests/test_mcp_history.py` 5ケース＋実機2-run統合実証（キー無し）=RUN1 収集→3件採用→RUN2 がその3件を除外して残りを返す。全 **266 green**。残: OpenAlex client retry（semantic 5xx吸収）は別途。
+
 ### 2026-06-23 Track B をキー無し委譲ループへ（API を Claude Opus エージェントで代替・追加課金ゼロ）
 *   「ガンガン回す」向けに、contra 自身は LLM を呼ばず（OpenAlex＋決定論ゲートのみ）、標的化抽象・採点・執筆を呼び出し側 Claude エージェントが代行する委譲ループへ。メータ Anthropic 切替案より「メータ API を使わない委譲」を選択（ユーザー決定）。
 *   byserendipity の Phase 3 semantic 収集を key-free 化（穴埋め）: `serendipity_query.spec_from_payload`（agent facet→SerendipitySpec）＋`collect.collect_track_b_from_spec`（spec から semantic 収集・語彙 fallback 無し）＋`delegate.material_from_work`（work_from_material の逆）＋`mcp_server` の `byserendipity_discover --raw_only`（structure/facets を受け materials を返す）。bybridge は `bybridge_collect --raw_only`→`delegate_finalize` で既にキー無し成立のため無改修。

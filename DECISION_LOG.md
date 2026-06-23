@@ -4,6 +4,26 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — 横断重複回避（履歴 dedup）を MCP/委譲経路へ配線（CLI 専用だったのを是正）
+
+**決定**: 「同じレポートを繰り返さない」履歴 dedup（`src/pipeline/history.py`＝テーマ別に既出 id/正規化title/DOI を除外し採用分を記録）を **MCP/委譲経路にも配線**する。従来この仕組みは **CLI 専用**で、`mcp_server.py` は history を一切 load/save しなかったため、**byserendipity_discover / bybridge_collect / delegate_finalize で同じテーマを再実行すると同じ論文が再出**していた（＝「ガンガン回す」委譲運用で最も困る所で未機能）。ユーザー指摘で発覚。
+
+**根因**: contra は CLI 先行で履歴は CLI 側にのみ実装。委譲シリーズ(a-d) と Phase 3/委譲作業は MCP ハンドラに history を未配線（`collect_track_b_from_spec` は used_* 引数の口だけ用意済みだった）。
+
+**実装（`src/mcp_server.py`）**: `compute_theme_hash(theme.theme_overview)` をキーに 2 点へ配線。
+- ヘルパ `_history_exclusions(theme, args)`＝file history（`load_history`）∪ agent 供給 `used_ids/used_titles/used_dois` を返す（`no_history` で無効化）。`_history_adopt(theme, args, entries)`＝post-gate 通過分の id/`_norm_title`/`_norm_doi` を `save_history` で追記。
+- **収集時に除外**: `_byserendipity_raw`→`collect_track_b_from_spec(used_*)`、自己完結 `_execute_byserendipity`→`collect_track_b(used_*)`、`_execute_bybridge`→`collect_citation_candidates(used_ids=...)`。
+- **採用時に記録**: 自己完結 byserendipity / bybridge（fill 後）と `delegate_finalize`（post-gate 後）で `_history_adopt`。**委譲ループは収集と finalize が別呼び出しだが、同一 theme_overview ハッシュで自動整合**（raw-collect が除外、finalize が記録）。
+- 3 ツールのスキーマに `no_history`（既定 false）＋任意 `used_ids/used_titles/used_dois` を追加。
+
+**検証**: `tests/test_mcp_history.py` 5ケース（空時 agent 供給/ adopt→exclusions round-trip・正規化/ file∪agent マージ/ no_history 双方向スキップ/ 空 entries は no-op）。**実機 2-run 統合実証**（キー無し・stub client）: RUN1 が W0–W5 収集→W0–W2 採用→RUN2 が `excl_in={W0,W1,W2}` で W3–W5 のみ収集＝**採用分を確実に除外**。`mcp_server` import OK・全 **266 green**（261→+5）。M3 飽和とも整合（ネタ枯渇時は繰り返しでなく飽和通知）。
+
+**可逆性 / 安全性**: 追加は history の load/exclude/save 配線のみ・`no_history=true` で旧挙動。CLI 経路は不変（既に機能）。選別段・スコア不変。履歴は `data/history/<hash>.json`（MCP サーバの CWD＝`D:\dev\repos\contra` 基準）。
+
+**未着手 / 次**: OpenAlex client への retry（semantic 5xx をクライアント層でも吸収）は別途。
+
+---
+
 ## 2026-06-23 — Track B（byserendipity/bybridge）をキー無し委譲ループへ：API を Claude Opus エージェントで代替（追加課金ゼロ）
 
 **決定**: 「ガンガン回す」運用に向け、Track B を **委譲（キー無し・追加課金ゼロ）ループ**へ組み替える。contra 自身は LLM を呼ばず（OpenAlex 収集＋決定論ゲートのみ）、標的化抽象・採点・プローズ執筆という LLM 推論は **flow を実行する呼び出し側エージェント（Claude Opus＝Claude Code セッション）が自分の推論で代行**する。マルチプロバイダ層（`openai_client` がモデル名で OpenAI/Anthropic 振り分け）でメータ Anthropic へ切替える案も検討したが、Opus を高ボリューム PM スコアリング/judge に使うと従量課金が大きく「ガンガン回す」と相性が悪いため、**メータ API を使わない委譲**を選択（ユーザー決定）。
