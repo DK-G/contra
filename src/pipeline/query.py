@@ -9,10 +9,15 @@ prefers FIELD-SCOPED matching (``title_and_abstract.search`` plus optional
 topic/concept/year/type filters) and renders it to OpenAlex request params, while always
 exposing a generic-search fallback so recall can never collapse below the old behaviour.
 
-The schema deliberately carries forward-compatible hooks the later phases need
-(``route`` incl. ``"semantic"`` for Phase 3 HyDE pseudo-abstract retrieval; ``cites`` and
-``exclude_concept_ids`` for Phase 2 citation bridging) so those phases extend this builder
-rather than re-introducing ad-hoc param dicts.
+The schema carries the hooks the later phases use (``cites`` / ``exclude_*`` for Phase 2
+citation bridging; ``route="semantic"`` for Phase 3 HyDE pseudo-abstract retrieval) so those
+phases extend this builder rather than re-introducing ad-hoc param dicts.
+
+Phase 3 note: the ``"semantic"`` route is now wired to OpenAlex's real embedding/ANN endpoint
+``search.semantic`` (verified 2026-06-23). That endpoint returns the ~50 nearest works by
+meaning, is capped at 50 (no pagination past page 1), respects ``per-page<=50``, composes with
+``type``/year filters but **400s on a ``primary_topic.field.id:!`` negation** — so the semantic
+route renders only the safe filters and leaves home-domain exclusion to the client side.
 """
 
 from __future__ import annotations
@@ -101,8 +106,8 @@ class StructuredQuery:
     year_from / year_to : inclusive publication-year bounds.
     work_type           : OpenAlex work type (e.g. "article").
     route               : how to execute — ``"filter"`` (field-scoped), ``"search"``
-                          (generic full-text), or ``"semantic"`` (embedding; Phase 3,
-                          currently rendered as generic search until the endpoint is wired).
+                          (generic full-text), or ``"semantic"`` (OpenAlex ``search.semantic``
+                          embedding/ANN — Phase 3 HyDE pseudo-abstract retrieval, top-50 cap).
     """
 
     anchor_terms: List[str] = field(default_factory=list)
@@ -157,17 +162,45 @@ class StructuredQuery:
             parts.append(f"referenced_works_count:<{self.max_referenced_works}")
         return ",".join(parts)
 
+    def _semantic_filter_string(self) -> str:
+        """The subset of filters that compose with ``search.semantic`` (verified 2026-06-23).
+
+        ``type:article`` and year bounds compose fine, but a ``primary_topic.field.id:!`` negation
+        returns HTTP 400 — so field/concept/cites filters are deliberately omitted here and the
+        semantic route relies on client-side home-domain exclusion instead.
+        """
+        parts: List[str] = []
+        if self.year_from is not None and self.year_to is not None:
+            parts.append(f"publication_year:{self.year_from}-{self.year_to}")
+        elif self.year_from is not None:
+            parts.append(f"from_publication_date:{self.year_from}-01-01")
+        elif self.year_to is not None:
+            parts.append(f"to_publication_date:{self.year_to}-12-31")
+        if self.work_type:
+            parts.append(f"type:{self.work_type}")
+        return ",".join(parts)
+
     def to_params(self, *, per_page: int = 50, page: int = 1) -> Dict[str, Any]:
         """Render to an OpenAlex request param dict for the chosen route."""
-        base: Dict[str, Any] = {"per-page": per_page, "page": page}
+        if self.route == ROUTE_SEMANTIC:
+            # OpenAlex's embedding/ANN endpoint: returns the ~50 nearest works by meaning. Capped
+            # at 50, so clamp per-page; field/concept exclusion is NOT emitted (400s) and is done
+            # client-side. This is the route HyDE/Query2doc pseudo-abstracts retrieve through.
+            base: Dict[str, Any] = {"per-page": min(per_page, 50), "page": page,
+                                    "search.semantic": self.anchor_string()}
+            sem_filter = self._semantic_filter_string()
+            if sem_filter:
+                base["filter"] = sem_filter
+            return base
+        base = {"per-page": per_page, "page": page}
         if self.route == ROUTE_FILTER:
             flt = self._filter_string()
             if flt:
                 base["filter"] = flt
                 return base
             # Nothing was field-scopeable -> fall through to generic search (recall-safe).
-        # ROUTE_SEARCH and ROUTE_SEMANTIC (semantic endpoint not wired yet) both execute as
-        # generic full-text search so recall is never worse than the legacy behaviour.
+        # ROUTE_SEARCH (and a filter route with nothing scopeable) executes as generic full-text
+        # search so recall is never worse than the legacy behaviour.
         base["search"] = self.anchor_string()
         return base
 

@@ -25,7 +25,7 @@
 ## 未着手 (To Do)
 
 - [x] 検索クエリ精度 Phase 2（bybridge）: co-citation 強度＋betweenness 代理（分野多様性）でブリッジ再ランク、ホームドメイン除外を L0 concepts → `dominant_field_ids`（primary_topic.field 除外）へ移行（**PRF は bybridge の異分野目的と衝突のため不採用＝Track A 収集へ再配置**）
-- [ ] 検索クエリ精度 Phase 3（byserendipity）: 標的化抽象（機能語へ再記述＋構造制約保持）、HyDE/Query2doc 接地＋OpenAlex semantic search、QA-Expand 多面化、round-trip / quality-gate の実行前検証
+- [x] 検索クエリ精度 Phase 3（byserendipity）: 標的化抽象（機能語へ再記述＋構造制約保持）、HyDE/Query2doc 接地＋OpenAlex semantic search、QA-Expand 多面化、round-trip / quality-gate の実行前検証
 - [x] ローカル化: MCPクライアント委譲（キー無し運用・docs/research/mcp_subscription_delegation.md）
     - [x] (a) bybridge raw_only ＋ structured 整形でキー無し一周（`src/pipeline/delegate.py` ＋ MCP `bybridge` の `structured` フラグ）
     - [x] (b) classify.py の数値ゲート（anomaly/serendipity/struct_depth/near-domain cap/output_floor/M3）を LLM 採点から独立した純関数 `apply_post_gates` として切り出し post-gate 化
@@ -47,6 +47,13 @@
 ---
 
 ## 完了 (Done)
+
+### 2026-06-23 検索クエリ精度 Phase 3（byserendipity: 標的化抽象＋HyDE semantic＋実行前検証）
+*   **★実機検証**: OpenAlex `search.semantic` は**実在する埋め込み/ANN エンドポイント**（戦略 doc の「要実機確認」に回答）。上位50件固定・ページング不可・`type:article` と合成可・`primary_topic.field.id:!` 否定と非合成（400）→ ホーム除外はクライアント側。
+*   新規 `src/pipeline/serendipity_query.py`: `generate_serendipity_facets`（標的化抽象＝機能語＋構造制約保持で再記述、最大3遠 facet、各 HyDE 仮想アブスト・temp=1.0）／`build_semantic_query`（相補的結合＝構造アンカー＋仮想アブスト）／`validate_semantic_results`・`home_field_fraction`・`exclude_home_field`（非空＋ホーム収束の実行前検証）。
+*   `src/pipeline/query.py`: `route="semantic"` を `search.semantic` へ配線（合成安全な type/year のみ・per-page 50 クランプ・field 除外は非出力）。`src/pipeline/collect.py`: `collect_track_b` を semantic 主経路化（`_collect_track_b_semantic`）＋全 facet 落選で語彙ベースラインへ quality-gate fallback（`_collect_track_b_lexical`）。後方互換シグネチャ＝MCP/CLI 無改修で恩恵。
+*   選別段（classify.py の purpose_sim × mechanism_dist）・スコア設計値（0.20/0.50/0.35）は不変（spec.md §7 禁則）。round-trip は単一根拠文書が無いため「非空＋ホーム収束」へ適応（concept 類似は選別段に委ね非重複）。
+*   実機 A/B: semantic は語彙と同等のホーム収束（0.02/0.03）・分野多様性（17/18）で、候補が**構造的に的中**（最適シーディング/マイクロインフルエンサー/生態系の到来順効果/ワクチン早期採用）＝語彙のキーワード散乱より net-positive。`tests/test_serendipity_query.py` 14ケース＋`test_query.py` semantic 2ケース更新・全 **248 green**。PRF は Track A 収集へ（別 PR）。
 
 ### 2026-06-23 検索クエリ精度 Phase 2（bybridge: co-citation＋betweenness）
 *   新規 `src/pipeline/bridges.py`（全純関数・API 追加コスト 0）: `shared_bridge_count`（co-citation 強度）／`bridge_field_diversity`＋`annotate_bridge_signals`（各 bridge を引用する候補の primary_topic Field 多様性＝betweenness 代理を source_meta に刻む）／`bridge_rank_key`（betweenness→共有数→被引用）。mcp/delegate の重複 `shared_bridge_count` を一本化。

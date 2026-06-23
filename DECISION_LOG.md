@@ -4,6 +4,29 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — Phase 3（byserendipity）：標的化抽象＋HyDE 仮想アブストラクトを OpenAlex semantic 検索へ配線、実行前検証＋quality-gate fallback
+
+**決定**: Track B（遠ドメイン類推）の収集を、語彙「全抽象化キーワード」一辺倒から **標的化抽象＋HyDE/Query2doc 接地＋semantic 検索** を主経路へ切替える。①テーマの関係構造を**ドメイン中立な機能語＋構造制約保持**で再記述（過抽象を避ける）②最大3つの**遠ドメイン facet**（QA-Expand）に各々**短い仮想アブストラクト**を生成③それを **OpenAlex `search.semantic`**（埋め込み/ANN）で検索④**実行前検証**（非空＋ホーム収束チェック）を通し、**全 facet 落選なら Phase 1 語彙ベースラインへ fallback**（Corrective-RAG quality gate）。選別段（`classify.py` の purpose_sim × mechanism_dist）とスコア設計値（0.20/0.50/0.35）は**不変**（spec.md 禁則順守）。
+
+**★最重要の実機検証（戦略 doc の「semantic API 要実機確認」に回答）**: `search.semantic` は**実在する埋め込み/ANN エンドポイント**だった（リポジトリ実クライアント＋polite pool で確認）。タンパク質折りたたみ／超伝導量子ビット／結合振動子同期の各自然文クエリが**意味的に的中**。制約＝**上位50件固定**（page=2 は0件・ページング不可）、`per-page≤50` 尊重、`filter=type:article` と合成可だが **`primary_topic.field.id:!` 否定とは合成不可（HTTP 400）**。→ semantic 経路の**ホーム除外はクライアント側**（parser が付与済の `primary_topic_field_id`）で実施。なお初回の未認証プローブで多くが count=0 に見えたのは**スロットリング由来の偽値**で、polite pool では `search=` の長文も0件に潰れない（16語→11,335件）と判明（HyDE を `search=` に投げる案も一応生きるが、意味検索の方が構造的に的中するため semantic を採用）。
+
+**実装**:
+- `src/pipeline/query.py`: `route="semantic"` を `{"search.semantic": <text>}` へ描画（合成安全な `type`/year のみ付与・per-page を50にクランプ・field/concept 除外は出さない＝400回避）。前方互換テストを新挙動へ更新。
+- `src/pipeline/serendipity_query.py`（新規）: `generate_serendipity_facets`（標的化抽象＋遠 facet＋HyDE 仮想アブスト・temp=1.0・OpenAIError時は空 spec で語彙へ）／`build_semantic_query`（**相補的結合**＝構造アンカー＋仮想アブスト・Query2doc 流）／`home_field_fraction`・`exclude_home_field`・`validate_semantic_results`（非空＋ホーム収束ゲート）。テーマとの関連判定は選別段に委ね、ここでは**構造的ターゲティングのみ検証**（禁則境界を侵さない）。
+- `src/pipeline/collect.py`: `collect_track_b` を後方互換のまま拡張（`use_semantic=True`／`home_field_ids`）。semantic 主経路＋語彙 fallback を `_collect_track_b_semantic` / `_collect_track_b_lexical` に分離。MCP/CLI はシグネチャ不変で恩恵。
+
+**実機 A/B（net-negative でないことを確認＝Phase 1/2 と同じ流儀）**: テーマ「情報カスケード予測（home=CS/17）」で semantic vs 語彙を実走。**両者ともホーム収束は低く（semantic 0.02 / 語彙 0.03）、生の分野多様性も同等（17 vs 18 分野）**。差は**候補の質**: semantic は構造そのもの（少数の早期採用者→大規模波及）を**異分野で具現**した論文を取得（最適シーディング／マイクロインフルエンサー／生態系の到来順効果・種子サイズ／ワクチン早期採用）。語彙は**キーワード散乱**（"complex/threshold/feedback/rate limiting" だけ共有する Mendelian 病態・Stern Review 気候経済・分数応答変数等＝構造を共有しない雑音）。→ **semantic は同等 recall・同等ホーム収束で構造的精度が上＝net-positive**。検証ゲート（max_home_fraction=0.6）は健全ケースで不発（0.02≪0.6）＝崩壊時のみ作動する保守ガードとして正しい挙動。
+
+**設計上の注記**: 標的化抽象①は**新主経路 `generate_serendipity_facets` で実現**（旧 `generate_track_b_queries` は安定した recall 床の fallback として温存）。PRF は Track A シード収集向けで Phase 3 対象外（別 PR）。
+
+**可逆性 / 安全性**: クエリ生成＋検証の追加のみ。選別/スコア不変、`use_semantic=False` で旧挙動、全 facet 落選で語彙へ透過 fallback（下流が枯れない）。
+
+**検証**: `tests/test_serendipity_query.py` 新設14ケース（semantic 描画・facet parse/dedup/フォールバック・検証ゲート4種・collect の semantic 採用/ホーム除外/quality-gate fallback/use_semantic=False/facet無時）＋`test_query.py` の semantic 描画2ケース更新。全 **248 green**（233→+15）。
+
+**未着手 / 次**: 実運用 forward での閾値校正（min_results/max_home_fraction）、PRF を Track A 収集へ（別 PR）。
+
+---
+
 ## 2026-06-23 — Phase 2（bybridge）：co-citation 強度＋betweenness 代理でブリッジ再ランク、ホーム除外を primary_topic.field へ移行
 
 **決定**: bybridge の引用ブリッジ精度を上げる。(1) **co-citation 強度**（候補が踏む共有 bridge 数）と (2) **betweenness 代理**（各 bridge を引用する候補の primary_topic Field 多様性＝分断コミュニティの連結度）を新規 `src/pipeline/bridges.py` に集約し、候補注記＋**betweenness 優先**の再ランクに使う。(3) ホームドメイン除外を L0 concepts から **`dominant_field_ids`（primary_topic.field 除外）**へ移行（seeds に primary_topic が無い場合のみ concepts へフォールバック）。**PRF は不採用**。

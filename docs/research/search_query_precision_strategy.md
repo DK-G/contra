@@ -120,6 +120,8 @@ IR 研究の名指しする失敗域＝byserendipity の使用域:
 - `generate_track_b_queries`: ①標的化抽象プロンプト（機能語へ再記述＋構造制約保持）②QA-Expand 風の facet 分解 ③HyDE pseudo-abstract オプション ④**実行前検証**（非空/home収束/round-trip でフィルタ、全滅時は Phase 1 ベースラインへフォールバック）。
 - 選別段（`classify.py` の purpose_sim × mechanism_dist）は**不変**（クエリ側で近purpose/遠mechanismを先取りするだけ。スコア設計値 0.20/0.50/0.35 等は据え置き、`spec.md` 禁則順守）。
 
+> **実装済み (2026-06-23)** — 新規 `src/pipeline/serendipity_query.py`（標的化抽象＋遠 facet＋HyDE 仮想アブスト生成 `generate_serendipity_facets`、相補的結合 `build_semantic_query`、検証 `validate_semantic_results`/`home_field_fraction`/`exclude_home_field`）＋ `query.py` の `route="semantic"` 配線＋ `collect.py` の `collect_track_b` 主経路化（語彙 fallback）。**★`search.semantic` は実在する埋め込み/ANN エンドポイントと実機確認**（§3.3「OpenAlex semantic search」は仮説でなく実体・上位50件固定・`primary_topic.field.id:!` 否定と非合成のためホーム除外はクライアント側）。round-trip は contra に単一根拠文書が無いため**「非空＋ホーム収束チェック」へ適応**（concept 類似は選別段の責務として重複させない）。実機 A/B で語彙より構造的精度が上＝net-positive（詳細は `DECISION_LOG.md`）。
+
 ---
 
 ## 5. トレードオフ / 可逆性

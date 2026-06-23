@@ -15,8 +15,15 @@ from src.pipeline.query import (
     ROUTE_SEARCH,
     StructuredQuery,
     dominant_field_ids,
+    resolve_field_ids,
     structured_query_from_theme,
     structured_query_variants,
+)
+from src.pipeline.serendipity_query import (
+    build_semantic_query,
+    exclude_home_field,
+    generate_serendipity_facets,
+    validate_semantic_results,
 )
 
 
@@ -444,15 +451,106 @@ def collect_track_b(
     used_ids: Optional[Set[str]] = None,
     used_titles: Optional[Set[str]] = None,
     used_dois: Optional[Set[str]] = None,
+    use_semantic: bool = True,
+    home_field_ids: Optional[List[str]] = None,
 ) -> List[Work]:
-    """Collect Track B candidates from multiple distinct domains using LLM-generated queries.
+    """Collect Track B (serendipity) candidates from multiple distinct distant domains.
 
-    Excludes papers already surfaced in a prior run on id / norm_title / DOI (the title and
-    DOI sets, seeded from history, catch the same paper recurring under a different OpenAlex id).
+    Phase 3: the PRIMARY path generates a targeted abstraction of the theme plus distant-domain
+    hypothetical abstracts (HyDE/Query2doc) and retrieves them through OpenAlex's semantic/ANN
+    endpoint, then validates each query (non-empty + not home-converged) before keeping it. If the
+    semantic path yields nothing valid — every facet failed validation, or generation failed
+    offline — it falls back to the Phase 1 lexical baseline (a Corrective-RAG quality gate), so
+    downstream selection never starves. ``use_semantic=False`` forces the legacy lexical path.
+
+    Excludes papers already surfaced in a prior run on id / norm_title / DOI (the title and DOI
+    sets, seeded from history, catch the same paper recurring under a different OpenAlex id).
     """
     cfg = config or CollectConfig()
-    queries = generate_track_b_queries(theme, model)
     collector = Collector(cfg)
+
+    if use_semantic:
+        # Home Fields to exclude / measure convergence against: caller-supplied (e.g. derived from
+        # near-field seeds via dominant_field_ids) or resolved statically from the declared field.
+        home_ids = home_field_ids if home_field_ids is not None else resolve_field_ids(theme.scope.field)
+        works = _collect_track_b_semantic(
+            theme, collector, model, max_count, used_ids, used_titles, used_dois, home_ids, cfg
+        )
+        if works:
+            return works[:max_count]
+        print("[info] Track B: semantic 経路が全滅 → 語彙ベースラインへフォールバック (quality-gate)")
+
+    return _collect_track_b_lexical(
+        theme, collector, model, max_count, used_ids, used_titles, used_dois, cfg
+    )
+
+
+def _collect_track_b_semantic(
+    theme: ThemeInput,
+    collector: "Collector",
+    model: str,
+    max_count: int,
+    used_ids: Optional[Set[str]],
+    used_titles: Optional[Set[str]],
+    used_dois: Optional[Set[str]],
+    home_field_ids: List[str],
+    cfg: CollectConfig,
+) -> List[Work]:
+    """HyDE/semantic Track B collection: targeted-abstraction facets -> search.semantic -> validate.
+
+    Returns [] (so the caller falls back to lexical) when no facets are generated or every facet's
+    query fails the non-empty / home-convergence gate. The semantic endpoint returns up to 50 works
+    in a single page (no pagination), so each facet is one request.
+    """
+    spec = generate_serendipity_facets(theme, model)
+    if spec.is_empty():
+        return []
+
+    works: List[Work] = []
+    seen_ids: Set[str] = set(used_ids or set())
+    seen_titles: Set[str] = set(used_titles or set())
+    seen_dois: Set[str] = set(used_dois or set())
+    valid_facets = 0
+    for facet in spec.facets:
+        sq = build_semantic_query(spec.structure, facet.pseudo_abstract)
+        payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
+        raw = filter_retracted(normalize_results(payload))
+        ok, reason = validate_semantic_results(raw, home_field_ids)
+        if not ok:
+            print(f"[info] Track B semantic facet '{facet.domain}' 棄却 ({reason})")
+            continue
+        valid_facets += 1
+        for w in exclude_home_field(raw, home_field_ids):
+            norm_title = _norm_title(w.title)
+            norm_doi = _norm_doi(w.doi)
+            if (w.id not in seen_ids and w.abstract
+                    and not (norm_title and norm_title in seen_titles)
+                    and not (norm_doi and norm_doi in seen_dois)):
+                seen_ids.add(w.id)
+                if norm_title:
+                    seen_titles.add(norm_title)
+                if norm_doi:
+                    seen_dois.add(norm_doi)
+                works.append(w)
+        if len(works) >= max_count:
+            break
+    if valid_facets:
+        print(f"[info] Track B semantic: {valid_facets}/{len(spec.facets)} facet 採用 -> {len(works)} 候補")
+    return works[:max_count]
+
+
+def _collect_track_b_lexical(
+    theme: ThemeInput,
+    collector: "Collector",
+    model: str,
+    max_count: int,
+    used_ids: Optional[Set[str]],
+    used_titles: Optional[Set[str]],
+    used_dois: Optional[Set[str]],
+    cfg: CollectConfig,
+) -> List[Work]:
+    """Phase 1 lexical Track B baseline (the pre-Phase-3 behaviour, now the quality-gate fallback)."""
+    queries = generate_track_b_queries(theme, model)
     works: List[Work] = []
     seen_ids: Set[str] = set(used_ids or set())
     seen_titles: Set[str] = set(used_titles or set())
