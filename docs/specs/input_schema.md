@@ -1,4 +1,7 @@
-﻿# 入力仕様スキーマ（草案）
+﻿# 入力仕様スキーマ
+
+> **入力仕様の正本**（旧「草案」）。実装の真の source は `src/core/input_schema.py`。
+> 必須最小セット（旧 `docs/input_min_spec.md`、archive 済み）は本書 §3 のバリデーション必須項目に対応する。
 
 本スキーマはPhase 1のCLI入力を想定する。
 
