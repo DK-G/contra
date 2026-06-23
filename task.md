@@ -48,6 +48,11 @@
 
 ## 完了 (Done)
 
+### 2026-06-23 Track A 近傍シード収集に PRF（擬似適合フィードバック）導入
+*   Phase 2 で「bybridge は異分野目的ゆえ PRF はホーム引き戻しで逆効果」と不採用にした PRF を、**ホーム語彙拡張が recall に効く Track A 近傍シード収集（`collect_and_filter`）へ再配置**（bybridge シード＋ドメインプロファイルの供給元）。
+*   `_salient_terms`（純関数・LLM不使用）= 上位シードを relevance set とみなし seed 文書頻度で salient 語を抽出（stopword/定型句＋既出クエリ語＋単発語を除去・PRF の「corpus 頻出語を落として top-k」を静的 stopword＋in-set DF へ適応）。`collect_and_filter` に `use_prf=True`＝**初期検索が薄いとき（5≤収集数<max_count）だけ発火**し、ヘッドキーワード＋salient のペアで field-scoped 拡張（`fallback=False` で generic-search drift を回避）。広いテーマは base で満ちるのでコスト増ゼロ。
+*   実機 A/B: ニッチテーマ（最適間隔の復習・home=psychology）で 148→300件、追加は spacing-effect/memory/retention のホーム論文が大勢（少数の多義 drift は downstream 篩い＋本番 max_count=20 で薄テーマ数件に限定ゆえ許容）＝net-positive。`tests/test_prf.py` 7ケース・全 **255 green**。byserendipity/bybridge は逆にホームから離れるため PRF 非採用（住み分け）。
+
 ### 2026-06-23 検索クエリ精度 Phase 3（byserendipity: 標的化抽象＋HyDE semantic＋実行前検証）
 *   **★実機検証**: OpenAlex `search.semantic` は**実在する埋め込み/ANN エンドポイント**（戦略 doc の「要実機確認」に回答）。上位50件固定・ページング不可・`type:article` と合成可・`primary_topic.field.id:!` 否定と非合成（400）→ ホーム除外はクライアント側。
 *   新規 `src/pipeline/serendipity_query.py`: `generate_serendipity_facets`（標的化抽象＝機能語＋構造制約保持で再記述、最大3遠 facet、各 HyDE 仮想アブスト・temp=1.0）／`build_semantic_query`（相補的結合＝構造アンカー＋仮想アブスト）／`validate_semantic_results`・`home_field_fraction`・`exclude_home_field`（非空＋ホーム収束の実行前検証）。
