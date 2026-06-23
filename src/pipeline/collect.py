@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass
-from typing import List, Optional, Set
+from typing import Iterable, List, Optional, Set
 
 from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig
@@ -77,6 +79,66 @@ def collect_candidates(theme: ThemeInput, config: Optional[CollectConfig] = None
     return collector.collect(theme)
 
 
+# --- Pseudo-relevance feedback (PRF) for near-field seed collection ---------
+# PRF research selects feedback terms by dropping CORPUS-common terms (those in >10% of documents)
+# then ranking the rest. contra has no corpus document-frequency index, so this static list of
+# high-frequency, low-information English + academic-boilerplate words is the precision guard that
+# keeps the mined expansion anchored to the topic's distinctive vocabulary instead of generic noise.
+_PRF_STOPWORDS = frozenset("""
+a an the of in on at to for from by with without within into over under between among and or not
+but as is are was were be been being this that these those it its their our your we they he she his
+her them us you which who whom whose what when where why how can could may might will would shall
+should must do does did done has have had having than then so such both each any all some no nor
+only own same other another more most much many few less least very too also however therefore thus
+hence moreover furthermore using used use based via per across about above after before during while
+study studies paper papers result results method methods methodology approach approaches model
+models framework frameworks analysis analyses data dataset datasets propose proposed novel new
+performance evaluation evaluate experiment experiments experimental research problem problems system
+systems application applications technique techniques work works present presents introduce
+introduced provide provides show shows shown demonstrate high low large small significant
+significantly effect effects different various recent state art toward towards
+""".split())
+
+_PRF_TOKEN_RE = re.compile(r"[a-z][a-z\-]{2,}")   # >=3 alpha chars, internal hyphen ok, drop numbers
+_PRF_MIN_SEEDS = 5     # need enough relevance-set docs for the seed-DF signal to be stable
+_PRF_SEED_POOL = 20    # mine salient terms from at most this many top seeds
+_PRF_TOP_K = 6         # expansion terms to add (kept small: reformulation, not blind expansion)
+
+
+def _salient_terms(
+    seeds: List[Work],
+    existing_terms: Iterable[str],
+    *,
+    top_k: int = _PRF_TOP_K,
+    min_seed_df: int = 2,
+) -> List[str]:
+    """Mine salient home-domain terms from the top seeds (Rocchio/RM3-style relevance feedback).
+
+    Treats the top seeds as the relevance set: a term recurring across MANY seeds (high in-set
+    document frequency) is salient to the topic. Ranks by seed-DF (then total frequency), dropping
+    stopwords/boilerplate, terms already in the query, and singletons (seed_df < ``min_seed_df``),
+    and returns the top ``top_k``. Pure/deterministic — no LLM, no network.
+    """
+    have: Set[str] = set()
+    for t in existing_terms:
+        have.update(_PRF_TOKEN_RE.findall((t or "").lower()))
+    seed_df: Counter = Counter()
+    total_tf: Counter = Counter()
+    for w in seeds:
+        toks = _PRF_TOKEN_RE.findall(f"{w.title or ''} {w.abstract or ''}".lower())
+        for tok in toks:
+            total_tf[tok] += 1
+        for tok in set(toks):
+            seed_df[tok] += 1
+    ranked = [
+        (df, total_tf[tok], tok)
+        for tok, df in seed_df.items()
+        if df >= min_seed_df and tok not in _PRF_STOPWORDS and tok not in have
+    ]
+    ranked.sort(key=lambda x: (-x[0], -x[1], x[2]))
+    return [tok for _, _, tok in ranked[:top_k]]
+
+
 def collect_and_filter(
     theme: ThemeInput,
     config: Optional[CollectConfig] = None,
@@ -84,11 +146,33 @@ def collect_and_filter(
     max_count: int = 500,
     require_abstract: bool = True,
     use_assumption_queries: bool = True,
+    use_prf: bool = True,
 ) -> List[Work]:
     cfg = config or CollectConfig()
     collector = Collector(cfg)
     collected: List[Work] = []
     seen_ids: Set[str] = set()
+
+    def _absorb(sq: StructuredQuery, *, fallback: bool = True) -> bool:
+        """Collect one query, filter, dedup into `collected`. Returns True when max_count reached.
+
+        ``fallback=False`` skips the generic-search recall floor: a too-narrow query then yields
+        nothing instead of degrading to a loose full-text match (used for PRF, where the
+        generic-search fallback on an over-constrained expansion is the source of topic drift).
+        """
+        runner = _collect_with_fallback if fallback else _page_through
+        works = runner(collector.client, sq, per_page=cfg.per_page, max_pages=cfg.max_pages)
+        works = filter_retracted(works)
+        if require_abstract:
+            works = filter_has_abstract(works)
+        for w in works:
+            if w.id in seen_ids:
+                continue
+            seen_ids.add(w.id)
+            collected.append(w)
+            if len(collected) >= max_count:
+                return True
+        return False
 
     base_variants = (
         structured_query_variants(theme) if cfg.relax_search
@@ -105,19 +189,29 @@ def collect_and_filter(
     ]
 
     for sq in base_variants + assumption_variants:
-        works = _collect_with_fallback(
-            collector.client, sq, per_page=cfg.per_page, max_pages=cfg.max_pages
-        )
-        works = filter_retracted(works)
-        if require_abstract:
-            works = filter_has_abstract(works)
-        for w in works:
-            if w.id in seen_ids:
-                continue
-            seen_ids.add(w.id)
-            collected.append(w)
-            if len(collected) >= max_count:
+        if _absorb(sq):
+            return collected
+
+    # Pseudo-relevance feedback (PRF): the user's keywords are an incomplete description of the
+    # topic, so when the initial near-field retrieval is THIN, mine the top seeds for salient
+    # home-domain vocabulary the keywords missed and run anchored expansion queries to lift recall.
+    # This is the home-vocabulary expansion PRF was reassigned to — away from bybridge, whose
+    # cross-domain goal it conflicts with (DECISION_LOG 2026-06-23 Phase 2). Each expansion stays
+    # anchored to the primary keyword so it REFORMULATES toward the topic rather than drifting
+    # (strategy §1.3: reformulation over blind expansion). It only fires below max_count, so broad
+    # themes that already fill the pool pay nothing.
+    if use_prf and _PRF_MIN_SEEDS <= len(collected) < max_count:
+        # Anchor each expansion on the SINGLE head keyword (the topic's most precise term), not the
+        # full keyword conjunction: head+salient stays on-topic and returns real field-scoped hits,
+        # whereas anchoring on every keyword over-constrains the filter and forces the drift-prone
+        # generic fallback (which is disabled here via fallback=False).
+        head = next((t for t in theme.keywords.include if t), None)
+        primary_anchor = [head] if head else [theme.scope.field]
+        existing = list(theme.keywords.include) + [theme.scope.field, theme.goal]
+        for term in _salient_terms(collected[:_PRF_SEED_POOL], existing):
+            if _absorb(StructuredQuery(anchor_terms=primary_anchor + [term]), fallback=False):
                 return collected
+
     return limit_count(collected, max_count)
 
 

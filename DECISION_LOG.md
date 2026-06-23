@@ -4,6 +4,26 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — Track A 近傍シード収集に PRF（擬似適合フィードバック）を導入（bybridge で不採用にした分の再配置）
+
+**決定**: `collect_and_filter`（OpenAlex 近傍シード収集＝bybridge シード＋ドメインプロファイルの供給元）に **PRF（擬似適合フィードバック）** を追加する。初期検索が**薄いとき**に限り、上位シードを relevance set とみなして**salient なホームドメイン語**（キーワードが取りこぼした語彙）を抽出し、**ヘッドキーワードに錨付けした拡張クエリ**で recall を底上げする。Phase 2 で「bybridge は異分野が目的ゆえ PRF はホームへ引き戻し逆効果」と不採用にした PRF を、**ホーム語彙拡張が recall に効く Track A 収集へ再配置**（DECISION_LOG 2026-06-23 Phase 2 の宣言を実装）。
+
+**実装（`src/pipeline/collect.py`・全純関数/決定論・LLM不使用）**:
+- `_salient_terms(seeds, existing_terms, top_k=6, min_seed_df=2)`: 上位シード（最大 `_PRF_SEED_POOL=20`）の title+abstract をトークン化し、**seed 文書頻度**（多くのシードに跨る語＝topic に salient）でランク。stopword/定型句（`_PRF_STOPWORDS`＝英語機能語＋"study/method/results/model…" 等の corpus 頻出語）・既出クエリ語・単発語（df<2）を除去。PRF 研究の「corpus の>10%に出る頻出語を落として top-k」を、DF インデックスを持たない contra 向けに**静的 stopword ＋ in-set DF** へ適応。
+- `collect_and_filter` に `use_prf=True` を追加。base＋assumption パス後、`_PRF_MIN_SEEDS(5) ≤ 収集数 < max_count` のときだけ発火（広いテーマは base で満ちるので**コスト増ゼロ**）。各 salient 語を**ヘッドキーワード＋salient のペア**として field-scoped 拡張（全キーワード連言でなくヘッド1語＝過拘束で generic fallback に落ちる drift を回避）。**拡張は `fallback=False`**（generic-search recall 床を切り、過狭クエリは drift でなく0件にする＝drift の主因を断つ）。
+
+**実機 A/B（net-negative でないことを確認）**: ニッチテーマ「最適間隔の復習で durable learning（home=psychology）」で base-only 148件 → PRF 300件（cap 到達）。salient=`memory/students/education/knowledge/repeated/recall`（topic 妥当）。追加分は spacing-effect/memory/retention の**ホームドメイン論文が大勢**（"Spaced Training Forms Complementary Long-Term Memories"・"Spacing of Repetitions Improves Learning"・"A Meta-analysis of the Spacing Effect" 等）、少数の多義 drift（"Repetitive Sequence Collections"=CS データ構造・"Social Memory geographies"）は許容（**downstream で bridge 側がクロスドメイン論理により篩い、本番 max_count=20 では薄テーマのみ発火・追加は数件に限定**）。**ヘッド錨＋fallback無効化で全キーワード連言版より drift を軽減**しつつ recall 倍増を維持。→ **薄い近傍シードの recall 向上＝net-positive で採用**。
+
+**設計の住み分け**: PRF=**ホーム語彙拡張（near-field recall）**＝Track A シード／プロファイル向け。byserendipity（Phase 3）は逆に**ホームから離れる**ので PRF を使わない（semantic+標的化抽象）。bybridge も異分野目的ゆえ非採用のまま。
+
+**可逆性 / 安全性**: `collect_and_filter` への加算のみ（`use_prf=False` で旧挙動・全テスト不変）。薄いプール時のみ発火・拡張は filter-only で drift 抑制・選別段とスコアは無関係。
+
+**検証**: `tests/test_prf.py` 新設7ケース（salient ランク/stopword・既出・単発除去/top_k/薄プール発火/seed過少で不発/満杯で不発/`use_prf=False`）。全 **255 green**（248→+7）。
+
+**未着手 / 次**: forward 運用で `_PRF_TOP_K`/`min_seed_df` 校正、必要なら拡張結果のヘッドキーワード含有チェックで drift を更に削減。
+
+---
+
 ## 2026-06-23 — Phase 3（byserendipity）：標的化抽象＋HyDE 仮想アブストラクトを OpenAlex semantic 検索へ配線、実行前検証＋quality-gate fallback
 
 **決定**: Track B（遠ドメイン類推）の収集を、語彙「全抽象化キーワード」一辺倒から **標的化抽象＋HyDE/Query2doc 接地＋semantic 検索** を主経路へ切替える。①テーマの関係構造を**ドメイン中立な機能語＋構造制約保持**で再記述（過抽象を避ける）②最大3つの**遠ドメイン facet**（QA-Expand）に各々**短い仮想アブストラクト**を生成③それを **OpenAlex `search.semantic`**（埋め込み/ANN）で検索④**実行前検証**（非空＋ホーム収束チェック）を通し、**全 facet 落選なら Phase 1 語彙ベースラインへ fallback**（Corrective-RAG quality gate）。選別段（`classify.py` の purpose_sim × mechanism_dist）とスコア設計値（0.20/0.50/0.35）は**不変**（spec.md 禁則順守）。
