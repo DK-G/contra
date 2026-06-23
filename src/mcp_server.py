@@ -18,13 +18,16 @@ from src.pipeline.collect import (
     collect_and_filter,
     collect_citation_candidates,
     collect_track_b,
+    collect_track_b_from_spec,
 )
 from src.pipeline.concept_distance import build_theme_profile
 from src.pipeline.delegate import (
     assemble_keyless_bridge_document,
     assemble_keyless_track_a_document,
     finalize_delegated_document,
+    material_from_work,
 )
+from src.pipeline.serendipity_query import spec_from_payload
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig
 from src.pipeline.hf_collect import HFCollectConfig
@@ -104,8 +107,11 @@ class StdinMcpServer:
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_b_count": {"type": "integer", "description": "Maximum number of serendipitous connections to return.", "default": 1},
-                        "llm_model": {"type": "string", "description": "LLM model for classification/generation.", "default": "gpt-4o-mini"},
-                        "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0}
+                        "llm_model": {"type": "string", "description": "LLM model for classification/generation (self-contained path only; ignored when raw_only).", "default": "gpt-4o-mini"},
+                        "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
+                        "raw_only": {"type": "boolean", "description": "Key-free DELEGATION (no contra API key): contra runs only OpenAlex semantic retrieval and returns raw candidate MATERIALS for the CALLING AGENT to score, then pass to delegate_finalize. Requires `facets` (and ideally `structure`). The agent does the targeted-abstraction + scoring + prose with its OWN inference, so no LLM is billed.", "default": False},
+                        "structure": {"type": "string", "description": "When raw_only: the theme's relational structure re-described in DOMAIN-NEUTRAL function words (keep the structural constraints, drop the theme's surface topic words). Concatenated with each facet's pseudo-abstract for semantic retrieval."},
+                        "facets": {"type": "array", "description": "When raw_only: up to 3 DISTINCT distant-domain facets the agent generated via targeted abstraction. contra runs OpenAlex search.semantic on each (no LLM) and excludes the home domain client-side.", "items": {"type": "object", "properties": {"domain": {"type": "string", "description": "The distant domain/discipline."}, "pseudo_abstract": {"type": "string", "description": "A short (~80-word) hypothetical abstract of a paper in THAT domain exhibiting the shared structure, in that domain's own vocabulary."}}}}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -271,6 +277,8 @@ class StdinMcpServer:
 
     def _execute_byserendipity(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
+        if bool(args.get("raw_only")):
+            return self._byserendipity_raw(theme, args)
         model = args.get("llm_model") or "gpt-4o-mini"
         target_count = args.get("track_b_count") or 1
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.0
@@ -323,6 +331,50 @@ class StdinMcpServer:
                 }
             ],
             "isError": False
+        }
+
+    def _byserendipity_raw(self, theme: ThemeInput, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Key-free delegation: agent-supplied facets -> semantic collection -> raw materials.
+
+        The calling agent did the targeted-abstraction reasoning (structure + distant-domain
+        pseudo-abstracts); contra runs only OpenAlex semantic retrieval (no LLM/key) and hands the
+        candidate materials back for the agent to score and pass to delegate_finalize.
+        """
+        facets = args.get("facets") or []
+        if not facets:
+            return {
+                "content": [{"type": "text", "text": (
+                    "raw_only=true には facets が必要です。テーマの関係構造をドメイン中立な機能語で再記述し"
+                    "（structure・構造制約は保持・テーマ表層語は除く）、遠ドメインごとに ~80語の仮想アブストラクト"
+                    "（facets[].pseudo_abstract）を最大3つ生成して渡してください。contra が search.semantic で収集します。"
+                )}],
+                "isError": False,
+            }
+        spec = spec_from_payload(args.get("structure") or "", facets)
+        if spec.is_empty():
+            return {
+                "content": [{"type": "text", "text": "有効な facets がありません（各 facet に非空の pseudo_abstract が必要）。"}],
+                "isError": False,
+            }
+        _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
+        works = collect_track_b_from_spec(theme, spec, CollectConfig())
+        if not works:
+            return {
+                "content": [{"type": "text", "text": (
+                    f"semantic 収集で候補が0件でした（facet {len(spec.facets)} 件・ホーム収束/非空ゲートで全滅）。"
+                    "facet をより遠い/具体的なドメインへ見直してください。"
+                )}],
+                "isError": False,
+            }
+        materials = [material_from_work(w) for w in works]
+        diag = (
+            f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
+            "（semantic・ホームドメイン除外済・キー無し）。各候補を purpose_sim/mechanism_dist 等で採点し、"
+            "同じ材料を echo して delegate_finalize へ渡してください。"
+        )
+        return {
+            "content": [{"type": "text", "text": diag + "\n\n" + json.dumps(materials, ensure_ascii=False)}],
+            "isError": False,
         }
 
     def _execute_byrepo(self, args: Dict[str, Any]) -> Dict[str, Any]:

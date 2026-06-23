@@ -4,6 +4,31 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-06-23 — Track B（byserendipity/bybridge）をキー無し委譲ループへ：API を Claude Opus エージェントで代替（追加課金ゼロ）
+
+**決定**: 「ガンガン回す」運用に向け、Track B を **委譲（キー無し・追加課金ゼロ）ループ**へ組み替える。contra 自身は LLM を呼ばず（OpenAlex 収集＋決定論ゲートのみ）、標的化抽象・採点・プローズ執筆という LLM 推論は **flow を実行する呼び出し側エージェント（Claude Opus＝Claude Code セッション）が自分の推論で代行**する。マルチプロバイダ層（`openai_client` がモデル名で OpenAI/Anthropic 振り分け）でメータ Anthropic へ切替える案も検討したが、Opus を高ボリューム PM スコアリング/judge に使うと従量課金が大きく「ガンガン回す」と相性が悪いため、**メータ API を使わない委譲**を選択（ユーザー決定）。
+
+**埋まっていた穴**: bybridge は `bybridge_collect --raw_only`（決定論＋OpenAlex のみ）→ agent 採点 → `delegate_finalize`（post-gate）で既にキー無しループが成立。一方 byserendipity の Phase 3 semantic 収集は facet 生成が LLM 依存で、**agent の facet を受けて key-free に semantic 収集する入口が無かった**。
+
+**実装（contra）**:
+- `serendipity_query.spec_from_payload(structure, facets)`: agent 供給の facet（`[{domain, pseudo_abstract}]`）→ `SerendipitySpec`（dedup/空除去/上限）。LLM 不使用。
+- `collect.collect_track_b_from_spec(theme, spec, ...)`: agent spec から **key-free semantic 収集**（`search.semantic`＋検証＋クライアント側ホーム除外）。語彙 fallback は持たない（それは LLM を呼ぶため）。`_collect_track_b_semantic` に `spec` 注入口を追加。
+- `delegate.material_from_work(work)`: `work_from_material` の逆＝生候補を materials 辞書へ直列化（agent が採点して echo→`delegate_finalize` へ）。round-trip 保存。
+- `mcp_server`: `byserendipity_discover` に `raw_only`＋`structure`＋`facets` を追加。`raw_only=true` で `_byserendipity_raw`＝spec 構築→`collect_track_b_from_spec`→materials を JSON 返却（採点して `delegate_finalize` へ、と誘導）。
+- **★`search.semantic` の実機脆弱性に対処**: 実走で同エンドポイントが断続的に 5xx を返すと判明（同一クエリ級が成功/失敗を反復）。OpenAlex client は 500 で即 raise するため、**facet 1本の 5xx が収集全体を中断**していた。`_collect_track_b_semantic` を**facet 単位の try/except**へ（1本失敗してもスキップして残り facet で継続＝各 facet は独立 semantic クエリ）。
+
+**実装（スキル＝委譲の置き場所）**: `docs/agent_rules/byserendipity.md`・`bybridge.md` を**委譲キー無しループ**へ全面改稿（エージェントの役割＝標的化抽象/採点/執筆、contra MCP の役割＝raw 収集/post-gate を明示）。ユーザー `~/.claude/skills/{byserendipity,bybridge}/SKILL.md` のステップ2も委譲既定へ更新（旧：メータ `byserendipity_discover` 直呼び）。byrepo は既に `structured` でキー無しのため対象外。
+
+**実機検証（キー無しE2E・課金ゼロを実証）**: `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` を**未設定**にして、手書き facet（情報カスケード×ecology/epidemiology/materials）→`collect_track_b_from_spec`（実 OpenAlex）→materials→手書き採点→`finalize_delegated_document` を一周。materials facet が 5xx でスキップされても **2/3 facet で 58 件の異分野候補**（生態系の到来順効果/物理）を取得、post-gate が **anomaly 3件（purpose_sim 0.10）を正しく棄却**し 2 件を描画。**キー無しで完走**＝従量課金ゼロを確認。
+
+**可逆性 / 安全性**: 追加 API（`raw_only`/`spec`/`material_from_work`）と純関数のみ。自己完結メータ経路は `raw_only` 無しで温存。選別段・スコア設計値は不変。facet 単位 try/except は挙動を緩めるだけ（成功時は同一）。
+
+**検証**: `tests/test_delegation_keyfree.py` 6ケース（spec_from_payload/material round-trip/key-free semantic で LLM 非呼出/空 spec で無通信/flaky facet スキップ）。`mcp_server` import OK・全 **261 green**（255→+6）。
+
+**未着手 / 次**: OpenAlex client への retry 付与（semantic 5xx をクライアント層でも吸収）は別途検討。forward 運用での採点プロンプト定着。
+
+---
+
 ## 2026-06-23 — Track A 近傍シード収集に PRF（擬似適合フィードバック）を導入（bybridge で不採用にした分の再配置）
 
 **決定**: `collect_and_filter`（OpenAlex 近傍シード収集＝bybridge シード＋ドメインプロファイルの供給元）に **PRF（擬似適合フィードバック）** を追加する。初期検索が**薄いとき**に限り、上位シードを relevance set とみなして**salient なホームドメイン語**（キーワードが取りこぼした語彙）を抽出し、**ヘッドキーワードに錨付けした拡張クエリ**で recall を底上げする。Phase 2 で「bybridge は異分野が目的ゆえ PRF はホームへ引き戻し逆効果」と不採用にした PRF を、**ホーム語彙拡張が recall に効く Track A 収集へ再配置**（DECISION_LOG 2026-06-23 Phase 2 の宣言を実装）。
