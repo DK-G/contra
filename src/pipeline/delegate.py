@@ -177,6 +177,32 @@ def work_from_material(material: Dict[str, Any]) -> Work:
     )
 
 
+def material_from_work(work: Work) -> Dict[str, Any]:
+    """Serialize a Work into the candidate-material dict the agent scores and echoes back.
+
+    The inverse of :func:`work_from_material`: contra's key-free raw collection emits these so the
+    calling agent can score them and pass the scored list to :func:`finalize_delegated_document`
+    (the ``delegate_finalize`` MCP tool). Carries exactly the fields ``work_from_material`` reads,
+    so a round-trip preserves the Work.
+    """
+    return {
+        "id": work.id,
+        "title": work.title,
+        "abstract": work.abstract,
+        "year": work.year,
+        "venue": work.venue,
+        "doi": work.doi,
+        "cited_by_count": work.cited_by_count,
+        "concepts": list(work.concepts or []),
+        "concept_tags": [
+            {"name": t.name, "level": t.level, "score": t.score}
+            for t in (work.concept_tags or [])
+        ],
+        "referenced_works": list(work.referenced_works or []),
+        "publication_type": work.publication_type,
+    }
+
+
 def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
     """Extract the post-gate score row from an agent-scored candidate."""
     row: Dict[str, Any] = {
@@ -314,6 +340,7 @@ __all__ = [
     "assemble_keyless_bridge_document",
     "AGENT_SCORE_REQUIRED",
     "work_from_material",
+    "material_from_work",
     "score_row_from_material",
     "normalize_agent_scores",
     "finalize_delegated_document",

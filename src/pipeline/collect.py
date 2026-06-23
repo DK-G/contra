@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Set
 
 from src.core.models import ThemeInput, Work
-from src.openalex.client import OpenAlexClient, OpenAlexConfig
+from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
 from src.openalex.parser import normalize_results
 from src.pipeline.filter import filter_retracted, filter_has_abstract, limit_count
 from src.pipeline.bridges import annotate_bridge_signals
@@ -22,6 +22,7 @@ from src.pipeline.query import (
     structured_query_variants,
 )
 from src.pipeline.serendipity_query import (
+    SerendipitySpec,
     build_semantic_query,
     exclude_home_field,
     generate_serendipity_facets,
@@ -579,6 +580,33 @@ def collect_track_b(
     )
 
 
+def collect_track_b_from_spec(
+    theme: ThemeInput,
+    spec: SerendipitySpec,
+    config: Optional[CollectConfig] = None,
+    *,
+    max_count: int = 60,
+    used_ids: Optional[Set[str]] = None,
+    used_titles: Optional[Set[str]] = None,
+    used_dois: Optional[Set[str]] = None,
+    home_field_ids: Optional[List[str]] = None,
+) -> List[Work]:
+    """Key-free semantic Track B collection from an agent-supplied SerendipitySpec (no LLM).
+
+    The delegation entry point (zero metered cost): the calling agent supplies the targeted-
+    abstraction structure + distant-domain HyDE pseudo-abstracts with its OWN inference, and contra
+    runs only the OpenAlex ``search.semantic`` retrieval + validation + client-side home-domain
+    exclusion — no LLM, no API key. Unlike :func:`collect_track_b` there is NO lexical fallback
+    (that path calls the LLM); an empty result simply means the agent should revise the facets.
+    """
+    cfg = config or CollectConfig()
+    collector = Collector(cfg)
+    home_ids = home_field_ids if home_field_ids is not None else resolve_field_ids(theme.scope.field)
+    return _collect_track_b_semantic(
+        theme, collector, "", max_count, used_ids, used_titles, used_dois, home_ids, cfg, spec=spec
+    )
+
+
 def _collect_track_b_semantic(
     theme: ThemeInput,
     collector: "Collector",
@@ -589,14 +617,19 @@ def _collect_track_b_semantic(
     used_dois: Optional[Set[str]],
     home_field_ids: List[str],
     cfg: CollectConfig,
+    *,
+    spec: Optional[SerendipitySpec] = None,
 ) -> List[Work]:
     """HyDE/semantic Track B collection: targeted-abstraction facets -> search.semantic -> validate.
 
-    Returns [] (so the caller falls back to lexical) when no facets are generated or every facet's
-    query fails the non-empty / home-convergence gate. The semantic endpoint returns up to 50 works
-    in a single page (no pagination), so each facet is one request.
+    ``spec`` lets a caller pass agent-supplied facets (key-free delegation); when None the facets
+    are generated via the LLM. Returns [] (so a self-contained caller falls back to lexical) when
+    no facets exist or every facet's query fails the non-empty / home-convergence gate. The
+    semantic endpoint returns up to 50 works in a single page (no pagination), so each facet is one
+    request.
     """
-    spec = generate_serendipity_facets(theme, model)
+    if spec is None:
+        spec = generate_serendipity_facets(theme, model)
     if spec.is_empty():
         return []
 
@@ -607,7 +640,14 @@ def _collect_track_b_semantic(
     valid_facets = 0
     for facet in spec.facets:
         sq = build_semantic_query(spec.structure, facet.pseudo_abstract)
-        payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
+        try:
+            payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
+        except OpenAlexError as exc:
+            # OpenAlex's semantic (search.semantic) endpoint is experimental and intermittently
+            # returns 5xx; one flaky facet must not abort the whole collection, so skip it and let
+            # the remaining facets contribute (each facet is an independent semantic query).
+            print(f"[info] Track B semantic facet '{facet.domain}' 取得失敗 ({exc}) — スキップ")
+            continue
         raw = filter_retracted(normalize_results(payload))
         ok, reason = validate_semantic_results(raw, home_field_ids)
         if not ok:
@@ -682,6 +722,7 @@ __all__ = [
     "collect_candidates",
     "collect_and_filter",
     "collect_track_b",
+    "collect_track_b_from_spec",
     "collect_citation_candidates",
     "filter_by_used_ids",
     "generate_track_b_query",

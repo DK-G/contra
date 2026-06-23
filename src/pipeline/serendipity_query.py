@@ -165,6 +165,32 @@ def generate_serendipity_facets(
     return SerendipitySpec(structure=structure, facets=facets)
 
 
+def spec_from_payload(
+    structure: str, facets: Iterable[Dict[str, Any]], *, n: int = MAX_FACETS
+) -> SerendipitySpec:
+    """Build a :class:`SerendipitySpec` from agent-supplied facets (key-free delegation entry).
+
+    The calling agent does the targeted-abstraction reasoning (the domain-neutral structure plus
+    up to ``n`` distant-domain pseudo-abstracts) with its OWN inference, so contra never calls an
+    LLM to produce them. Applies the same shaping as :func:`generate_serendipity_facets` (dedup
+    domains, drop empty pseudo-abstracts, cap at ``n``).
+    """
+    out: List[SerendipityFacet] = []
+    seen: set = set()
+    for item in facets or []:
+        if not isinstance(item, dict):
+            continue
+        domain = str(item.get("domain") or "").strip()
+        pseudo = str(item.get("pseudo_abstract") or "").strip()
+        key = domain.lower()
+        if pseudo and key not in seen:
+            seen.add(key)
+            out.append(SerendipityFacet(domain=domain, pseudo_abstract=pseudo))
+        if len(out) >= n:
+            break
+    return SerendipitySpec(structure=str(structure or "").strip(), facets=out)
+
+
 def build_semantic_query(
     structure: str, pseudo_abstract: str, *, work_type: Optional[str] = "article"
 ) -> StructuredQuery:
@@ -246,6 +272,7 @@ __all__ = [
     "SerendipitySpec",
     "SerendipityFacet",
     "generate_serendipity_facets",
+    "spec_from_payload",
     "build_semantic_query",
     "home_field_fraction",
     "exclude_home_field",

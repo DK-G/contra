@@ -48,6 +48,13 @@
 
 ## 完了 (Done)
 
+### 2026-06-23 Track B をキー無し委譲ループへ（API を Claude Opus エージェントで代替・追加課金ゼロ）
+*   「ガンガン回す」向けに、contra 自身は LLM を呼ばず（OpenAlex＋決定論ゲートのみ）、標的化抽象・採点・執筆を呼び出し側 Claude エージェントが代行する委譲ループへ。メータ Anthropic 切替案より「メータ API を使わない委譲」を選択（ユーザー決定）。
+*   byserendipity の Phase 3 semantic 収集を key-free 化（穴埋め）: `serendipity_query.spec_from_payload`（agent facet→SerendipitySpec）＋`collect.collect_track_b_from_spec`（spec から semantic 収集・語彙 fallback 無し）＋`delegate.material_from_work`（work_from_material の逆）＋`mcp_server` の `byserendipity_discover --raw_only`（structure/facets を受け materials を返す）。bybridge は `bybridge_collect --raw_only`→`delegate_finalize` で既にキー無し成立のため無改修。
+*   **★`search.semantic` 実機脆弱性対処**: 同エンドポイントが断続 5xx → facet 1本の失敗が収集全体を中断していたのを、`_collect_track_b_semantic` の facet 単位 try/except でスキップ継続に。
+*   スキル＝委譲の置き場所: `docs/agent_rules/{byserendipity,bybridge}.md` を委譲キー無しループへ全面改稿＋`~/.claude/skills/{byserendipity,bybridge}/SKILL.md` を委譲既定へ更新。
+*   実機検証: OPENAI/ANTHROPIC キー未設定で E2E 一周（手書き facet→実 OpenAlex semantic→materials→手書き採点→post-gate）。materials facet 5xx でも 2/3 facet で 58 異分野候補・anomaly 3件棄却・2件描画＝**キー無し完走/課金ゼロ実証**。`tests/test_delegation_keyfree.py` 6ケース・全 **261 green**。
+
 ### 2026-06-23 Track A 近傍シード収集に PRF（擬似適合フィードバック）導入
 *   Phase 2 で「bybridge は異分野目的ゆえ PRF はホーム引き戻しで逆効果」と不採用にした PRF を、**ホーム語彙拡張が recall に効く Track A 近傍シード収集（`collect_and_filter`）へ再配置**（bybridge シード＋ドメインプロファイルの供給元）。
 *   `_salient_terms`（純関数・LLM不使用）= 上位シードを relevance set とみなし seed 文書頻度で salient 語を抽出（stopword/定型句＋既出クエリ語＋単発語を除去・PRF の「corpus 頻出語を落として top-k」を静的 stopword＋in-set DF へ適応）。`collect_and_filter` に `use_prf=True`＝**初期検索が薄いとき（5≤収集数<max_count）だけ発火**し、ヘッドキーワード＋salient のペアで field-scoped 拡張（`fallback=False` で generic-search drift を回避）。広いテーマは base で満ちるのでコスト増ゼロ。
