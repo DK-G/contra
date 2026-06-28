@@ -12,11 +12,36 @@
 
 1. **計算ホスト** — Python 3.10+（依存は標準ライブラリ中心）
 2. **OpenAlex への egress** — `api.openalex.org` へ HTTPS で到達できること
+   （bybridge / byserendipity の必須。byrepo を使う場合は GitHub / Hugging Face も要る → §0.5）
 3. **ツール登録** — contra の stdio MCP サーバが Dispatch セッションに登録されていること
 
 このうち **2 の OpenAlex egress が肝**。contra は近傍シードを OpenAlex から取得して初めて
 bridge プールを作る。ここが開いていないと bybridge は **0 件で止まる**（直近の Dispatch 失敗の
 真因はキー未設定ではなく、egress ポリシーが `api.openalex.org` を 403 で拒否していたこと）。
+
+## 0.5 フロー別の可否と必要 egress（早見表）
+
+委譲モードでも **すべてのフローがキー不要というわけではない**。MCP ツールごとに整理する。
+
+| フロー | MCP ツール | キー無しで Dispatch 可? | 必要な egress |
+|---|---|---|---|
+| **bybridge** | `bybridge_collect`（`raw_only=true`） | ✅ 可 | `api.openalex.org` |
+| **byserendipity** | `byserendipity_discover`（`raw_only=true`＋エージェントの facets） | ✅ 可 | `api.openalex.org`（semantic も同ホスト） |
+| **byrepo** | `byrepo_search`（`structured=true`） | ✅ 可（決定論スコア・LLM 不使用） | `api.github.com` ＋ `huggingface.co` |
+| **delegate_finalize** | `delegate_finalize` | ✅ 可 | なし（ネットワーク不使用） |
+| **bynote** | `bynote_link_concepts` | ❌ **不可** | `api.openai.com` ＋ **`OPENAI_API_KEY` 必須** |
+
+要点:
+
+- **bybridge / byserendipity / delegate_finalize** … `api.openalex.org` だけでキー無し委譲が完結する（当初ゴール）。
+- **byrepo** … OpenAlex を使わず GitHub Search（`api.github.com`）と Hugging Face Hub（`huggingface.co`）を叩く。
+  `structured=true` なら LLM 不使用でキー無しだが、**この2ドメインの egress が別途必要**（§1 参照）。
+- **bynote**（MCP ツール `bynote_link_concepts`）… 現状 **委譲モードが無く、必ず LLM を呼ぶ**
+  （[`src/mcp_server.py`](../src/mcp_server.py) `_execute_bynote` → [`src/openai_client.py`](../src/openai_client.py)）。
+  Dispatch でキー無しだと `OPENAI_API_KEY is not set` で失敗する。キー無しで使いたい場合は委譲パスの
+  実装が別途必要（スコア設計外なので [`spec.md`](../spec.md) 禁則には触れない）。
+  - ※ `/bynote` **スキル**（NotebookLM Deep Research）は MCP 経由ではない別物。ここで言うキー依存は
+    MCP ツール `bynote_link_concepts` の話。
 
 ## 1. ネットワークポリシー（Web UI でしか変えられない）
 
@@ -26,15 +51,29 @@ bridge プールを作る。ここが開いていないと bybridge は **0 件�
 
 ### 推奨: Custom + 必要ドメインを許可
 
-環境編集ダイアログで **Network access を `Custom`** にし、**Allowed domains** に1行ずつ追加する:
+環境編集ダイアログで **Network access を `Custom`** にし、**Allowed domains** に1行ずつ追加する。
+使うフローに応じて必要なブロックを足す（早見表は §0.5）。
+
+**(a) bybridge / byserendipity / delegate_finalize（最小・必須）:**
 
 ```
 api.openalex.org
 ```
 
-↑ **bybridge / by シリーズの必須**。これだけで委譲モードの by シリーズは回る。
+↑ これだけで bybridge・byserendipity の委譲ループは回る（delegate_finalize はネットワーク不使用）。
 
-`--fulltext`（OA 全文補強）も使う場合のみ、さらに次を追加:
+**(b) byrepo も使う場合**（GitHub / Hugging Face を叩くため追加）:
+
+```
+api.github.com
+huggingface.co
+```
+
+`api.github.com` は package managers 既定許可に含まれない可能性が高いので明示的に足す。
+任意で環境変数 `GITHUB_TOKEN` を設定すると GitHub Search のレート制限が 10→30 req/min に緩和される
+（キー無し委譲とは無関係・レート対策のみ）。
+
+**(c) `--fulltext`（OA 全文補強）も使う場合**（さらに追加）:
 
 ```
 arxiv.org
@@ -47,6 +86,9 @@ dx.doi.org
 
 **「Also include default list of common package managers」はチェックを維持する**
 （pypi / GitHub の既定許可が残り、`git push` や `pip` を壊さない）。
+
+> **bynote について:** MCP ツール `bynote_link_concepts` は委譲モードが無く `api.openai.com` ＋
+> `OPENAI_API_KEY` が必須（§0.5）。キー無し運用ではこのツールは使わない前提とする。
 
 ### 代替: Full（全許可）
 
