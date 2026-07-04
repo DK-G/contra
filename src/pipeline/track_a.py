@@ -1,13 +1,15 @@
 """Unified Track A practical-anchor collection across swappable sources.
 
-Today two sources exist — GitHub repositories (:mod:`src.pipeline.git_collect`) and
-Hugging Face Hub models/datasets (:mod:`src.pipeline.hf_collect`). Both normalise to
-``Work`` objects carrying a 0-100 ``source_meta["reliability_score"]``, so this layer
-just collects from each requested source, merges, and re-ranks by that score.
+Today three sources exist — GitHub repositories (:mod:`src.pipeline.git_collect`),
+Hugging Face Hub models/datasets (:mod:`src.pipeline.hf_collect`), and Kaggle
+datasets/notebooks (:mod:`src.pipeline.kaggle_collect`). All normalise to ``Work``
+objects carrying a 0-100 ``source_meta["reliability_score"]``, so this layer just
+collects from each requested source, merges, and re-ranks by that score.
 
 Per-source failure is isolated: if one source raises (network/HTTP/parse), it is
-skipped with a recorded error and the other source's anchors are still returned, so
-a Hub outage never drops the GitHub anchors and vice versa.
+skipped with a recorded error and the other sources' anchors are still returned, so
+a Hub outage never drops the GitHub anchors and vice versa. Kaggle additionally
+self-skips (returns no anchors, not an error) when no credentials are configured.
 """
 
 from __future__ import annotations
@@ -17,10 +19,12 @@ from typing import Any, Callable, List, Optional, Sequence
 from src.core.models import ThemeInput, Work
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
 from src.pipeline.hf_collect import HFCollectConfig, collect_track_a_hf_works
+from src.pipeline.kaggle_collect import KaggleCollectConfig, collect_track_a_kaggle_works
 
 SOURCE_GITHUB = "github"
 SOURCE_HUGGINGFACE = "huggingface"
-DEFAULT_SOURCES = (SOURCE_GITHUB, SOURCE_HUGGINGFACE)
+SOURCE_KAGGLE = "kaggle"
+DEFAULT_SOURCES = (SOURCE_GITHUB, SOURCE_HUGGINGFACE, SOURCE_KAGGLE)
 
 
 def normalize_sources(sources: Optional[Sequence[str]]) -> List[str]:
@@ -37,6 +41,9 @@ def normalize_sources(sources: Optional[Sequence[str]]) -> List[str]:
         "huggingface": SOURCE_HUGGINGFACE,
         "hf": SOURCE_HUGGINGFACE,
         "huggingface_hub": SOURCE_HUGGINGFACE,
+        "kaggle": SOURCE_KAGGLE,
+        "kg": SOURCE_KAGGLE,
+        "kaggle_hub": SOURCE_KAGGLE,
     }
     out: List[str] = []
     for name in sources:
@@ -52,8 +59,10 @@ def collect_track_a_works(
     sources: Optional[Sequence[str]] = None,
     git_config: Optional[GitCollectConfig] = None,
     hf_config: Optional[HFCollectConfig] = None,
+    kaggle_config: Optional[KaggleCollectConfig] = None,
     github_client: Optional[Any] = None,
     hf_client: Optional[Any] = None,
+    kaggle_client: Optional[Any] = None,
     on_error: Optional[Callable[[str, Exception], None]] = None,
 ) -> List[Work]:
     """Collect Track A anchors from the requested sources, merged and ranked.
@@ -81,6 +90,15 @@ def collect_track_a_works(
         except Exception as exc:
             if on_error:
                 on_error(SOURCE_HUGGINGFACE, exc)
+
+    if SOURCE_KAGGLE in selected:
+        try:
+            works.extend(
+                collect_track_a_kaggle_works(theme, config=kaggle_config, client=kaggle_client)
+            )
+        except Exception as exc:
+            if on_error:
+                on_error(SOURCE_KAGGLE, exc)
 
     works.sort(key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True)
     return works
