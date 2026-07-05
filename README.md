@@ -33,7 +33,7 @@
 - 環境変数 `OPENAI_API_KEY` または `ANTHROPIC_API_KEY`（選別・生成に使用。`--llm-model` / `llm_model` でプロバイダごとゼロコード切替）
 - OpenAlex API（APIキー不要）
 - `GITHUB_TOKEN`（任意。byrepo の GitHub Search レート制限が 10→30 req/min に緩和）
-- `KAGGLE_USERNAME` / `KAGGLE_KEY`（任意。byrepo の Kaggle 収集源（dataset / notebook）を有効化。未設定なら Kaggle はスキップ。`~/.kaggle/kaggle.json` でも可）
+- `KAGGLE_API_TOKEN`（任意・推奨。byrepo の Kaggle 収集源（dataset / notebook）を有効化する新方式トークン `KGAT_...`。`~/.kaggle/access_token` でも可）。旧方式なら `KAGGLE_USERNAME` / `KAGGLE_KEY`（`~/.kaggle/kaggle.json` でも可）。いずれも未設定なら Kaggle はスキップ
 - `CORE_API_KEY`（任意。`--fulltext` 使用時に CORE provider を有効化。未設定なら CORE はスキップ）
 
 ## 使い方

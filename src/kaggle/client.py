@@ -8,11 +8,17 @@ API requires credentials **even to read public datasets/notebooks**. So this cli
 exposes :attr:`has_credentials`; the collector uses it to *silently skip* Kaggle when
 no credentials are configured — keeping contra's "runs with no key" ergonomics intact.
 
-Credentials are read (in order) from:
-- the ``KAGGLE_USERNAME`` + ``KAGGLE_KEY`` environment variables, then
-- ``~/.kaggle/kaggle.json`` (the file the official Kaggle CLI writes).
+Two credential formats are supported (the same ``/api/v1/...`` endpoints accept both,
+differing only in the ``Authorization`` header):
 
-One access shape is exposed:
+- **New API token** (Bearer) — the single ``KGAT_...`` token Kaggle's settings page
+  issues by default. Read from the ``KAGGLE_API_TOKEN`` env var, then
+  ``~/.kaggle/access_token``. Sent as ``Authorization: Bearer <token>``.
+- **Legacy credentials** (Basic) — ``username`` + ``key``. Read from the
+  ``KAGGLE_USERNAME`` + ``KAGGLE_KEY`` env vars, then ``~/.kaggle/kaggle.json``
+  (the file the legacy Kaggle CLI writes). Sent as ``Authorization: Basic <b64>``.
+
+The new token wins when both are present. One access shape is exposed:
 - ``get()`` — JSON endpoints under ``/api/v1/...`` (list endpoints return a JSON array).
 """
 
@@ -33,25 +39,40 @@ class KaggleError(RuntimeError):
     """Raised when the Kaggle API request fails."""
 
 
-def _load_credentials() -> Tuple[Optional[str], Optional[str]]:
-    """Resolve (username, key) from env vars, then ~/.kaggle/kaggle.json."""
+def _load_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Resolve (api_token, username, key).
+
+    New-format Bearer token first (``KAGGLE_API_TOKEN`` env, then ``~/.kaggle/access_token``),
+    then legacy Basic creds (``KAGGLE_USERNAME``/``KAGGLE_KEY`` env, then ``~/.kaggle/kaggle.json``).
+    """
+    api_token = os.getenv("KAGGLE_API_TOKEN")
+    if not api_token:
+        try:
+            token_path = Path.home() / ".kaggle" / "access_token"
+            if token_path.is_file():
+                api_token = token_path.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            pass
+
     username = os.getenv("KAGGLE_USERNAME")
     key = os.getenv("KAGGLE_KEY")
-    if username and key:
-        return username, key
-    try:
-        path = Path.home() / ".kaggle" / "kaggle.json"
-        if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return data.get("username") or username, data.get("key") or key
-    except (OSError, json.JSONDecodeError):
-        pass
-    return username, key
+    if not (username and key):
+        try:
+            json_path = Path.home() / ".kaggle" / "kaggle.json"
+            if json_path.is_file():
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+                username = data.get("username") or username
+                key = data.get("key") or key
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    return api_token, username, key
 
 
 @dataclass
 class KaggleConfig:
     base_url: str = "https://www.kaggle.com/api/v1"
+    api_token: Optional[str] = None
     username: Optional[str] = None
     key: Optional[str] = None
     timeout_sec: int = 20
@@ -61,21 +82,23 @@ class KaggleConfig:
 class KaggleClient:
     def __init__(self, config: Optional[KaggleConfig] = None) -> None:
         if config is None:
-            username, key = _load_credentials()
-            config = KaggleConfig(username=username, key=key)
+            api_token, username, key = _load_credentials()
+            config = KaggleConfig(api_token=api_token, username=username, key=key)
         self.config = config
 
     @property
     def has_credentials(self) -> bool:
-        """True only when both a username and key are available (basic-auth needs both)."""
-        return bool(self.config.username and self.config.key)
+        """True when a new-format token, or a full legacy username+key pair, is available."""
+        return bool(self.config.api_token or (self.config.username and self.config.key))
 
     def _headers(self, accept: str) -> Dict[str, str]:
         headers = {
             "Accept": accept,
             "User-Agent": self.config.user_agent,
         }
-        if self.has_credentials:
+        if self.config.api_token:
+            headers["Authorization"] = f"Bearer {self.config.api_token}"
+        elif self.config.username and self.config.key:
             raw = f"{self.config.username}:{self.config.key}".encode("utf-8")
             headers["Authorization"] = f"Basic {base64.b64encode(raw).decode('ascii')}"
         return headers

@@ -24,7 +24,7 @@ description: contra の Track A Git practical anchors を収集・評価・出�
 
 各収集源は同一の `Work` に正規化され、`source_meta["reliability_score"]`（0-100）で統合ランキングする。片方の収集源が落ちても他方のアンカーは返す（障害分離）。`sources` で対象を絞れる（例: `["huggingface"]`）。
 
-Kaggle は公開データの読み取りでも API 資格情報（環境変数 `KAGGLE_USERNAME` / `KAGGLE_KEY`、または `~/.kaggle/kaggle.json`）が必須。**資格情報が未設定なら Kaggle 収集は静かにスキップ**し（エラーにせず 0 件）、他収集源のアンカーはそのまま返す。
+Kaggle は公開データの読み取りでも API 資格情報が必須。新方式トークン（`KAGGLE_API_TOKEN` または `~/.kaggle/access_token` の `KGAT_...`、Bearer 認証）を優先し、無ければ旧方式（`KAGGLE_USERNAME` / `KAGGLE_KEY`、または `~/.kaggle/kaggle.json`、Basic 認証）を使う。**いずれも未設定なら Kaggle 収集は静かにスキップ**し（エラーにせず 0 件）、他収集源のアンカーはそのまま返す。
 
 ## Invocation
 
