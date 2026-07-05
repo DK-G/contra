@@ -236,6 +236,15 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
     parser.add_argument(
+        "--track-a-pool-size",
+        type=int,
+        default=0,
+        help="Track A candidate pool size per source (search per_page/limit + pre-classify cap), independent of "
+        "--track-a-count. 0 (default) auto-derives from --track-a-count (max(count*2, 10)), preserving the old "
+        "linked behaviour. Set explicitly to widen/narrow the search net without changing the final output count "
+        "(larger values cost more GitHub/HF API calls per source).",
+    )
+    parser.add_argument(
         "--track-a-sources",
         default="github,huggingface",
         help="Comma-separated Track A practical-anchor sources: github, huggingface (default: both). Anchors from all sources merge and rank by their reliability score.",
@@ -328,14 +337,15 @@ def main(argv: list[str]) -> int:
     use_llm = gen_mode == "llm"
 
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
+    track_a_pool_size = args.track_a_pool_size or max(args.track_a_count * 2, 10)
     git_config = GitCollectConfig(
-        per_page=max(args.track_a_count * 2, 10),
-        max_repos=max(args.track_a_count * 2, 10),
+        per_page=track_a_pool_size,
+        max_repos=track_a_pool_size,
         include_rich_signals=args.git_rich_signals,
     )
     hf_config = HFCollectConfig(
-        limit=max(args.track_a_count * 2, 10),
-        max_works=max(args.track_a_count * 2, 10),
+        limit=track_a_pool_size,
+        max_works=track_a_pool_size,
     )
     track_a_sources = normalize_sources(
         [s.strip() for s in args.track_a_sources.split(",") if s.strip()]

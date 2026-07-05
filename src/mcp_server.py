@@ -184,6 +184,7 @@ class StdinMcpServer:
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
+                        "track_a_pool_size": {"type": "integer", "description": "Candidate pool size per source (search per_page/limit + pre-score cap), independent of track_a_count. Omit/0 to auto-derive as track_a_count*2 (old linked behaviour). Set explicitly to widen/narrow the search net without changing how many final anchors are returned (larger values cost more GitHub/HF API calls per source)."},
                         "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface"]}, "description": "Practical-anchor sources to search: 'github' (repositories) and/or 'huggingface' (Hub models + datasets). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface"]},
                         "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
@@ -444,8 +445,9 @@ class StdinMcpServer:
     def _execute_byrepo(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
         target_count = args.get("track_a_count") or 3
-        git_config = GitCollectConfig(per_page=target_count * 2, max_repos=target_count * 2)
-        hf_config = HFCollectConfig(limit=target_count * 2, max_works=target_count * 2)
+        pool_size = args.get("track_a_pool_size") or max(target_count * 2, 10)
+        git_config = GitCollectConfig(per_page=pool_size, max_repos=pool_size)
+        hf_config = HFCollectConfig(limit=pool_size, max_works=pool_size)
         sources = normalize_sources(args.get("sources"))
 
         _log(f"Byrepo: collecting practical anchors (sources: {', '.join(sources)})...")
