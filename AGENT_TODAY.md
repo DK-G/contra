@@ -30,7 +30,7 @@
 - マージ・push はしない（diff を残して人間レビューへ）
 
 ## 検証（bycheck）
-- 正本: `C:\dev\portfolio\docs\skills\bycheck.md`（参照のみ）
+- 正本: `D:\dev\docs\skills\bycheck.md`（参照のみ）
 - 想定コマンド: `python -m pytest tests/ -q`（既存 `tests/` 規約に合わせる）
 - 任意: 構文チェック（python 不在時は最低限ここまで）。
 
