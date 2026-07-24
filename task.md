@@ -1,3 +1,14 @@
+<!-- CURRENT-START / ここだけを常に最新に保つ。ここより下は履歴で、読むのは必要時のみ。 -->
+## 現在地（2026-07-25）
+- フェーズ: **実装は完了・Phase 1 の Done 判定待ち**。検索クエリ精度 Phase 2（bybridge）/ Phase 3（byserendipity）、キー無し委譲ループ（`delegate_finalize` ＋ 各 MCP の `structured` フラグ）、byrepo の A-RS1/A-RS2 配点移行、`fill_track_entries` の統合テストまで全て `[x]`。完了記録は `docs/archive/task-history.md` へ退避済み。
+- 進行中: **MCP サーバとして実稼働中**（`byserendipity` / `byrepo` / `bybridge` / `bynote_link_concepts` / `delegate_finalize` がツールとして利用可能なことを 2026-07-25 に確認）。Track A「Git 実用アンカー設計」は設計5項目とも完了（`docs/specs/track_a_git_anchor_design.md`）。
+- 次の一手:
+  1. **Track B 品質評価を実施して Phase 1 を閉じる** — ①複数テーマでサンプル生成し「遠いが構造一致」の1本が安定して出るか ②Anomaly（無意味接続）と近接（マイオピア）の混入がないか ③「役に立つ可能性の仮説」が論文固有の発見に基づくか ④飽和ノート時に弱い候補で水増しされないか、を確認し **`docs/quality_eval.md` §4 表・§5 総評に記入**（ルーブリックと再現コマンドは整備済み）。
+  2. Track A の discussion 観測は **GitHub Discussions が REST に一覧エンドポイントを持たず GraphQL 専用**のため保留中。着手するなら GraphQL 経路の導入から（dependents も同じ理由で対象外）。
+- ★ブロッカー/外部待ち: 上記1の残5件は**全て「実 LLM API キーが必要」または「人間の質的判断が必要」**。**実装が Done 判定を追い越しており、人間が評価しない限り Phase 1 を閉じられない**のが唯一かつ最大のボトルネック。
+- 直近の重い判断: **Web 化・課金は現時点では実装しない**（必要になったら Phase 2 として再評価）。PRF は bybridge の異分野目的と衝突するため不採用とし Track A 収集へ再配置。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。判断の経緯は `DECISION_LOG.md`。
+<!-- CURRENT-END -->
+
 # 作業タスクリスト
 
 `roadmap.md`からブレークダウンした、具体的な作業タスクを管理します。
