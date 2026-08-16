@@ -34,7 +34,12 @@ from src.pipeline.serendipity_query import spec_from_payload
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 from src.pipeline.git_collect import GitCollectConfig
 from src.pipeline.hf_collect import HFCollectConfig
-from src.pipeline.track_a import collect_track_a_works, normalize_sources
+from src.pipeline.track_a import (
+    SOURCE_GITHUB,
+    SOURCE_HUGGINGFACE,
+    collect_track_a_works,
+    normalize_sources,
+)
 from src.core.output_spec import render_markdown
 
 
@@ -479,15 +484,40 @@ class StdinMcpServer:
         sources = normalize_sources(args.get("sources"))
 
         _log(f"Byrepo: collecting practical anchors (sources: {', '.join(sources)})...")
+        failures: Dict[str, str] = {}
+
+        def _on_src_error(src: str, exc: Exception) -> None:
+            failures[src] = str(exc)
+            _log(f"Byrepo: source '{src}' failed: {exc}")
+
         works = collect_track_a_works(
             theme,
             sources=sources,
             git_config=git_config,
             hf_config=hf_config,
-            on_error=lambda src, exc: _log(f"Byrepo: source '{src}' failed: {exc}"),
+            on_error=_on_src_error,
         )
 
         if not works:
+            # Distinguish "every selected source failed" (almost always blocked
+            # egress: byrepo only reaches GitHub / Hugging Face) from "sources were
+            # reachable but nothing matched". Reporting the blocked hosts mirrors the
+            # bybridge OpenAlex-egress message so the operator knows what to allow.
+            if failures and len(failures) == len(sources):
+                _host_by_source = {
+                    SOURCE_GITHUB: "api.github.com",
+                    SOURCE_HUGGINGFACE: "huggingface.co",
+                }
+                hosts = " / ".join(_host_by_source[s] for s in sources if s in _host_by_source) \
+                    or "api.github.com / huggingface.co"
+                detail = "; ".join(f"{s}: {e}" for s, e in failures.items())
+                return {
+                    "content": [{"type": "text", "text": (
+                        f"byrepo egress blocked — allow {hosts} in this environment's "
+                        f"Network access (Custom)（全ソース {len(sources)} 件が到達失敗: {detail}）"
+                    )}],
+                    "isError": False
+                }
             return {
                 "content": [{"type": "text", "text": "条件に合致する実装・モデル・データセットが見つかりませんでした。"}],
                 "isError": False

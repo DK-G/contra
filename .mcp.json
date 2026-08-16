@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "contra": {
+      "command": "python",
+      "args": ["-u", "-m", "src.cli.main", "--mcp"]
+    }
+  }
+}
