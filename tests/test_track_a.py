@@ -5,8 +5,10 @@ from __future__ import annotations
 from src.core.models import Keywords, Scope, ThemeInput
 from src.pipeline.git_collect import GitCollectConfig
 from src.pipeline.hf_collect import HFCollectConfig
+from src.pipeline.kaggle_collect import KaggleCollectConfig
 from src.pipeline.track_a import (
     DEFAULT_SOURCES,
+    SOURCE_KAGGLE,
     collect_track_a_works,
     normalize_sources,
 )
@@ -58,6 +60,23 @@ class _FakeHF:
         return ""
 
 
+class _FakeKaggle:
+    def __init__(self, datasets=None, fail=False, has_credentials=True) -> None:
+        self.config = type("C", (), {"base_url": "https://www.kaggle.com/api/v1"})()
+        self.datasets = datasets or []
+        self.fail = fail
+        self.has_credentials = has_credentials
+        self.calls = []
+
+    def get(self, path, params=None):
+        self.calls.append(path)
+        if self.fail:
+            raise RuntimeError("kaggle down")
+        if path == "/datasets/list":
+            return self.datasets
+        return []
+
+
 def _repo(full_name="acme/mahjong-cv", stars=300):
     return {
         "full_name": full_name,
@@ -73,6 +92,20 @@ def _repo(full_name="acme/mahjong-cv", stars=300):
         "updated_at": "2026-05-01T00:00:00Z",
         "pushed_at": "2026-05-01T00:00:00Z",
         "topics": ["mahjong", "object-detection"],
+    }
+
+
+def _kaggle_dataset(ref="user/mahjong-data", downloads=8000, votes=90):
+    return {
+        "ref": ref,
+        "title": ref.split("/")[-1],
+        "subtitle": "mahjong tiles",
+        "downloadCount": downloads,
+        "voteCount": votes,
+        "usabilityRating": 0.8,
+        "licenseName": "CC0-1.0",
+        "lastUpdated": "2026-06-01T00:00:00Z",
+        "tags": [{"name": "mahjong"}],
     }
 
 
@@ -99,6 +132,8 @@ def _no_rich_github_cfg() -> GitCollectConfig:
 def test_normalize_sources_aliases_and_dedupe():
     assert normalize_sources(["hf", "huggingface", "gh"]) == ["huggingface", "github"]
     assert normalize_sources(["github", "github"]) == ["github"]
+    assert normalize_sources(["kg", "kaggle"]) == ["kaggle"]
+    assert SOURCE_KAGGLE in DEFAULT_SOURCES
 
 
 def test_normalize_sources_empty_or_unknown_falls_back_to_all():
@@ -169,4 +204,51 @@ def test_huggingface_failure_still_returns_github_anchors():
         on_error=lambda src, exc: errors.append(src),
     )
     assert errors == ["huggingface"]
+    assert works and all(w.publication_type == "github_repository" for w in works)
+
+
+# --- kaggle source ----------------------------------------------------------
+
+def test_collect_merges_three_sources_sorted_by_reliability():
+    works = collect_track_a_works(
+        _theme(),
+        sources=["github", "huggingface", "kaggle"],
+        git_config=_no_rich_github_cfg(),
+        hf_config=HFCollectConfig(include_card=False, include_datasets=False),
+        github_client=_FakeGH(items=[_repo()]),
+        hf_client=_FakeHF(models=[_model()]),
+        kaggle_client=_FakeKaggle(datasets=[_kaggle_dataset()]),
+    )
+    types = {w.publication_type for w in works}
+    assert {"github_repository", "huggingface_model", "kaggle_dataset"} <= types
+    scores = [w.source_meta.get("reliability_score", 0) for w in works]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_kaggle_without_credentials_is_silently_skipped():
+    errors = []
+    works = collect_track_a_works(
+        _theme(),
+        sources=["github", "kaggle"],
+        git_config=_no_rich_github_cfg(),
+        github_client=_FakeGH(items=[_repo()]),
+        kaggle_client=_FakeKaggle(datasets=[_kaggle_dataset()], has_credentials=False),
+        on_error=lambda src, exc: errors.append(src),
+    )
+    # no error recorded (skip, not failure) and only github anchors returned
+    assert errors == []
+    assert works and all(w.publication_type == "github_repository" for w in works)
+
+
+def test_kaggle_failure_still_returns_other_anchors():
+    errors = []
+    works = collect_track_a_works(
+        _theme(),
+        sources=["github", "kaggle"],
+        git_config=_no_rich_github_cfg(),
+        github_client=_FakeGH(items=[_repo()]),
+        kaggle_client=_FakeKaggle(fail=True),
+        on_error=lambda src, exc: errors.append(src),
+    )
+    assert errors == ["kaggle"]
     assert works and all(w.publication_type == "github_repository" for w in works)

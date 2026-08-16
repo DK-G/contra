@@ -246,8 +246,8 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--track-a-sources",
-        default="github,huggingface",
-        help="Comma-separated Track A practical-anchor sources: github, huggingface (default: both). Anchors from all sources merge and rank by their reliability score.",
+        default="github,huggingface,kaggle",
+        help="Comma-separated Track A practical-anchor sources: github, huggingface, kaggle (default: all). kaggle (datasets + notebooks) needs KAGGLE_USERNAME/KAGGLE_KEY and is silently skipped when unset. Anchors from all sources merge and rank by their reliability score.",
     )
     parser.add_argument(
         "--git-rich-signals",
