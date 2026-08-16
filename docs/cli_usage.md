@@ -4,7 +4,7 @@
 python -m src.cli.main --input data/samples/theme.json --out output
 ```
 
-- `data/samples/theme.json`: `docs/input_schema.md`に準拠した入力
+- `data/samples/theme.json`: `docs/specs/input_schema.md`に準拠した入力
 - `output/normalized_input.json`: 正規化済み入力
 - `output/brainstorm_output.md`: Markdown出力
 - 生成仕様は`docs/output_markdown_spec.md`を参照

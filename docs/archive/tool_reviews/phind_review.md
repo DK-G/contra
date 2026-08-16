@@ -4,7 +4,7 @@
 > 論文系ツール群と毛色が異なり、評価は **Track A（byrepo）と Web Pass 手法**の観点が中心。
 > 調査手段: phind 製品情報＋ Web 調査。調査日: 2026-06-14。
 > 対象: <https://www.phind.com/>（商用 SaaS / 開発者向け）
-> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md)（Web Pass）, [`../research/byrepo_improvement_strategy.md`](../research/byrepo_improvement_strategy.md)
+> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md)（Web Pass）, [`../research/byrepo_improvement_strategy.md`](../../research/byrepo_improvement_strategy.md)
 
 ---
 

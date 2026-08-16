@@ -4,7 +4,7 @@
 > Elicit/Consensus と同型の「収束型 SaaS」のため、本稿は**重複を避け、固有の貢献点（生成＝翻訳段への示唆）**に絞る。
 > 調査手段: scispace.com ヘルプ/製品ページ＋ Web 調査。調査日: 2026-06-14。
 > 対象: <https://scispace.com/>（商用 SaaS）
-> 関連: [`elicit_review.md`](elicit_review.md), [`../research/serendipity_conditions.md`](../research/serendipity_conditions.md)
+> 関連: [`elicit_review.md`](elicit_review.md), [`../research/serendipity_conditions.md`](../../research/serendipity_conditions.md)
 
 ---
 
@@ -19,7 +19,7 @@
    SciSpace の看板 **Chat with PDF**（数式・専門用語・表を門外漢に噛み砕く）は、contra の
    **生成段（`generate.py`）と「役に立つ可能性の仮説」フィールド**が担うべき
    **「遠ドメインの発見をユーザーの慧眼(sagacity)が働く形へ翻訳する」**役割の、具体的な手本になる。
-   （理論的根拠は [`serendipity_conditions.md`](../research/serendipity_conditions.md) §1: ユーザーは
+   （理論的根拠は [`serendipity_conditions.md`](../../research/serendipity_conditions.md) §1: ユーザーは
    自分の専門には準備済みだが**遠いドメインには無防備** → ツールが翻訳して慧眼を肩代わりする。）
 
 3. **その他の機能（Chat with Folder の「矛盾・ギャップ抽出」、50M OA 全文）は、既出の他ツールで代替可。**

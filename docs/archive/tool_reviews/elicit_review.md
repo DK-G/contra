@@ -4,7 +4,7 @@
 > contra に取り込める要素があるかを判定した記録である。
 > 調査手段: elicit.com / Semantic Scholar API ドキュメント＋ Web 調査。調査日: 2026-06-14。
 > 対象: <https://elicit.com/>（商用 SaaS）/ 基盤: <https://api.semanticscholar.org/>
-> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md), [`../research/serendipity_conditions.md`](../research/serendipity_conditions.md)
+> 関連: [`okf_knowledge_catalog_review.md`](okf_knowledge_catalog_review.md), [`../research/serendipity_conditions.md`](../../research/serendipity_conditions.md)
 
 ---
 

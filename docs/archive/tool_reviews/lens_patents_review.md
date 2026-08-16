@@ -4,7 +4,7 @@
 > (2) **特許という新ジャンルが contra の中核に効くか**、(3) 特許の無料 API 代替、を評価する。
 > 調査手段: about.lens.org / docs.api.lens.org / PatentsView / Google Patents Public Data ＋ Web 調査。調査日: 2026-06-15。
 > 対象: <https://www.lens.org/>
-> 関連: [`openalex_review.md`](openalex_review.md), [`arxiv_review.md`](arxiv_review.md), [`../research/serendipity_conditions.md`](../research/serendipity_conditions.md)
+> 関連: [`openalex_review.md`](openalex_review.md), [`arxiv_review.md`](arxiv_review.md), [`../research/serendipity_conditions.md`](../../research/serendipity_conditions.md)
 
 ---
 
