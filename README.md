@@ -23,7 +23,7 @@
 | フロー | MCP ツール | 内容 |
 |---|---|---|
 | `byserendipity` | `byserendipity_discover` | Track B: LLM クエリで遠ドメイン論文を収集し、構造類推で選別 |
-| `byrepo` | `byrepo_search` | Track A: GitHub repository を収集し Reliability Score で評価 |
+| `byrepo` | `byrepo_search` | Track A: GitHub repository + Hugging Face Hub の model/dataset を収集し Reliability Score で評価 |
 | `bybridge` | `bybridge_collect` | citation 2-hop: 共有引用文献(bridge)経由でホームドメイン外の交差論文を収集（`raw_only=true` なら LLM キー不要） |
 | `bynote` | `bynote_link_concepts` | メモを Purpose/Mechanism に分解し、類推ドメインと Serendipity Bridge の問いを提示 |
 
@@ -55,6 +55,7 @@ python -m src.cli.main \
 | `--single` | MVP モード: Track B 最良1本のみ | off |
 | `--track-b-count` | Track B 最大本数（上限。質ゲートで減る） | 10 |
 | `--track-a-count` | Track A アンカー本数（0=省略） | 0 |
+| `--track-a-pool-size` | Track A 収集源ごとの探索プール件数（`--track-a-count` とは独立。0=自動で `max(count*2, 10)`） | 0（自動） |
 | `--gen-mode` | 生成モード（llm / structured / simple） | llm |
 | `--llm-model` | 選別・生成に使うモデル（OpenAI / Claude 切替） | gpt-4o-mini |
 | `--no-history` | 履歴除外をスキップ | off |
@@ -112,7 +113,7 @@ Phase 2 完了・MCP 化済み（`main` ブランチ）。
 
 主要実装済み:
 - Track B 選別: SOLVENT Purpose-Mechanism 構造類推スコアリング（`select_track_b`）
-- Track A: GitHub 収集 + 4本柱 Reliability Score（byrepo）
+- Track A: GitHub + Hugging Face Hub 収集・統合ランキング（byrepo）
 - citation 2-hop 収集（bybridge）・MAX-MIN 多様化
 - hollow gate（Structural Depth judge）・percentile gate・output floor
 - 4部構成生成・数値捏造ガード

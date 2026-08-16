@@ -41,6 +41,7 @@ description: contra の Track A Git practical anchors を収集・評価・出�
 - `keywords.exclude`
 - 必要なら `track_a_count`
 - 必要なら `sources`（既定 `["github", "huggingface"]`）
+- 必要なら `track_a_pool_size`（各収集源の探索プール件数=`per_page`/`limit`/`max_repos`/`max_works`。既定は未指定=0で`track_a_count`から自動導出 `max(track_a_count*2, 10)`。`track_a_count`と独立に指定でき、最終採用件数を変えずに探索の広さだけ調整できる。大きくするほどGitHub/HF APIコールが増える）
 
 ## Workflow
 
