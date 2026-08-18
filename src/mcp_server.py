@@ -10,6 +10,12 @@ from typing import Any, Dict, List, Optional
 
 from src.core.input_schema import validate_and_normalize
 from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
+from src.pipeline.bridge_diagnostics import (
+    bridge_concentration,
+    bridge_usage,
+    render_diagnostics,
+    resolve_work_labels,
+)
 from src.pipeline.bridges import bridge_rank_key, shared_bridge_count
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
@@ -270,7 +276,8 @@ class StdinMcpServer:
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, cross-domain candidates already surfaced for this theme are excluded and adopted ones recorded (data/history/), so re-runs return NEW papers.", "default": False},
-                        "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."}
+                        "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."},
+                        "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -602,6 +609,25 @@ class StdinMcpServer:
             "isError": False
         }
 
+    @staticmethod
+    def _bybridge_diagnostics(seeds, cands, bridges, ranked, *, enabled: bool) -> str:
+        """Render the F-02 diagnostics block (seeds + bridge traffic), or the old counts line.
+
+        Names only the bridges that are actually displayed, in a single OpenAlex call that fails
+        soft — a diagnostics hiccup must never cost the caller their results.
+        """
+        if not enabled:
+            return (
+                f"収集診断: シード {len(seeds)} 件 / bridge プール {len(bridges)} 本 / "
+                f"交差候補 {len(cands)} 件"
+            )
+        conc = bridge_concentration(cands, bridges, ranked=ranked)
+        shown = [u.id for u in bridge_usage(seeds, cands, bridges) if u.candidate_citers > 0][:5]
+        if conc.top_bridge_id and conc.top_bridge_id not in shown:
+            shown.append(conc.top_bridge_id)
+        labels = resolve_work_labels(shown) if shown else {}
+        return render_diagnostics(seeds, cands, bridges, ranked=ranked, labels=labels)
+
     def _execute_bybridge(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
         model = args.get("llm_model") or "gpt-4o-mini"
@@ -610,6 +636,9 @@ class StdinMcpServer:
         raw_only = bool(args.get("raw_only"))
         structured = bool(args.get("structured"))
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.0
+        # F-02 (docs/field_observations_seihai.md): counts alone cannot separate a seed-search
+        # failure from giant-hub absorption, so the seeds and bridges are shown by default.
+        diagnostics = bool(args.get("diagnostics", True))
 
         _log("Bybridge: collecting near-field seed papers...")
         seeds = collect_and_filter(theme, CollectConfig(), max_count=seed_count, require_abstract=True)
@@ -625,13 +654,16 @@ class StdinMcpServer:
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
         cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60, used_ids=used_ids)
+        ranked_all = sorted(cands, key=bridge_rank_key, reverse=True) if cands else []
+        diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
         if not cands:
-            return {
-                "content": [{"type": "text", "text": f"citation 2-hop で交差候補が見つかりませんでした（シード {len(seeds)} 件 / bridge {len(bridges)} 本。ホームドメイン除外で全滅した可能性があります）。"}],
-                "isError": False
-            }
-
-        diag_line = f"収集診断: シード {len(seeds)} 件 / bridge プール {len(bridges)} 本 / 交差候補 {len(cands)} 件"
+            head = (
+                f"citation 2-hop で交差候補が見つかりませんでした"
+                f"（シード {len(seeds)} 件 / bridge {len(bridges)} 本。ホームドメイン除外で全滅した可能性があります）。"
+            )
+            # Seeds are shown even on this path: an empty result caused by off-topic seeds and one
+            # caused by an over-aggressive home-domain exclusion look identical without them.
+            return _external_data_result(f"{head}\n\n{diag_line}" if diagnostics else head)
 
         if raw_only:
             if structured:
@@ -645,7 +677,7 @@ class StdinMcpServer:
                 md = render_markdown(doc)
                 return _external_data_result(f"{diag_line}\n\n{md}")
             lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
-            ranked = sorted(cands, key=bridge_rank_key, reverse=True)
+            ranked = ranked_all
             for i, w in enumerate(ranked[:max(target_count, 10)], 1):
                 betw = int((w.source_meta or {}).get("bridge_betweenness", 0) or 0)
                 lines.append(f"{i}. {w.title}")

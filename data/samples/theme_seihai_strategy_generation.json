@@ -1,0 +1,28 @@
+{
+  "_comment": "Reproduction fixture for the seihai theme family that produced F-01 (bybridge giant-hub absorption, 7 weeks running) and F-06. Wording follows the 2026-08-18 seihai run recorded in docs/field_observations_seihai.md so remediation days can re-measure against a fixed input instead of a fresh theme each time.",
+  "theme_overview": "遺伝的プログラミングで売買ルールを自動生成する探索器を運用している。生成された候補どうしの相関が高く、集合として見たときに過剰適合確率(PBO)が閾値を超えてしまう。個別候補の統計的検定は通るのに、集合レベルの大域vetoが働くと候補群が丸ごと棄却される。生成段は候補集合の相関構造を測る手段を持たず、選抜段は生成分布を制御できないため、両者の間に責任の空白がある。生成段で振る舞いの多様性(behavioural diversity)を強制する仕組みと、選抜段の集合レベルveto判定を明示的に分離し、どちらの段でどの量を測るべきかを決めたい。品質多様性(quality diversity)や新規性探索の系譜が表現型空間の被覆をどう定義しているか、また多重検定の文献が候補集合の相関をどう扱っているかを手掛かりにしたい。",
+  "goal": "生成器が出す候補集合の相関構造を、選抜段のveto判定と切り離して制御する設計指針を得る。",
+  "why_problem": "個別候補の統計的検定と集合レベルの過剰適合指標が別の量を測っているため、個別で有意な候補ばかり集めると集合として劣化する。生成段は多様性を測る手段を持たず、選抜段は生成を制御できない。",
+  "approach_type": "application",
+  "assumptions": [
+    "候補間相関は生成器の探索分布に由来し、選抜段では回復できない",
+    "behavioural diversity は表現型(取引系列)の距離で測るべきで、遺伝子型の距離では代理にならない",
+    "集合レベルの過剰適合は候補数の増加とともに単調に悪化する"
+  ],
+  "scope": {
+    "field": "evolutionary computation",
+    "scale": "small",
+    "time_range": "last_10_years"
+  },
+  "keywords": {
+    "include": [
+      "quality diversity",
+      "novelty search",
+      "genetic programming",
+      "backtest overfitting",
+      "multiple hypothesis testing"
+    ],
+    "exclude": []
+  },
+  "concern": "生成された候補が互いに相関し、集合レベルの過剰適合指標が閾値を超える"
+}

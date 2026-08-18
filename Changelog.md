@@ -7,6 +7,37 @@
 
 ---
 
+## 2026-08-18（CL-0084） bybridge 実行診断（F-02）: 使ったシードと通った bridge を出力に出す
+
+### 概要
+* スケジュールタスク `contra-failure-remediation` の初回実行。`docs/field_observations_seihai.md` の **F-02**（bybridge が使用シードを返さないため、失敗が「シード検索の失敗」か「bridge が汎用ハブに吸われた」か区別できない）を対処。
+* 新規 `src/pipeline/bridge_diagnostics.py`：シード射影 / bridge 通行量 / 集中度メーター（純関数・API コスト 0）＋ 表示する bridge だけを **OpenAlex 1コール**で命名するフェイルソフトなラベル解決。
+* `src/mcp_server.py` の `_execute_bybridge` に配線。既定 ON、`diagnostics:false` で従来の件数1行に戻る（加算的・可逆・シグネチャ非破壊）。交差候補ゼロの経路でもシードを出す。
+* **初日に F-01 の診断を否定**：`bridge 寄与` 列が「20シード中18件が寄与0本、残る2件が50枠すべてを占有」と示し、真因が巨大ハブ吸着ではなく**重複 proceedings レコードによるプール占領**だと確定（新規 F-07 として起票）。中心性ペナルティは実装しなくて正解だった。
+
+### 関連タスク
+* Task: contra 失敗対処デー（F-02＝計器、F-01 の処方より先に入れる）
+
+### Diffスナップショット（要約）
+
+```text
+# 1. 変更目的 (必須)
+bybridge の失敗切り分けを可能にする。計器なしに処方を入れると「効いたか分からない」で終わるため、F-01 の処方より先に F-02 を入れる。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/bridge_diagnostics.py(新規), src/mcp_server.py, tests/test_bridge_diagnostics.py(新規), data/samples/theme_seihai_strategy_generation.json(新規・再現用固定テーマ), docs/field_observations_seihai.md, DECISION_LOG.md, Changelog.md
+seed_rows / bridge_usage / bridge_concentration / resolve_work_labels / render_diagnostics ＋ MCP の diagnostics フラグ（既定 true）。
+
+# 3. 確認方法 (必須)
+新規 11 ケース＋全体 302 tests(301 pass / 1 は本変更前から失敗している既存不具合 test_git_collect.py::test_lma_floor_never_lowers_a_fresh_score)。
+実機: 固定テーマで raw / structured / 交差候補ゼロ の3経路を実行し before/after を実測。
+before=「収集診断: シード 20 件 / bridge プール 50 本 / 交差候補 60 件」の1行のみ。
+after=シード20件全リスト（bridge 寄与つき）＋通行 bridge 5本（名前・被引用数）＋集中度（最頻 bridge が上位10件の100%・全体の50%）。
+ランキングは不変（計器であって処方ではない）。
+```
+
+---
+
 ## 2026-06-15（CL-0083） ローカル化 段階(d): byrepo/Track A 委譲（委譲シリーズ a-d 完了）
 
 ### 概要
