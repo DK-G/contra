@@ -86,6 +86,7 @@
 | 2026-08-18 | GP 生成器の候補相関と集合レベル PBO 大域veto の分離／生成段での behavioural diversity 強制 | `impratiksingh/unsupervised-learning`(Kaggle・★1605・**Reliability 28**) / `azxc9595/visual-graphs-of-philosophy`(Kaggle・★696・**28**) / `arunkumarramanan/awesome-ml-frameworks-and-mnist-classification`(Kaggle・★329・**24**) | **3/3 無関係、かつ 3/3 が Kaggle ノートブック**（`sources` 既定に github を含めて呼んだが、上位はすべて Kaggle）。Impl/Doc・LMA・Comm・Sec が**全件 0/0/0/0** で、スコアは実質★数の単調変換になっている＝**品質軸すら測れていない**。`keywords_include` に `quality diversity` / `novelty search` / `backtest overfitting` を明示したのに、QD/GP 系のリポジトリ（`pyribs`・`qdpy`・`gplearn` 等の明白な候補）が1件も上位に来ない |
 | 2026-08-19 | 稼働中 A/B 腕の重複検出（タイムスタンプ jitter 下の照合）／入口専用スクリーニングの死角 | `jonigl/mcp-client-for-ollama`(★801・**Reliability 95**) / `trackawesomelist/trackawesomelist`(★662・**91**) / `lukasmasuch/best-of-ml-python`(★23.7k・**90**) / `automateyournetwork/netclaw`(★638・**90**) | **4/4 無関係**（Ollama クライアント・awesome-list 追跡・ML ライブラリ一覧・ネットワーク自動化エージェント）。★**8/18 と違い品質サブスコアは全件充填**（Impl/Doc 25-30・LMA 25・Comm 10-17・Sec 21-25）＝**品質軸が生きている状態でも順位は無関係のまま**。⇒ F-03 の主症状（関連度が順位に効かない）が**単独で**再現＝8/18 の「サブスコア全ゼロ」は F-03 とは別の第2経路であることが確定した。`keywords_include` に `fuzzy matching`/`temporal tolerance`/`deduplication`/`A/B testing` を明示したが、record linkage 系（`dedupe`・`splink`・`recordlinkage` 等の明白な候補）は1件も来ない |
 | 2026-08-20 | 有限グリッド生成器の到達域と、実際に評価・配備された仮説空間との差の計上／壺が空いたとき語彙を伸ばす archive 駆動生成器 | `open-fars/openfars`(★34・**Reliability 82**) / `algorithmicsuperintelligence/openevolve`(★7,231・**83**) / `katopz/katgpt-rs`(★91・**86**) | **★2/3 が関連＝7/30・8/06・8/10・8/13・8/17・8/18・8/19 の全滅系より明確に改善**（`openevolve` は「固定グリッドが枯れたら語彙自体を伸ばす」の実装として主題に直接対応、`openfars` は QD アーカイブで弱く関連）。**ただし F-03 は健在で、しかも最も鋭い形で出た**＝**3件中スコア最上位の 86 が唯一の無関係候補**（`katgpt-rs`＝Rust の neuro-symbolic micro-transformer）で、**関連する2件は 83 / 82 と下**。⇒ **関連度が順位に効かないという F-03 の主張が、「全件無関係」ではなく「関連と無関係が混在し、順位だけが逆」という形で再現**した。混在ケースのほうが**呼び手にとって危険**（上から読むと最初に無関係に当たる）。`keywords_include` は `quality diversity`/`MAP-Elites`/`open-ended search`/`novelty search`/`archive coverage`（5件上限に抵触して1度目は `InputValidationError`＝**上限が説明文に書かれていない**のも記録しておく）
+| 2026-08-21 | 二点分布（固定TP/SL）の少数試行から期待値の符号を判定する推定量・逐次検定の実装 | `bytedance/deer-flow`(★80.4k・**Reliability 94**) / `rampstackco/claude-skills`(★566・**88**) / `Dicklesworthstone/frankensqlite`(★214・**85**) | **3/3 無関係**（エージェントハーネス・Claude Skills 集・Rust 製 SQLite 再実装）。**品質サブスコアは全件充填**（Impl/Doc 30・LMA 25・Comm 10-19・Sec 11-23）＝8/19 と同じ「品質軸が生きていても順位は無関係のまま」の再現。`keywords_include` に `sequential test`/`e-value`/`anytime-valid`/`bernoulli`/`SPRT` を明示したが、逐次検定の明白な候補（`confseq`・`safe-anytime-valid` 系・`statsmodels` の SPRT 実装）は1件も来ない。★**3件とも「関係軸: 勝率」**という同一ラベルが付き、`frankensqlite` の関連性は「ページレベル MVCC を用いて同時書き込みを実現しており…データベースの効率性が重要」＝**F-05（概要/関連性がソースに接地しない）を伴う**。5件上限の `InputValidationError` を再度踏んだ（8/20 に続き2回目＝**上限は依然として説明文に無い**） |
 
 ★**2026-08-17 の観測が F-03 の診断を強める**: 従来は「無関係が上位を占める」という結果からの推定だったが、今回は**関連する候補が実際に返っており、それがスコアで無関係な2件に負けている**。⇒ 対処は検索語彙の調整ではなく、**関連度をスコアに乗算項として入れる**（下記対処案）で確定してよい。
 
@@ -163,6 +164,25 @@
 **対処案**: (1) `candidates` の必須欄が欠けたら**エラーにするか、欠落を明示した警告行を出力に載せる**（沈黙して空欄を描画しない）。(2) post-gate 診断に**落選1件ごとの (id, 当たった床, 実測値, 閾値)** を出す＝F-02 に入れた実行診断ブロックと同じ思想。**呼び手は採点を自分でやっているので、床の実測値さえ返れば次回の採点を較正できる**。
 
 ---
+
+---
+
+### F-10. byserendipity — 判定側が「因果対応なし」と言っている候補に、構造スコアの**最高位**が付く（2026-08-21 初観測）
+
+**症状**: 返却された候補の接続点ラベルが `【接続点（構造対応ゆるめ・思考のタネ）: …】`＝判定器が `has_causal_pm=False`（明示的な因果 Purpose-Mechanism リンクが無い）と申告しているのに、**同じ候補の構造スコアが 0.70**＝`_PURPOSE_LEVELS = {"none": 0.10, "partial": 0.45, "strong": 0.70}`（`src/pipeline/classify.py:261`）の **`strong` そのもの**。**散文の但し書きと数値の等級が正面から矛盾する。**
+
+**実測（2026-08-21・テーマ＝「結果が既知の離散構造（固定利得/固定損失）を取る反復試行で、少数試行から期待値の符号を判定する推定量・停止規則」）**:
+
+| # | 返却論文 | スコア | ラベル | 実測 |
+|---|---|---|---|---|
+| 1 | Decisions reduce sensitivity to subsequent information（Proc R Soc B 2015・被引用 71） | **0.56（距離 0.80 / 構造 0.70）** | **ゆるめ**（`has_causal_pm=False`） | 人間の知覚的二肢選択における確証バイアスの行動研究。**推定量も停止規則も持たない**。構造 0.70＝`strong` は判定器自身の但し書きと矛盾 |
+| 2 | Modeling and analysis of dynamic decision making in sequential two-choice tasks（2008・被引用 15） | **0.56（距離 0.80 / 構造 0.70）** | ゆるめ無し（`has_causal_pm=True`） | 報酬構造下の意思決定の**漸近的**挙動。テーマが「小標本・漸近近似が使えない」を前提に置いているので、**運べる機序が前提ごと反転している** |
+
+★**併せて観測（スコアの分解能）**: 2026-08-17 の F-04 で返った2件も **0.56（距離 0.80 / 構造 0.70）**。**別テーマ・別論文・4日差で、4件すべてが同一の三つ組**。構造軸は 3 値（0.10/0.45/0.70）の離散設計なので同値自体は仕様どおりだが、**距離 0.80 まで一致する**と、実質「当たりの候補は全部 0.56」になり **順位付けができない**。⇒ **byrepo の F-03（関連度が順位に効かない）と同じ帰結が、byserendipity では「スコアが動かない」という別経路で起きている。**
+
+**F-04 / F-08 との関係**: F-04 は**テーマ側の命題を捏造**して対応を主張する。F-08（bynote）は**遠くに行くが機序を持ち帰らない**。F-10 は**持ち帰っていないことを判定器自身が申告しているのに、等級だけが最高位**という第3の形＝**自己申告が数値に反映されない**。F-01（構造 0.0 で失敗を自己申告）の対極で、**申告と数値が乖離している分だけ F-01 より読み手に不利**。
+
+**対処案（seihai 側は実装しない）**: (1) `has_causal_pm=False` の候補に `purpose_sim` の上限（例: `partial`=0.45）を課す＝判定器の申告を等級へ機械的に反映する。少なくとも `strong` は与えない。(2) 距離軸に実効的な分解能があるかを、既存の履歴から `distance_score` の分布を出して確認する（0.80 に張り付いているなら距離項も等級化されている）。
 
 ## 対処済み
 
