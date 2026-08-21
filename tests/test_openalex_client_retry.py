@@ -95,3 +95,45 @@ def test_zero_retries_keeps_old_single_shot_behaviour(monkeypatch):
     with pytest.raises(OpenAlexError):
         _client(max_retries=0).get({})
     assert len(calls) == 1
+
+
+# --- F-11(3): run stats — "zero harvest" vs "fetch failure" must be separable ---
+
+from src.openalex.client import RUN_STATS, reset_run_stats, run_stats_caveat
+
+
+def test_clean_run_has_no_caveat(monkeypatch):
+    reset_run_stats()
+    _patch_urlopen(monkeypatch, [{"ok": True}])
+    _client().get({})
+    assert run_stats_caveat() == ""
+    assert RUN_STATS == {"requests": 1, "retried": 0, "gave_up": 0}
+
+
+def test_recovered_retry_is_reported_as_recovered(monkeypatch):
+    reset_run_stats()
+    _patch_urlopen(monkeypatch, [_http_error(429), {"ok": True}])
+    _client().get({})
+    caveat = run_stats_caveat()
+    assert "リトライ 1 回" in caveat and "回復済み" in caveat
+    assert "収穫ゼロ" not in caveat            # recovered runs don't cast doubt on the result
+
+
+def test_exhausted_retries_warn_about_false_zero_harvest(monkeypatch):
+    reset_run_stats()
+    _patch_urlopen(monkeypatch, [_http_error(429)])
+    with pytest.raises(OpenAlexError):
+        _client().get({})
+    caveat = run_stats_caveat()
+    assert "リトライ上限まで失敗 1 件" in caveat
+    assert "収穫ゼロ" in caveat                # the caller must not misread this as saturation
+
+
+def test_stats_accumulate_across_clients_and_reset(monkeypatch):
+    reset_run_stats()
+    _patch_urlopen(monkeypatch, [{"ok": True}])
+    _client().get({})
+    _client().get({})                          # a second client, same run
+    assert RUN_STATS["requests"] == 2
+    reset_run_stats()
+    assert RUN_STATS == {"requests": 0, "retried": 0, "gave_up": 0}

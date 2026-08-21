@@ -17,6 +17,7 @@ from src.pipeline.bridge_diagnostics import (
     resolve_work_labels,
 )
 from src.pipeline.bridges import bridge_rank_key, shared_bridge_count
+from src.openalex.client import reset_run_stats, run_stats_caveat
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
     CollectConfig,
@@ -33,6 +34,7 @@ from src.pipeline.history import compute_theme_hash, load_history, save_history
 from src.pipeline.delegate import (
     assemble_keyless_bridge_document,
     assemble_keyless_track_a_document,
+    echo_completeness_warnings,
     finalize_delegated_document,
     material_from_work,
 )
@@ -346,6 +348,7 @@ class StdinMcpServer:
         old_stdout = sys.stdout
         sys.stdout = buffer
 
+        reset_run_stats()  # F-11(3): per-run fetch telemetry starts clean
         try:
             if name == "byserendipity_discover":
                 result = self._execute_byserendipity(args)
@@ -359,7 +362,13 @@ class StdinMcpServer:
                 result = self._execute_delegate_finalize(args)
             else:
                 raise ValueError(f"Unknown tool: {name}")
-            
+
+            # F-11(3): a run where some fetches failed must not look like a clean zero
+            # harvest — surface the fetch caveat in the RESULT, not just the server log.
+            caveat = run_stats_caveat()
+            if caveat and isinstance(result.get("content"), list):
+                result["content"].append({"type": "text", "text": caveat})
+
             # Add stdout logs if there are any, for tracing
             sys.stdout = old_stdout
             console_log = buffer.getvalue()
@@ -735,6 +744,9 @@ class StdinMcpServer:
         count = int(args.get("count") or 1)
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.35
         emit_fallback = bool(args.get("emit_fallback", True))
+        # F-09 (1): missing echoed material renders as blank fields that read like a
+        # low-quality hit — name the caller's omission explicitly instead of staying silent.
+        echo_warnings = echo_completeness_warnings(materials)
         diag: dict = {}
         try:
             doc = finalize_delegated_document(
@@ -750,6 +762,23 @@ class StdinMcpServer:
             f"anomaly {diag.get('anomaly', 0)} / hollow {diag.get('hollow', 0)} / "
             f"通過 {diag.get('passed', 0)} / 出力 {len(entries)}"
         )
+        # F-09 (2): name every rejected candidate, the floor it hit, and the measured value —
+        # the caller does its own scoring, so this is what calibrates its next run (the same
+        # observability principle as bybridge's F-02 diagnostics block).
+        title_by_id = {str(m.get("id")): str(m.get("title") or "") for m in materials}
+        rejection_lines = []
+        for r in diag.get("rejections", []):
+            label = title_by_id.get(str(r["id"]), "")
+            label = f"「{label[:40]}」" if label else ""
+            rejection_lines.append(
+                f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
+            )
+        extra = ""
+        if echo_warnings:
+            extra += "\n" + "\n".join(echo_warnings)
+        if rejection_lines:
+            extra += "\n落選内訳:\n" + "\n".join(rejection_lines)
+        diag_line += extra
         if not entries:
             return {
                 "content": [{"type": "text", "text": f"{diag_line}\n\n決定論ゲートを通過した候補がありませんでした（飽和または全棄却）。"}],

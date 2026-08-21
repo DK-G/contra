@@ -20,6 +20,34 @@ class OpenAlexError(RuntimeError):
 # 4xx other than 429 mean the REQUEST is wrong — retrying those just repeats the mistake.
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
 
+# F-11(3): process-wide fetch telemetry for one tool run. A run where some requests failed
+# (even after retries) must not present itself as a clean "zero harvest" — the MCP layer
+# resets this before each tool call and appends a caveat line when anything went wrong.
+# Counters, not state: clients are constructed per collection stage, so per-instance stats
+# would fragment across the run.
+RUN_STATS = {"requests": 0, "retried": 0, "gave_up": 0}
+
+
+def reset_run_stats() -> None:
+    RUN_STATS.update(requests=0, retried=0, gave_up=0)
+
+
+def run_stats_caveat() -> str:
+    """One caveat line when the run saw transient failures; '' when it was clean."""
+    if not (RUN_STATS["retried"] or RUN_STATS["gave_up"]):
+        return ""
+    parts = [f"OpenAlex リクエスト {RUN_STATS['requests']} 件中"]
+    if RUN_STATS["retried"]:
+        parts.append(f"一時失敗→リトライ {RUN_STATS['retried']} 回")
+    if RUN_STATS["gave_up"]:
+        parts.append(f"リトライ上限まで失敗 {RUN_STATS['gave_up']} 件")
+    tail = (
+        "。結果が薄い場合は「収穫ゼロ」ではなく取得失敗の可能性があります（再実行を推奨）。"
+        if RUN_STATS["gave_up"]
+        else "（リトライで回復済み・結果への影響なし）。"
+    )
+    return "⚠ 取得診断: " + " / ".join(parts) + tail
+
 
 @dataclass
 class OpenAlexConfig:
@@ -63,8 +91,10 @@ class OpenAlexClient:
         req = urllib.request.Request(url, headers={"User-Agent": "contra-cli/0.1"})
         attempts = max(0, self.config.max_retries) + 1
         last_exc: Optional[Exception] = None
+        RUN_STATS["requests"] += 1
         for attempt in range(attempts):
             if attempt:
+                RUN_STATS["retried"] += 1
                 self._sleep(self.config.retry_backoff_sec * (2 ** (attempt - 1)))
             self._rate_limit()
             try:
@@ -85,9 +115,17 @@ class OpenAlexClient:
                 return json.loads(data)
             except json.JSONDecodeError as exc:
                 raise OpenAlexError(f"invalid json response: {exc}") from exc
+        RUN_STATS["gave_up"] += 1
         raise OpenAlexError(
             f"request failed after {attempts} attempts: {last_exc}"
         ) from last_exc
 
 
-__all__ = ["OpenAlexClient", "OpenAlexConfig", "OpenAlexError"]
+__all__ = [
+    "OpenAlexClient",
+    "OpenAlexConfig",
+    "OpenAlexError",
+    "RUN_STATS",
+    "reset_run_stats",
+    "run_stats_caveat",
+]

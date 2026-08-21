@@ -861,6 +861,28 @@ def _update_diag(diag: Optional[dict], **kw) -> None:
         diag.update(kw)
 
 
+def _record_rejections(diag, before_ids, after_ids, *, floor, threshold, value_of) -> None:
+    """F-09: append one (id, floor, value, threshold) row per candidate dropped at a stage.
+
+    The post-gate used to report only pass COUNTS ("採点 4 / 通過 1") — the caller could
+    reproduce the scoring but never the rejections, so its own calibration loop was blind
+    (field_observations_seihai.md F-09, the same observability gap as bybridge's F-02).
+    No-op when diag is None. `value_of` maps a work id to the measured value at this floor.
+    """
+    if diag is None:
+        return
+    rejections = diag.setdefault("rejections", [])
+    for wid in before_ids:
+        if wid not in after_ids:
+            value = value_of(wid)
+            rejections.append({
+                "id": wid,
+                "floor": floor,
+                "value": round(value, 3) if isinstance(value, (int, float)) else value,
+                "threshold": round(threshold, 3) if isinstance(threshold, (int, float)) else threshold,
+            })
+
+
 # --- Deterministic post-gates (no LLM) -------------------------------------
 # Stage (b) of the MCP-client delegation design
 # (docs/research/mcp_subscription_delegation.md): the hard numeric floors are
@@ -891,6 +913,31 @@ def _serendipity_scored(
             mechanism_dist = min(mechanism_dist, _NEAR_DOMAIN_MECH_CAP)
         all_scored.append((purpose_sim * mechanism_dist, wid, s))
     return all_scored, anomaly_count
+
+
+def _apply_causal_cap(
+    all_scored: List[Tuple[float, str, dict]],
+) -> List[Tuple[float, str, dict]]:
+    """Reflect the judge's own verdict in the grade (F-10, field_observations_seihai.md).
+
+    When the hollow judge says has_causal_pm=False the label already reads "構造対応ゆるめ"
+    — yet the same candidate could carry purpose_sim 0.70 = the "strong" level, so the prose
+    caveat and the numeric grade contradicted each other head-on (observed 2026-08-21: four
+    candidates across two themes, all 0.56 = 0.80 x 0.70 with the loose label). A candidate
+    the judge itself calls loose is capped at the "partial" level; the serendipity product is
+    rescaled by the same factor so ranking stays consistent with the displayed scores. The
+    uncapped value is kept in `purpose_sim_uncapped` for diagnostics.
+    """
+    cap = _PURPOSE_LEVELS["partial"]
+    out: List[Tuple[float, str, dict]] = []
+    for ser, wid, s in all_scored:
+        purpose = s.get("purpose_sim", 0.0)
+        if s.get("has_causal_pm") is False and purpose > cap:
+            s["purpose_sim_uncapped"] = purpose
+            s["purpose_sim"] = cap
+            ser = ser * (cap / purpose) if purpose else ser
+        out.append((ser, wid, s))
+    return out
 
 
 def _hollow_filter(
@@ -935,6 +982,18 @@ def _quality_gate_and_build(
     effective_gate = _percentile_gate(ser_vals, top_pct=0.30, floor=gate)
     passed = [(ser, wid, s) for ser, wid, s in all_scored if ser >= effective_gate]
     qualified = [(ser, wid, s) for ser, wid, s in passed if ser >= output_floor]
+    # F-09: per-candidate rejection rows for the two serendipity floors.
+    ser_by_id = {wid: ser for ser, wid, _s in all_scored}
+    _record_rejections(
+        diag, ser_by_id.keys(), {wid for _s, wid, _d in passed},
+        floor="percentile_gate(serendipity)", threshold=effective_gate,
+        value_of=ser_by_id.get,
+    )
+    _record_rejections(
+        diag, {wid for _s, wid, _d in passed}, {wid for _s, wid, _d in qualified},
+        floor="output_floor(serendipity)", threshold=output_floor,
+        value_of=ser_by_id.get,
+    )
     print(
         f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
         f"-> 通過 {len(passed)}/{len(all_scored)} 件; "
@@ -984,6 +1043,11 @@ def _quality_gate_and_build(
         final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
     else:
         final = sorted(qualified, key=lambda x: x[0], reverse=True)[:count]
+    _record_rejections(
+        diag, {wid for _s, wid, _d in qualified}, {wid for _s, wid, _d in final},
+        floor=f"not_selected(count={count})", threshold=count,
+        value_of=ser_by_id.get,
+    )
 
     # Step 6: Build OutputEntry list
     result: List[OutputEntry] = []
@@ -1034,11 +1098,25 @@ def apply_post_gates(
         _update_diag(diag, status="empty_pool", scored=0, anomaly=0, hollow=0, passed=0, qualified=0)
         return []
     all_scored, anomaly_count = _serendipity_scored(scores, id_to_work, theme_profile)
+    # F-09: name every rejected candidate and the floor it hit — the caller scores the
+    # candidates itself, so the measured value + threshold is what calibrates its next run.
+    _record_rejections(
+        diag, scores.keys(), {wid for _s, wid, _d in all_scored},
+        floor="anomaly(purpose_sim)", threshold=_PURPOSE_SIM_MIN,
+        value_of=lambda wid: scores[wid].get("purpose_sim"),
+    )
     if not all_scored:
         _update_diag(diag, status="saturated", reason="all_anomaly", scored=len(scores),
                      anomaly=anomaly_count, hollow=0, passed=0, qualified=0)
         return []
+    # F-10: agent-supplied rows may carry has_causal_pm — same cap as the LLM path.
+    all_scored = _apply_causal_cap(all_scored)
     kept, hollow_count, _loose = _hollow_filter(all_scored, struct_depth_gate)
+    _record_rejections(
+        diag, {wid for _s, wid, _d in all_scored}, {wid for _s, wid, _d in kept},
+        floor="hollow(structural_depth)", threshold=struct_depth_gate,
+        value_of=lambda wid: scores[wid].get("structural_depth"),
+    )
     if not kept:
         _update_diag(diag, status="saturated", reason="all_hollow", scored=len(scores),
                      anomaly=anomaly_count, hollow=hollow_count, passed=0, qualified=0)
@@ -1153,6 +1231,8 @@ def select_track_b(
             s["applicability"] = j["applicability"]
             s["has_causal_pm"] = j["has_causal_pm"]
             s["judge_reason"] = j["judge_reason"]
+    # F-10: the judge's has_causal_pm verdict must reach the numeric grade, not just the label.
+    all_scored = _apply_causal_cap(all_scored)
     all_scored, hollow_count, loose_causal_count = _hollow_filter(all_scored, struct_depth_gate)
     print(
         f"[info] hollow 除外 (structural_depth<{struct_depth_gate:.2f}): {hollow_count} 件 "

@@ -218,6 +218,30 @@ def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+# Material fields the agent is contractually expected to echo back (F-09). They are not
+# hard-required (the join key + scores are), but when they are missing the rendered output
+# silently degrades to blank headings / "abstract欠損" / "年: 0" — which reads as a low-quality
+# hit instead of a caller mistake. finalize surfaces these as explicit warnings.
+ECHO_RECOMMENDED = ("title", "abstract", "year", "venue", "cited_by_count")
+
+
+def echo_completeness_warnings(materials: Sequence[Dict[str, Any]]) -> List[str]:
+    """One warning line per candidate whose echoed material is missing recommended fields."""
+    warnings: List[str] = []
+    for i, material in enumerate(materials):
+        missing = [
+            k for k in ECHO_RECOMMENDED
+            if material.get(k) is None or (k in ("title", "venue") and not str(material.get(k) or "").strip())
+        ]
+        if missing:
+            wid = str(material.get("id") or f"#{i}")
+            warnings.append(
+                f"⚠ 候補 {wid}: 材料欄が欠けたまま送信されています（{', '.join(missing)}）"
+                "— 該当欄は空のまま描画されます。contra が返した候補材料を全欄 echo してください。"
+            )
+    return warnings
+
+
 def normalize_agent_scores(
     materials: Sequence[Dict[str, Any]],
 ) -> "tuple[Dict[str, Work], Dict[str, dict], Dict[str, Dict[str, Any]]]":
