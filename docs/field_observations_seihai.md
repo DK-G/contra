@@ -50,29 +50,11 @@
 
 ---
 
-### F-03. byrepo — 関連度がランキングに効かない（S-39）
-
-**症状**: `Reliability Score` はリポジトリ品質（Impl/Doc・LMA・Community・Security）のみを測り、**テーマ関連度をスコアに含めない**。「関係度: 中」はラベルとしては出るがランキングには効かないため、**無関係だが良く整備されたリポジトリが上位を占める**。
-
-**実測**: 2026-08-15 時点で**5週連続の収穫ゼロ**（8/15 は「見つかりませんでした」）。2026-08-07 に語彙を MLOps 系へ切り替える改善仮説を試したが**外れた**。
-
-| 日付 | テーマ | 上位3件 | 実測 |
-|---|---|---|---|
-| 2026-08-10 | 配備アーティファクトと稼働インスタンスのバージョン乖離検証 | `garrytan/gstack`(127k★) / `Mininglamp-AI/Mano-P` / `VoltAgent/awesome-agent-skills` | 3/3 無関係。関連性の散文はテーマ側の語をリポジトリに貼っただけ |
-| 2026-08-17 | 逐次実験の多軸停止規則・futility boundary・arm dropping の実装 | `brownjuly2003-code/ab-test-research-designer`(★1・**Reliability 79**) / `aladinor/rustytree`(★8・**75**) / `Lexsi-Labs/aligntune`(★38・**84**) | **1/3 のみ主題に接する。しかも最上位スコアは無関係な `aligntune`(84) で、唯一関連する候補が 79 と下**＝F-03 の症状（関連度が順位に効かない）が**同一出力内で直接観測できた形**。`rustytree` は Zarr/xarray の Rust バックエンドで、生成散文は「非同期処理能力を活用し停止規則を同時評価できるかもしれない」という**リポジトリの実体に対応しない転用**を書いている |
-
-| 2026-08-18 | GP 生成器の候補相関と集合レベル PBO 大域veto の分離／生成段での behavioural diversity 強制 | `impratiksingh/unsupervised-learning`(Kaggle・★1605・**Reliability 28**) / `azxc9595/visual-graphs-of-philosophy`(Kaggle・★696・**28**) / `arunkumarramanan/awesome-ml-frameworks-and-mnist-classification`(Kaggle・★329・**24**) | **3/3 無関係、かつ 3/3 が Kaggle ノートブック**（`sources` 既定に github を含めて呼んだが、上位はすべて Kaggle）。Impl/Doc・LMA・Comm・Sec が**全件 0/0/0/0** で、スコアは実質★数の単調変換になっている＝**品質軸すら測れていない**。`keywords_include` に `quality diversity` / `novelty search` / `backtest overfitting` を明示したのに、QD/GP 系のリポジトリ（`pyribs`・`qdpy`・`gplearn` 等の明白な候補）が1件も上位に来ない |
-| 2026-08-19 | 稼働中 A/B 腕の重複検出（タイムスタンプ jitter 下の照合）／入口専用スクリーニングの死角 | `jonigl/mcp-client-for-ollama`(★801・**Reliability 95**) / `trackawesomelist/trackawesomelist`(★662・**91**) / `lukasmasuch/best-of-ml-python`(★23.7k・**90**) / `automateyournetwork/netclaw`(★638・**90**) | **4/4 無関係**（Ollama クライアント・awesome-list 追跡・ML ライブラリ一覧・ネットワーク自動化エージェント）。★**8/18 と違い品質サブスコアは全件充填**（Impl/Doc 25-30・LMA 25・Comm 10-17・Sec 21-25）＝**品質軸が生きている状態でも順位は無関係のまま**。⇒ F-03 の主症状（関連度が順位に効かない）が**単独で**再現＝8/18 の「サブスコア全ゼロ」は F-03 とは別の第2経路であることが確定した。`keywords_include` に `fuzzy matching`/`temporal tolerance`/`deduplication`/`A/B testing` を明示したが、record linkage 系（`dedupe`・`splink`・`recordlinkage` 等の明白な候補）は1件も来ない |
-| 2026-08-20 | 有限グリッド生成器の到達域と、実際に評価・配備された仮説空間との差の計上／壺が空いたとき語彙を伸ばす archive 駆動生成器 | `open-fars/openfars`(★34・**Reliability 82**) / `algorithmicsuperintelligence/openevolve`(★7,231・**83**) / `katopz/katgpt-rs`(★91・**86**) | **★2/3 が関連＝7/30・8/06・8/10・8/13・8/17・8/18・8/19 の全滅系より明確に改善**（`openevolve` は「固定グリッドが枯れたら語彙自体を伸ばす」の実装として主題に直接対応、`openfars` は QD アーカイブで弱く関連）。**ただし F-03 は健在で、しかも最も鋭い形で出た**＝**3件中スコア最上位の 86 が唯一の無関係候補**（`katgpt-rs`＝Rust の neuro-symbolic micro-transformer）で、**関連する2件は 83 / 82 と下**。⇒ **関連度が順位に効かないという F-03 の主張が、「全件無関係」ではなく「関連と無関係が混在し、順位だけが逆」という形で再現**した。混在ケースのほうが**呼び手にとって危険**（上から読むと最初に無関係に当たる）。`keywords_include` は `quality diversity`/`MAP-Elites`/`open-ended search`/`novelty search`/`archive coverage`（5件上限に抵触して1度目は `InputValidationError`＝**上限が説明文に書かれていない**のも記録しておく）
-| 2026-08-21 | 二点分布（固定TP/SL）の少数試行から期待値の符号を判定する推定量・逐次検定の実装 | `bytedance/deer-flow`(★80.4k・**Reliability 94**) / `rampstackco/claude-skills`(★566・**88**) / `Dicklesworthstone/frankensqlite`(★214・**85**) | **3/3 無関係**（エージェントハーネス・Claude Skills 集・Rust 製 SQLite 再実装）。**品質サブスコアは全件充填**（Impl/Doc 30・LMA 25・Comm 10-19・Sec 11-23）＝8/19 と同じ「品質軸が生きていても順位は無関係のまま」の再現。`keywords_include` に `sequential test`/`e-value`/`anytime-valid`/`bernoulli`/`SPRT` を明示したが、逐次検定の明白な候補（`confseq`・`safe-anytime-valid` 系・`statsmodels` の SPRT 実装）は1件も来ない。★**3件とも「関係軸: 勝率」**という同一ラベルが付き、`frankensqlite` の関連性は「ページレベル MVCC を用いて同時書き込みを実現しており…データベースの効率性が重要」＝**F-05（概要/関連性がソースに接地しない）を伴う**。5件上限の `InputValidationError` を再度踏んだ（8/20 に続き2回目＝**上限は依然として説明文に無い**） |
-
-★**2026-08-17 の観測が F-03 の診断を強める**: 従来は「無関係が上位を占める」という結果からの推定だったが、今回は**関連する候補が実際に返っており、それがスコアで無関係な2件に負けている**。⇒ 対処は検索語彙の調整ではなく、**関連度をスコアに乗算項として入れる**（下記対処案）で確定してよい。
-
-★**2026-08-18 の観測が加える別軸**: この日は**全件 Impl/Doc=LMA=Comm=Sec=0** で、順位が★数だけで決まった。F-03 の対処（関連度を乗算項に）を入れても、**品質軸が全ゼロに潰れる経路が残っていれば順位は人気度のままになる**。⇒ 対処案に「**品質サブスコアが全件ゼロで返る条件を先に特定する**」を追加する（Kaggle 由来のアンカーで各サブスコアが埋まらない疑い）。
-
-**対処案**: (1) 関連度をスコアに乗算項として入れる。(2) 品質サブスコアが全件 0 になる経路（少なくとも Kaggle 由来）を特定して埋めるか、埋まらない source を順位付けから外す。
+### F-03. byrepo — 関連度がランキングに効かない（S-39） → **対処済み（2026-08-21・同日2回目）。下記「対処済み」節へ**
 
 ---
+
+> **2026-08-21 追記（同日2回目の作業）**: F-04 / F-05 / F-06 / F-08 は**散文生成（LLM）経路の失敗**で、処方はプロンプト契約の変更（テーマ側/ソース側の記述を提出テキスト・README/abstract からの抜粋に限定する）。本日の環境には OPENAI/ANTHROPIC キーが無く「実装したらその場で走らせて出力を見る」を守れないため着手を見送った。**次回この4件に着手する場合はキーの有効性を先に確認すること**（キーはローテーション待ちの疑いあり）。
 
 ### F-05. byrepo — 「概要」が**ソースでなく呼び手のテーマ**を要約して返る（2026-08-18 初観測・F-04 と同一機序）
 
@@ -131,40 +113,17 @@
 
 ---
 
-### F-09. delegate_finalize — 材料の部分 echo が**沈黙して劣化**し、落とした候補を名指ししない（2026-08-19 初観測）
-
-**症状**: `delegate_finalize` の `candidates` は「contra の候補材料（id/title/abstract/year/venue/doi/cited_by_count/concepts/concept_tags/referenced_works）を echo し、**かつ**採点を載せる」契約だが、**id と採点だけを送ってもエラーにならず、欠けた欄を空のまま描画する**。
-
-**実測（2026-08-19）**: 4件を id＋採点のみで送信した結果、出力の見出しが **`### 1. `**（タイトル空）、本文が **「1) 概要: abstract欠損」**、メタが **「年: 0 ｜ 掲載: ｜ 被引用: 0」**。**採用された1件は被引用 16 の 2013 年 IEEE TDSC 論文**で、実際には全欄が存在する。⇒ **呼び手のミスだが、成果物は「メタデータの無い低品質な当たり」に見える**形で返る（F-05 と同じ「成功の形で失敗する」系）。
-
-**併せて観測（別軸・こちらは呼び手のミスではない）**: post-gate 診断は `採点 4 件 / anomaly 0 / hollow 0 / 通過 1 / 出力 1` と**通過数だけ**を返し、**落ちた3件がどれで、どの床（near-domain mechanism cap / percentile / output_floor / M3）に当たったのかを言わない**。今回落ちたのは呼び手が最も強いと判断した3件（[incomplete matching bias](https://doi.org/10.1017/cbo9780511810725.020) 被引用 426 / [sequential equivalence checking](https://doi.org/10.1109/iccd.2006.4380826) 被引用 74 / [equivalence trials](https://doi.org/10.1136/bmj.313.7048.36) 被引用 1,032）で、**採点は再現できても棄却理由は再現できない**。⇒ **F-02（bybridge のシードが見えない）と同型の可観測性欠落**が、委譲経路の post-gate 側にも残っている。
-
-**対処案**: (1) `candidates` の必須欄が欠けたら**エラーにするか、欠落を明示した警告行を出力に載せる**（沈黙して空欄を描画しない）。(2) post-gate 診断に**落選1件ごとの (id, 当たった床, 実測値, 閾値)** を出す＝F-02 に入れた実行診断ブロックと同じ思想。**呼び手は採点を自分でやっているので、床の実測値さえ返れば次回の採点を較正できる**。
+### F-09. delegate_finalize — 材料の部分 echo が沈黙して劣化し、落とした候補を名指ししない → **対処済み（2026-08-21・同日2回目）。下記「対処済み」節へ**
 
 ---
 
 ---
 
-### F-10. byserendipity — 判定側が「因果対応なし」と言っている候補に、構造スコアの**最高位**が付く（2026-08-21 初観測）
-
-**症状**: 返却された候補の接続点ラベルが `【接続点（構造対応ゆるめ・思考のタネ）: …】`＝判定器が `has_causal_pm=False`（明示的な因果 Purpose-Mechanism リンクが無い）と申告しているのに、**同じ候補の構造スコアが 0.70**＝`_PURPOSE_LEVELS = {"none": 0.10, "partial": 0.45, "strong": 0.70}`（`src/pipeline/classify.py:261`）の **`strong` そのもの**。**散文の但し書きと数値の等級が正面から矛盾する。**
-
-**実測（2026-08-21・テーマ＝「結果が既知の離散構造（固定利得/固定損失）を取る反復試行で、少数試行から期待値の符号を判定する推定量・停止規則」）**:
-
-| # | 返却論文 | スコア | ラベル | 実測 |
-|---|---|---|---|---|
-| 1 | Decisions reduce sensitivity to subsequent information（Proc R Soc B 2015・被引用 71） | **0.56（距離 0.80 / 構造 0.70）** | **ゆるめ**（`has_causal_pm=False`） | 人間の知覚的二肢選択における確証バイアスの行動研究。**推定量も停止規則も持たない**。構造 0.70＝`strong` は判定器自身の但し書きと矛盾 |
-| 2 | Modeling and analysis of dynamic decision making in sequential two-choice tasks（2008・被引用 15） | **0.56（距離 0.80 / 構造 0.70）** | ゆるめ無し（`has_causal_pm=True`） | 報酬構造下の意思決定の**漸近的**挙動。テーマが「小標本・漸近近似が使えない」を前提に置いているので、**運べる機序が前提ごと反転している** |
-
-★**併せて観測（スコアの分解能）**: 2026-08-17 の F-04 で返った2件も **0.56（距離 0.80 / 構造 0.70）**。**別テーマ・別論文・4日差で、4件すべてが同一の三つ組**。構造軸は 3 値（0.10/0.45/0.70）の離散設計なので同値自体は仕様どおりだが、**距離 0.80 まで一致する**と、実質「当たりの候補は全部 0.56」になり **順位付けができない**。⇒ **byrepo の F-03（関連度が順位に効かない）と同じ帰結が、byserendipity では「スコアが動かない」という別経路で起きている。**
-
-**F-04 / F-08 との関係**: F-04 は**テーマ側の命題を捏造**して対応を主張する。F-08（bynote）は**遠くに行くが機序を持ち帰らない**。F-10 は**持ち帰っていないことを判定器自身が申告しているのに、等級だけが最高位**という第3の形＝**自己申告が数値に反映されない**。F-01（構造 0.0 で失敗を自己申告）の対極で、**申告と数値が乖離している分だけ F-01 より読み手に不利**。
-
-**対処案（seihai 側は実装しない）**: (1) `has_causal_pm=False` の候補に `purpose_sim` の上限（例: `partial`=0.45）を課す＝判定器の申告を等級へ機械的に反映する。少なくとも `strong` は与えない。(2) 距離軸に実効的な分解能があるかを、既存の履歴から `distance_score` の分布を出して確認する（0.80 に張り付いているなら距離項も等級化されている）。
+### F-10. byserendipity — 判定側が「因果対応なし」と言っている候補に構造スコアの最高位が付く → **対処済み（2026-08-21・同日2回目）。下記「対処済み」節へ**
 
 ---
 
-### F-11. 全 by\* 共通 — OpenAlex を**匿名プール・リトライ無し**で叩いている（2026-08-21 起票・contra 側の自己観測／**(1) リトライは同日対処済み**）
+### F-11. 全 by\* 共通 — OpenAlex を**匿名プール・リトライ無し**で叩いている（2026-08-21 起票／**(1)(3) 同日対処済み・(2) polite pool のみ据え置き**）
 
 **症状（潜在）**: `OpenAlexClient.get`（`src/openalex/client.py:42`）は **HTTP エラーを一切リトライしない**——`urllib` の例外をそのまま `OpenAlexError` に包んで送出する。加えて `mailto` は **CLI の `--mailto` でしか渡らず、MCP 経路（`src/mcp_server.py` の `CollectConfig()` 既定）では常に `None`**＝OpenAlex の**匿名プール**を使っている。匿名プールは polite pool（mailto 付き）より共有レートが厳しい。
 
@@ -172,7 +131,7 @@
 
 **なぜ起票するか**: シード収集経路（`_page_through` → `collect_and_filter`）は `OpenAlexError` を握り潰さないので、**一過性の 429 が実行中に当たると、その回は落ちるか途中で切れる**。呼び手から見るとこれは「**収穫ゼロ**」と区別がつかない——seihai が記録してきた収穫ゼロの一部が、実は取得失敗だった可能性を**現状の出力では否定できない**。
 
-**対処状況（2026-08-21 当日・ユーザー裁定「(1)を今実装」）**: **(1) 実装済み** — `OpenAlexClient.get`（`src/openalex/client.py`）に 429/5xx/タイムアウト系の指数バックオフ・リトライ（既定2回・`max_retries=0` で旧挙動）を入れた。**429 以外の 4xx はリトライしない**（間違ったリクエストの反復は無意味）。新規 `tests/test_openalex_client_retry.py` 6ケース＋実経路1回で検証。**(2) polite pool 移行（`mailto`）は据え置き** — メールアドレスを外部サービスへ毎リクエスト送る判断を伴うため、リトライ後もなお 429 が頻発すると分かってから再検討（そのときは役割アドレスの用意が前提）。**(3) 取得失敗の診断1行は未実装** — 次回以降の候補として残す。
+**対処状況（2026-08-21 当日・ユーザー裁定「(1)を今実装」）**: **(1) 実装済み** — `OpenAlexClient.get`（`src/openalex/client.py`）に 429/5xx/タイムアウト系の指数バックオフ・リトライ（既定2回・`max_retries=0` で旧挙動）を入れた。**429 以外の 4xx はリトライしない**（間違ったリクエストの反復は無意味）。新規 `tests/test_openalex_client_retry.py` 6ケース＋実経路1回で検証。**(2) polite pool 移行（`mailto`）は据え置き** — メールアドレスを外部サービスへ毎リクエスト送る判断を伴うため、リトライ後もなお 429 が頻発すると分かってから再検討（そのときは役割アドレスの用意が前提）。**(3) 同日対処済み（2回目の作業で実装）** — `RUN_STATS`（`src/openalex/client.py`）がツール実行1回ぶんの requests/retried/gave_up を数え、MCP 層が毎回リセット＋異常時のみ「⚠ 取得診断」行を**結果本文に**追記する。リトライで回復した場合は「結果への影響なし」、上限まで失敗した場合は「収穫ゼロではなく取得失敗の可能性」と明記＝呼び手が誤読しない文面にした。
 
 
 ## 対処済み
@@ -236,6 +195,53 @@
 **検証**: `tests/test_collect_citation.py` に6ケース追加（F-07 の形そのもの＝重複2件×150refs＋18シードの再現／重複が共有階層を作らないこと／共有階層にも上限が効くこと／単一シードでプールが満たされること／参考文献の乏しい相手での backfill／**わずかに ref を共有するだけの別論文は折り畳まれない**こと）。全体 **308 tests: 307 pass**（唯一の失敗 `tests/test_git_collect.py::test_lma_floor_never_lowers_a_fresh_score` は 2026-08-18 と同じ既存不具合・本変更と無関係）。実機で raw 経路を before/after 各1回実行。
 
 **seihai 側への申し送り（人間判断事項）**: bybridge は S-26 で呼び出し停止中。**停止理由だった F-07/F-01 の主症状（上位が共有 bridge 1本・分野外の名簿由来ハブ）は解消**したので、**呼び出し再開の判断材料は揃った**。ただし上表のとおり「候補の主題適合性」は未改善なので、**再開するなら「上位窓の多様性が戻ったかの再観測」を目的にした試験的な再開**が妥当。contra 側から seihai のコード・SKILL は触っていない。
+
+
+---
+
+---
+
+### F-03. byrepo — 関連度がランキングに効かない — **対処済み 2026-08-21（同日2回目・ユーザー立ち会い）**
+
+**何を変えたか**:
+
+1. **関連度を乗算項として順位に導入**（`src/pipeline/track_a.py` 新設 `annotate_anchor_rank`/`anchor_rank_key`）: `順位スコア = Reliability × (0.35 + 0.65 × relevance)`。relevance は各ソースが**既に計算していた** `theme_fit_score` の正規化（GitHub は max30・HF/Kaggle は max20）。**GitHub の theme_fit は "backwards compatibility metric" として計算だけされ順位に入っていなかった**——F-03 の「ラベルは出るが順位に効かない」の実体そのもの。床 0.35 は実観測バグ2件（8/17: 84vs79、8/20: 86vs83）が弱い関連（fit10/30）でも逆転する値で較正し、テストに固定した
+2. **README 照合の切り詰めバグ**: `_theme_fit_score` が README 先頭2000字しか見ていなかった。実測: **confseq（テーマど真ん中の標準実装）の "sequential test" は5737字目に初出＝fit 0 に潰れていた**
+3. **README 全文照合の逆バグを実測で発見→密度正規化**: 全文照合に変えたところ **frankensqlite（Rust製SQLite・180KB README）が fit30・relevance 1.0** に——巨大 README は何にでも当たる。実データ較正（本物の言及=confseq 1回/7.6KB・POPPER 2回/8.8KB、偶発=frankensqlite 6回/180KB・deer-flow 1回/117KB）に基づき、README ヒットは **10,000字あたり出現数で部分点**、name/description/topics ヒットは全点とした
+4. **順位スコアと relevance を出力に明示**（F-02 と同じ「計器も一緒に」）＋ **keywords 5件上限を MCP スキーマに明記**（8/20・8/21 に2回踏まれた `InputValidationError` の説明欠落を解消）
+
+**before / after 実測**（8/21 観測と同型のテーマ「逐次検定・anytime-valid・SPRT の実装」・github・pool10・実 API）:
+
+| | before | after |
+|---|---|---|
+| 首位 | **bytedance/deer-flow（★80.4k・エージェントハーネス＝無関係）**＝8/21 観測の再現 | deer-flow は **relevance 0.03 で7位**に降格 |
+| 真に関連する候補 | POPPER 7位 / confseq 最下位（fit 0＝切り詰めバグ） | **POPPER（逐次 e-value 検証・rel43）が quality88 の deer-flow を逆転**。confseq は fit 10 に回復 |
+| 偽 relevance | —（naive 全文照合の中間版では frankensqlite が 1.0） | frankensqlite 0.1 / deer-flow 0.03＝**巨大 README の偶発ヒットが数値上も「弱い」と出る** |
+
+**残る正直な限界（この処置では直っていない）**:
+- **プール自体の質**: 検索クエリは include 先頭1語しか使わない（`build_track_a_git_query`）ため、`confseq`/`splink` 級の本命がそもそもプールに入りにくい。順位付けは直ったが**土俵に上がる段が未処置**
+- **弱関連クラスタ内は quality 支配のまま**: confseq は rel48 が足を引き relevance 0.33 では首位に届かない。ただし呼び手が **"confidence sequence" をキーワードに入れれば description 直撃＝fit20** で首位になる構造（キーワード選択が効くようになった）
+- **HF/Kaggle のカード文は密度正規化未適用**（GitHub の README でのみ実測較正した）
+- **8/18 の「サブスコア全ゼロ」の正体を特定**: Kaggle の reliability は adoption+activity+license+theme_fit 構成で **Impl/Doc・LMA・Comm・Sec の柱を最初から持たない**。バグではなく描画ラベルの不一致（GitHub 用の柱名で 0 表示）。修正は未実施＝残件
+
+**検証**: `tests/test_anchor_rank.py` 10ケース（実観測バグ2件の逆転を固定・密度較正4ケースは実測値を模写）。全体 **341 tests: 341 pass**。
+
+---
+
+### F-09. delegate_finalize — 沈黙劣化と落選理由の不可視 — **対処済み 2026-08-21（同日2回目）**
+
+**何を変えたか**: (1) echo 欠落警告 — 推奨欄（title/abstract/year/venue/cited_by_count）が欠けた候補は `⚠ 候補 W…: 材料欄が欠けたまま送信されています（…）` を出力に明示（エラーにはしない＝既存呼び手を壊さない。cited_by_count=0 は値であり欠落扱いしない）。(2) **落選1件ごとの (id, タイトル, 当たった床, 実測値, 閾値)** を「落選内訳」として出力（anomaly / hollow / percentile_gate / output_floor / not_selected の全段。`_record_rejections` を各段の境界に配線）。
+
+**実機検証**（合成テーマ・4候補）: 出力に `落選内訳: W1003「…」: anomaly(purpose_sim) — 実測 0.1 / 閾値 0.2`、`W1004: hollow — 実測 0.3 / 閾値 0.5`、`W1002: percentile_gate — 実測 0.36 / 閾値 0.56` と echo 警告1行がすべて出た。8/19 に「呼び手が最も強いと判断した3件がなぜ落ちたか再現できない」だった状態は、**次回から出力だけで較正できる**。
+
+---
+
+### F-10. byserendipity — 判定器の申告が数値に反映されない — **対処済み 2026-08-21（同日2回目）**
+
+**何を変えたか**: `_apply_causal_cap`（`src/pipeline/classify.py`）— `has_causal_pm=False`（＝ラベルが「構造対応ゆるめ」）の候補は `purpose_sim` を **partial(0.45) に上限**し、セレンディピティ積も同率で再計算。LLM 経路（judge マージ直後）と delegate post-gate の両方に配線。未判定は fail-open（従来どおり触らない）。上限前の値は `purpose_sim_uncapped` に保存。
+
+**実機検証**: 上記 F-09 の実機実行で同時確認——観測された形そのもの（0.80×0.70=0.56・ゆるめラベル）が **0.80×0.45=0.36 に降格し、tight な候補（0.56）と同点でなくなった**。F-10 の併記観測「当たりが全部 0.56 で順位付け不能」も、ゆるめ候補が 0.36 に分離することで部分的に解消。距離軸 0.80 張り付きの検証（処方(2)）は未実施＝残件。
+
 
 
 ---

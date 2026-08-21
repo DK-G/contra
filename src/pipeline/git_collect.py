@@ -145,18 +145,36 @@ def _days_since(updated_at: str) -> Optional[int]:
         return None
 
 
+# Density normalisation for readme keyword hits (F-03, calibrated on live data 2026-08-21):
+# genuine mentions live in small, focused READMEs (confseq: "sequential test" once in 7.6KB;
+# POPPER: 2 hits in 8.8KB), incidental ones deep inside mega-READMEs (frankensqlite: 6 hits
+# spread over 180KB; deer-flow: 1 hit at char 81407 of 117KB). A presence check over the full
+# text made README LENGTH a proxy for relevance (frankensqlite scored a perfect fit); a prefix
+# cut ([:2000]) zeroed the true best candidate instead. Occurrences per _README_DENSITY_UNIT
+# chars keeps both: 1 hit in a 7.6KB readme ~= full credit, 3 hits in 180KB ~= 0.17.
+_README_DENSITY_UNIT = 10_000
+_README_MIN_LEN = 1_000   # don't inflate credit for near-empty readmes
+
+
 def _theme_fit_score(theme: ThemeInput, repo: GitRepository) -> int:
-    text = " ".join(
-        [
-            repo.full_name,
-            repo.description,
-            " ".join(repo.topics),
-            repo.readme_text[:2000],
-        ]
-    ).lower()
-    include_hits = sum(1 for token in theme.keywords.include if token and token.lower() in text)
-    exclude_hits = sum(1 for token in theme.keywords.exclude if token and token.lower() in text)
-    score = min(include_hits * 10, 30) - min(exclude_hits * 10, 20)
+    strong = " ".join([repo.full_name, repo.description, " ".join(repo.topics)]).lower()
+    readme = repo.readme_text.lower()
+    denom = max(len(readme), _README_MIN_LEN) / _README_DENSITY_UNIT
+
+    include_credit = 0.0
+    for token in theme.keywords.include:
+        t = (token or "").lower()
+        if not t:
+            continue
+        if t in strong:
+            include_credit += 1.0          # name/description/topics: full credit
+        elif readme:
+            include_credit += min(readme.count(t) / denom, 1.0)
+    exclude_hits = sum(
+        1 for token in theme.keywords.exclude
+        if token and (token.lower() in strong or token.lower() in readme)
+    )
+    score = min(int(round(include_credit * 10)), 30) - min(exclude_hits * 10, 20)
     return max(score, 0)
 
 

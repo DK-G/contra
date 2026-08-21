@@ -100,5 +100,57 @@ def collect_track_a_works(
             if on_error:
                 on_error(SOURCE_KAGGLE, exc)
 
-    works.sort(key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True)
+    annotate_anchor_rank(works)
+    works.sort(key=anchor_rank_key, reverse=True)
     return works
+
+
+# --- F-03: relevance as a MULTIPLICATIVE ranking term ------------------------
+#
+# Reliability measures repo QUALITY (impl/doc, maintenance, community, security);
+# theme relevance was computed by every source (theme_fit_score: keyword hits in
+# name/description/topics/readme) but never entered the ranking — on GitHub it was an
+# orphaned "backwards compatibility metric", on HF/Kaggle a +20 additive term drowned
+# by ~80 quality points. Six weeks of field observations (F-03) show the consequence:
+# well-built but off-topic repos outrank the on-topic ones (2026-08-20: the ONE
+# irrelevant candidate scored 86, the two relevant ones 83/82).
+#
+# The confirmed prescription is multiplication, not addition: an anchor is useful only
+# as quality AND relevance together.  rank = reliability * (FLOOR + (1-FLOOR)*relevance)
+# The floor keeps zero-lexical-match anchors rankable (the matcher is crude; killing
+# them outright would empty thin themes) while letting any nonzero relevance dominate:
+# at FLOOR=0.35 both observed real bugs (8/17: 84 vs 79, 8/20: 86 vs 83) flip even if
+# the relevant repo matched only weakly (~0.1) and the irrelevant one not at all.
+
+_RANK_RELEVANCE_FLOOR = 0.35
+# theme_fit_score scale differs per source: GitHub caps at 30, HF/Kaggle at 20.
+_FIT_MAX_GITHUB = 30
+_FIT_MAX_OTHER = 20
+
+
+def _relevance_of(work: Work) -> float:
+    fit = work.source_meta.get("theme_fit_score", 0) or 0
+    fit_max = _FIT_MAX_GITHUB if work.publication_type == "github_repository" else _FIT_MAX_OTHER
+    try:
+        return min(max(float(fit) / fit_max, 0.0), 1.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def annotate_anchor_rank(works: Sequence[Work]) -> None:
+    """Stamp source_meta with `relevance` (0-1) and `anchor_rank_score` (the sort key)."""
+    for w in works:
+        relevance = _relevance_of(w)
+        reliability = w.source_meta.get("reliability_score", 0) or 0
+        w.source_meta["relevance"] = round(relevance, 2)
+        w.source_meta["anchor_rank_score"] = round(
+            reliability * (_RANK_RELEVANCE_FLOOR + (1.0 - _RANK_RELEVANCE_FLOOR) * relevance), 1
+        )
+
+
+def anchor_rank_key(work: Work) -> float:
+    """Sort key for Track A anchors. Falls back to raw reliability when unannotated."""
+    meta = work.source_meta or {}
+    if "anchor_rank_score" in meta:
+        return float(meta["anchor_rank_score"])
+    return float(meta.get("reliability_score", 0) or 0)

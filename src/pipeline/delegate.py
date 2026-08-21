@@ -325,10 +325,9 @@ def _reliability_level(score: int) -> str:
 
 
 def build_track_a_entries(works: Sequence[Work], *, count: int = 3) -> List[OutputEntry]:
-    """Deterministic Track A entries ranked by the 4-Pillar Reliability Score (no LLM)."""
-    chosen = sorted(
-        works, key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True
-    )[: max(count, 0)]
+    """Deterministic Track A entries: reliability x relevance ranking (F-03), no LLM."""
+    from src.pipeline.track_a import anchor_rank_key  # local import avoids a cycle
+    chosen = sorted(works, key=anchor_rank_key, reverse=True)[: max(count, 0)]
     return [
         OutputEntry(
             work=work,

@@ -7,6 +7,39 @@
 
 ---
 
+## 2026-08-21（CL-0087） F-03/F-09/F-10/F-11(3) 一括対処（ユーザー立ち会い・「ガンガン回して潰す」指示）
+
+### 概要
+* **F-03（byrepo・関連度が順位に効かない）**: `theme_fit_score`（各ソースが計算済みだが GitHub では順位に未接続だった）を正規化した relevance を乗算項に導入——`順位スコア = Reliability × (0.35 + 0.65 × relevance)`（`src/pipeline/track_a.py`）。作業中に2つの下位バグを実測で発見・修正: (a) README 照合が先頭2000字切り詰め＝confseq の本命キーワード（5737字目）が fit 0 に潰れていた、(b) 全文照合に変えると巨大 README（frankensqlite 180KB）が偽 relevance 1.0——実データ較正で**密度正規化**（README ヒットは10,000字あたり出現数の部分点・name/desc/topics は全点）に決着。実 API before/after: **8/21 観測と同型テーマで首位 deer-flow（無関係・★80k）→ relevance 0.03 で7位、POPPER（真に関連・rel43）が quality88 を逆転**。keywords 5件上限を MCP スキーマに明記。
+* **F-09（delegate_finalize）**: echo 欠落警告＋落選1件ごとの (id, 床, 実測値, 閾値) を「落選内訳」として出力（`_record_rejections` を anomaly/hollow/percentile/output_floor/not_selected 全段に配線）。実機で全行の出力を確認。
+* **F-10（byserendipity）**: `has_causal_pm=False` の候補に `purpose_sim` 上限 partial(0.45) を機械適用（`_apply_causal_cap`）。LLM 経路と delegate post-gate の両方。実機で 0.56→0.36 への降格と tight 候補との分離を確認。
+* **F-11(3)**: OpenAlex 取得の RUN_STATS（requests/retried/gave_up）を MCP 層で毎回リセットし、異常時のみ「⚠ 取得診断」行を結果本文へ追記＝「収穫ゼロ」と「取得失敗」を出力上で区別。
+* **F-04/F-05/F-06/F-08 は見送り**（LLM キー無しで「実装したら走らせる」を守れないため）。field_observations に着手条件（キー有効性の先行確認）を明記。
+* 全 **341 tests: 341 pass**。
+
+### 関連タスク
+* Task: contra 失敗対処デーの延長（ユーザー裁定「今ここでガンガン回して潰す」）
+
+### Diffスナップショット（要約）
+
+```text
+# 1. 変更目的 (必須)
+残存 F-xx のうちキー不要で実装→実測まで完結できる4系統を一括処置。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/track_a.py, src/pipeline/git_collect.py, src/pipeline/classify.py,
+src/pipeline/delegate.py, src/mcp_server.py, src/openalex/client.py,
+tests/test_anchor_rank.py(新規), tests/test_causal_cap.py(新規),
+tests/test_delegate_observability.py(新規), tests/test_openalex_client_retry.py(拡張),
+docs/field_observations_seihai.md, Changelog.md, DECISION_LOG.md
+
+# 3. 検証 (必須)
+新規/拡張テスト 26ケース＋実 API 実測: byrepo before/after 3回（切り詰め版/naive全文版/密度版）、
+delegate_finalize 実機1回（F-09/F-10 同時確認）、README 実測プローブ2回（密度較正の一次データ）。
+```
+
+---
+
 ## 2026-08-21（CL-0086） F-11(1) OpenAlex リトライ／時計依存テストの修理／S-26 試験再開の反映
 
 ### 概要

@@ -45,6 +45,7 @@ from src.pipeline.hf_collect import HFCollectConfig
 from src.pipeline.track_a import (
     SOURCE_GITHUB,
     SOURCE_HUGGINGFACE,
+    anchor_rank_key,
     collect_track_a_works,
     normalize_sources,
 )
@@ -200,8 +201,8 @@ class StdinMcpServer:
                         "scope_field": {"type": "string", "description": "Core field of study."},
                         "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
                         "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
-                        "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
+                        "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
+                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_b_count": {"type": "integer", "description": "Maximum number of serendipitous connections to return.", "default": 1},
                         "llm_model": {"type": "string", "description": "LLM model for classification/generation (self-contained path only; ignored when raw_only).", "default": "gpt-4o-mini"},
@@ -231,8 +232,8 @@ class StdinMcpServer:
                         "scope_field": {"type": "string", "description": "Core field of study."},
                         "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
                         "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
-                        "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
+                        "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
+                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
                         "track_a_pool_size": {"type": "integer", "description": "Candidate pool size per source (search per_page/limit + pre-score cap), independent of track_a_count. Omit/0 to auto-derive as track_a_count*2 (old linked behaviour). Set explicitly to widen/narrow the search net without changing how many final anchors are returned (larger values cost more GitHub/HF/Kaggle API calls per source)."},
@@ -268,8 +269,8 @@ class StdinMcpServer:
                         "scope_field": {"type": "string", "description": "Core field of study."},
                         "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
                         "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
-                        "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
+                        "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
+                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
@@ -541,8 +542,9 @@ class StdinMcpServer:
                 "isError": False
             }
 
-        # Select & rank works based on reliability score
-        works = sorted(works, key=lambda w: w.source_meta.get("reliability_score", 0), reverse=True)[:target_count]
+        # Select & rank: reliability x relevance multiplier (F-03 — relevance must
+        # actually move the ranking, not just appear as a label).
+        works = sorted(works, key=anchor_rank_key, reverse=True)[:target_count]
 
         if bool(args.get("structured")):
             # Stage (d) delegation path: key-free structured Track A assembly (no LLM).
@@ -566,6 +568,10 @@ class StdinMcpServer:
             lines.append(f"- **Reliability Score**: {meta.get('reliability_score', 0)} "
                          f"(Impl/Doc: {meta.get('impl_doc_score', 0)}, LMA: {meta.get('lma_score', 0)}, "
                          f"Comm: {meta.get('community_score', 0)}, Sec: {meta.get('security_score', 0)})")
+            # F-03: the ACTUAL sort key — reliability x relevance — so the caller can see
+            # why an 86-quality off-topic repo now sits below an 83-quality on-topic one.
+            lines.append(f"- **順位スコア**: {meta.get('anchor_rank_score', meta.get('reliability_score', 0))} "
+                         f"= Reliability × 関連度係数 (theme関連度 {meta.get('relevance', 0.0)})")
             lines.append(f"- 更新年: {entry.work.year} | 種別: {entry.work.venue} | stars: {entry.work.cited_by_count}")
             lines.append(f"- リンク: {entry.work.id}")
             lines.append("")
