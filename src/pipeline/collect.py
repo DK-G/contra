@@ -411,56 +411,185 @@ def _strip_openalex_id(raw: Optional[str]) -> str:
     return str(raw).rsplit("/", 1)[-1]
 
 
-def _bridge_pool_from_seeds(seeds: List[Work], cap: int = 50) -> List[str]:
+_BRIDGE_SEED_SHARE = 4          # a single seed may claim at most cap // 4 of the bridge pool
+_DUP_REF_JACCARD = 0.9          # ref-set overlap above which two seed records are the same work
+_DUP_REF_MIN = 10               # ...but only when both sides cite enough refs for that to mean something
+
+
+def _norm_title_key(title: Optional[str]) -> str:
+    """Case/punctuation/entity-insensitive title key ('A&amp;B: x!' -> 'a b x')."""
+    t = re.sub(r"&[a-z]+;", " ", str(title or "").lower())
+    return re.sub(r"[^a-z0-9]+", " ", t).strip()
+
+
+def _norm_doi_key(doi: Optional[str]) -> str:
+    d = str(doi or "").strip().lower()
+    for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "doi:"):
+        if d.startswith(prefix):
+            return d[len(prefix):]
+    return d
+
+
+def _seed_group_ids(seeds: List[Work], per_seed_refs: List[List[str]]) -> List[int]:
+    """Group index per seed; DUPLICATE RECORDS OF THE SAME WORK SHARE ONE INDEX.
+
+    F-07 (``docs/field_observations_seihai.md``): the same conference proceedings entered the
+    seed set twice under two DOIs, so its 150 references were "cited by 2 seeds" and swallowed
+    the whole shared-reference tier. "Cited by >=2 seeds = a strong bridge" only holds when the
+    seeds are distinct works, so duplicates are folded before anything is counted.
+
+    Folded when any of: identical normalised DOI, identical normalised title, or near-identical
+    reference sets (Jaccard >= 0.9 over >= 10 refs each — two records of one work list the same
+    bibliography; two genuinely different papers essentially never do).
+    """
+    n = len(seeds)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)   # keep the earliest seed as representative
+
+    by_doi: dict = {}
+    by_title: dict = {}
+    for i, seed in enumerate(seeds):
+        dk = _norm_doi_key(seed.doi)
+        if dk:
+            if dk in by_doi:
+                union(by_doi[dk], i)
+            else:
+                by_doi[dk] = i
+        tk = _norm_title_key(seed.title)
+        if tk:
+            if tk in by_title:
+                union(by_title[tk], i)
+            else:
+                by_title[tk] = i
+
+    ref_sets = [set(refs) for refs in per_seed_refs]
+    for i in range(n):
+        if len(ref_sets[i]) < _DUP_REF_MIN:
+            continue
+        for j in range(i + 1, n):
+            if len(ref_sets[j]) < _DUP_REF_MIN or find(i) == find(j):
+                continue
+            inter = len(ref_sets[i] & ref_sets[j])
+            if not inter:
+                continue
+            if inter / len(ref_sets[i] | ref_sets[j]) >= _DUP_REF_JACCARD:
+                union(i, j)
+
+    roots: dict = {}
+    out: List[int] = []
+    for i in range(n):
+        r = find(i)
+        if r not in roots:
+            roots[r] = len(roots)
+        out.append(roots[r])
+    return out
+
+
+def _bridge_pool_from_seeds(
+    seeds: List[Work],
+    cap: int = 50,
+    *,
+    per_seed_share: int = _BRIDGE_SEED_SHARE,
+) -> List[str]:
     """Pick up to `cap` bridge works (the referenced_works of the near-field seeds).
 
     Bridges are the shared references through which a 2-hop citation scan crosses field
     boundaries. References cited by MULTIPLE seeds rank first (a stronger bridge); the
     remaining refs are then taken round-robin across seeds so every seed contributes
     bridges (diversity), instead of one reference-heavy seed dominating the pool.
+
+    Two guards keep that diversity promise honest (F-07):
+
+    * duplicate seed records are folded into one group first (:func:`_seed_group_ids`), so a
+      work that appears twice cannot manufacture a "shared" reference tier by itself;
+    * each group may claim at most ``cap // per_seed_share`` slots **in both tiers**. Without
+      this the shared tier could fill `cap` on its own and the round-robin — the actual
+      diversity guarantee — would never run. The quota is a fairness rule, not a ceiling: when
+      no other seed has refs left to offer, a final backfill fills the pool as before, so a
+      single-seed (or reference-poor) input still yields a full pool.
     """
-    counts: dict = {}
     per_seed: List[List[str]] = []
-    first_seen: List[str] = []
-    fs_set: Set[str] = set()
     for seed in seeds:
         refs: List[str] = []
         for r in (seed.referenced_works or []):
             if r and r not in refs:  # dedupe within a single seed, keep order
                 refs.append(r)
         per_seed.append(refs)
+
+    groups = _seed_group_ids(seeds, per_seed)
+    n_groups = (max(groups) + 1) if groups else 0
+
+    # Per-group ordered ref list + per-ref owning group (first group, in seed order, to list it).
+    per_group: List[List[str]] = [[] for _ in range(n_groups)]
+    owner: dict = {}
+    counts: dict = {}
+    first_seen: List[str] = []
+    fs_set: Set[str] = set()
+    for i, refs in enumerate(per_seed):
+        g = groups[i]
         for r in refs:
-            counts[r] = counts.get(r, 0) + 1
+            if r not in per_group[g]:
+                per_group[g].append(r)
+                counts[r] = counts.get(r, 0) + 1        # counted once per GROUP, not per record
             if r not in fs_set:
                 fs_set.add(r)
+                owner[r] = g
                 first_seen.append(r)
+
+    # One group has nothing to be fair to -> no quota (keeps the legacy single-seed behaviour).
+    quota = cap if n_groups <= 1 else max(1, cap // max(1, per_seed_share))
+    used = [0] * n_groups
 
     selected: List[str] = []
     seen: Set[str] = set()
-    # 1) shared refs first (cited by >=2 seeds), most-shared first, ties by first-seen order
+
+    def take(ref: str, g: int) -> None:
+        seen.add(ref)
+        used[g] += 1
+        selected.append(ref)
+
+    # 1) shared refs first (cited by >=2 distinct seed works), most-shared first, ties by first-seen
     for r in sorted((x for x in first_seen if counts[x] >= 2), key=lambda x: -counts[x]):
         if len(selected) >= cap:
             break
-        if r not in seen:
-            seen.add(r)
-            selected.append(r)
-    # 2) remaining refs round-robin across seeds
-    idxs = [0] * len(per_seed)
+        g = owner[r]
+        if r not in seen and used[g] < quota:
+            take(r, g)
+    # 2) remaining refs round-robin across seed groups
+    idxs = [0] * n_groups
     while len(selected) < cap:
         progressed = False
-        for i, refs in enumerate(per_seed):
-            while idxs[i] < len(refs):
-                r = refs[idxs[i]]
-                idxs[i] += 1
+        for g in range(n_groups):
+            if used[g] >= quota:
+                continue
+            while idxs[g] < len(per_group[g]):
+                r = per_group[g][idxs[g]]
+                idxs[g] += 1
                 if r not in seen:
-                    seen.add(r)
-                    selected.append(r)
+                    take(r, g)
                     progressed = True
                     break
             if len(selected) >= cap:
                 break
         if not progressed:
             break
+    # 3) backfill — the quota must not shrink the pool when nobody else can fill it
+    if len(selected) < cap:
+        for r in first_seen:
+            if len(selected) >= cap:
+                break
+            if r not in seen:
+                take(r, owner[r])
     return selected
 
 

@@ -7,6 +7,36 @@
 
 ---
 
+## 2026-08-21（CL-0085） bybridge F-07 処置: 重複シードの折り畳み＋1シード群あたりの bridge プール占有上限
+
+### 概要
+* スケジュールタスク `contra-failure-remediation` の2回目。`docs/field_observations_seihai.md` の **F-07**（同一 proceedings の重複レコード2件が bridge プール50枠を丸ごと占領し、多様性保証のラウンドロビン段が一度も走らない）を対処。F-01（7週連続・seihai 側で呼び出し停止）の**真の機序**。
+* 処置前に同一テーマで実行し **F-07 を9週目として再現**（2シードが 50/50 本、残り18シードが 0 本）。
+* `src/pipeline/collect.py` の `_bridge_pool_from_seeds` のみ変更。(1) 新規 `_seed_group_ids` で重複シードレコードを折り畳む（正規化DOI一致／正規化タイトル一致／**参考文献集合の Jaccard ≥ 0.9**）。(2) 1シード群あたりの占有上限 `cap // 4` を**共有 ref 階層にも**適用。(3) 上限は天井ではなく公平規則——他に出せるシードが無ければ backfill が従来どおりプールを満たす（単一シード入力の挙動は不変）。
+* **実測 before/after**（F-02 の計器がそのまま出力）: 最頻 bridge の**上位10件占有率 100% → 0%** / 通行 bridge **6本 → 13本** / bridge 寄与のあるシード **2/20 → 8/20** / 主題に最も近いシード `AlphaAgent` の寄与 **0本 → 9本** / 重複 proceedings 群の占有 **50枠 → 9枠**。最頻 bridge の正体が「冠動脈疾患」(2,128) から **「Returns to Buying Winners and Selling Losers」(Jegadeesh & Titman・11,577)＝主題ドメインの文献**へ。
+* **残件も記録**: 最頻 bridge が**全候補**に占める割合は 50% → 52% とほぼ不変で、候補の主題適合性もこの処置では改善が確認できていない。F-01 の残余として `docs/field_observations_seihai.md` に明記した。
+* 併せて **F-11 を新規起票（未対処）**: OpenAlex を匿名プール・リトライ無しで叩いており、一過性の 429 が「収穫ゼロ」と区別できない。
+
+### 関連タスク
+* Task: contra 失敗対処デー（F-07＝F-01 の真因への処方。seihai 側 S-26 の停止解除は人間判断）
+
+### Diffスナップショット（要約）
+
+```text
+# 1. 変更目的 (必須)
+bybridge の bridge プールが「重複した名簿型 proceedings 2件」に占領される F-07 を断つ。F-01 として7週間記録されてきた症状の真因。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/collect.py, tests/test_collect_citation.py, docs/field_observations_seihai.md, DECISION_LOG.md, Changelog.md
+_seed_group_ids(新規・重複レコード折り畳み) ＋ _bridge_pool_from_seeds に per-seed-group quota(cap//4) と backfill。呼び出し側・MCP シグネチャ・スコア・順位付けは非変更。
+
+# 3. 検証 (必須)
+tests/test_collect_citation.py に6ケース追加。全体 308 tests: 307 pass（既存不具合 test_lma_floor_never_lowers_a_fresh_score のみ失敗・本変更と無関係）。
+実機 raw 経路を before/after 各1回（git stash で切替）実行し、F-02 の診断ブロックの数値で比較。
+```
+
+---
+
 ## 2026-08-18（CL-0084） bybridge 実行診断（F-02）: 使ったシードと通った bridge を出力に出す
 
 ### 概要

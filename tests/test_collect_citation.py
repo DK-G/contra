@@ -181,3 +181,75 @@ def test_collect_citation_candidates_returns_empty_when_no_bridges(monkeypatch):
     out = collect_citation_candidates([_seed("WA", [], ["C1"])], CollectConfig())
     assert out == []
     assert called["n"] == 0
+
+
+# --- F-07: duplicate seed records must not swallow the bridge pool -----------
+# docs/field_observations_seihai.md F-07. The same proceedings entered the seed set twice
+# under two DOIs; its 150 refs counted as "cited by 2 seeds" and filled all 50 pool slots,
+# so the round-robin diversity guarantee never ran. Two guards: fold duplicate records,
+# and cap each seed group at cap // 4 in BOTH tiers.
+
+def _seed_doi(work_id: str, refs: List[str], doi: str | None = None, title: str | None = None) -> Work:
+    w = _seed(work_id, refs, ["C1"])
+    w.doi = doi
+    if title is not None:
+        w.title = title
+    return w
+
+
+def test_duplicate_seeds_by_ref_set_are_folded_and_capped():
+    """The F-07 shape: 2 duplicate records with 150 identical refs + 18 seeds with refs."""
+    dup_refs = [f"D{i}" for i in range(150)]
+    seeds = [
+        _seed_doi("DUP_A", dup_refs, doi="10.46299/isg.p.2024.1.8", title="Priority Areas"),
+        _seed_doi("DUP_B", list(dup_refs), doi="10.46299/isg.2024.1.8", title="Proceedings VIII"),
+    ]
+    seeds += [_seed_doi(f"S{i}", [f"S{i}_R{j}" for j in range(18)], doi=f"10.1/{i}") for i in range(18)]
+    pool = _bridge_pool_from_seeds(seeds, cap=50)
+    assert len(pool) == 50
+    from_dup = [r for r in pool if r.startswith("D")]
+    assert len(from_dup) <= 50 // 4                    # quota, not 50/50
+    assert len({r.split("_")[0] for r in pool if not r.startswith("D")}) >= 10  # many seeds contribute
+
+
+def test_duplicate_seeds_do_not_create_a_shared_tier():
+    """Two records of ONE work must not make their refs look 'cited by 2 seeds'."""
+    dup_refs = [f"D{i}" for i in range(20)]
+    a = _seed_doi("DUP_A", dup_refs, doi="10.9/a", title="Same Work")
+    b = _seed_doi("DUP_B", list(dup_refs), doi="10.9/b", title="Same Work")
+    other = _seed_doi("S0", [f"X{i}" for i in range(20)], doi="10.9/c", title="Other")
+    pool = _bridge_pool_from_seeds([a, b, other], cap=20)
+    # folded -> 2 groups, quota 5 each, then backfill; the real seed keeps a genuine share
+    assert len([r for r in pool if r.startswith("X")]) >= 5
+
+
+def test_seed_quota_applies_to_the_shared_tier_too():
+    """A shared tier big enough to fill `cap` must still leave room for other seeds."""
+    shared = [f"H{i}" for i in range(60)]
+    a = _seed_doi("A", shared + ["A1"], doi="10.1/a", title="A")
+    b = _seed_doi("B", list(shared) + ["B1"], doi="10.1/b", title="B")
+    c = _seed_doi("C", [f"C{i}" for i in range(30)], doi="10.1/c", title="C")
+    pool = _bridge_pool_from_seeds([a, b, c], cap=40)
+    assert len(pool) == 40
+    assert len([r for r in pool if r.startswith("C")]) >= 10   # C is not shut out by the shared tier
+
+
+def test_single_seed_still_fills_the_pool():
+    """The quota is fairness, not a ceiling: nobody else to be fair to -> full pool."""
+    pool = _bridge_pool_from_seeds([_seed("WA", [f"W{i}" for i in range(100)], ["C1"])], cap=50)
+    assert len(pool) == 50
+
+
+def test_backfill_keeps_pool_full_when_others_are_ref_poor():
+    rich = _seed_doi("R", [f"R{i}" for i in range(80)], doi="10.2/r", title="R")
+    poor = _seed_doi("P", ["P0"], doi="10.2/p", title="P")
+    pool = _bridge_pool_from_seeds([rich, poor], cap=50)
+    assert len(pool) == 50
+    assert "P0" in pool
+
+
+def test_distinct_papers_sharing_a_few_refs_are_not_folded():
+    a = _seed_doi("A", [f"A{i}" for i in range(20)] + ["S1", "S2"], doi="10.3/a", title="Alpha")
+    b = _seed_doi("B", [f"B{i}" for i in range(20)] + ["S1", "S2"], doi="10.3/b", title="Beta")
+    pool = _bridge_pool_from_seeds([a, b], cap=10)
+    assert pool[0] in ("S1", "S2")     # genuinely shared refs still rank first
