@@ -546,13 +546,23 @@ class StdinMcpServer:
         # actually move the ranking, not just appear as a label).
         works = sorted(works, key=anchor_rank_key, reverse=True)[:target_count]
 
+        # F-12 side-note (seihai, 2026-08-22): when even the BEST anchor's self-reported
+        # relevance is weak, say so up front instead of presenting the ranking as a match —
+        # low relevance across the board usually means a lexical collision ("admission" vs
+        # Kubernetes admission controllers), and the caller should reread the list knowing that.
+        max_relevance = max((w.source_meta.get("relevance", 0.0) or 0.0) for w in works)
+        low_rel_warning = (
+            f"⚠ theme 関連度が全アンカーで低い（最大 {max_relevance}）— キーワードの語彙衝突"
+            "（同綴り別分野語）の可能性があります。上位も転用候補ではなく参考程度に読んでください。\n\n"
+        ) if max_relevance < 0.35 else ""
+
         if bool(args.get("structured")):
             # Stage (d) delegation path: key-free structured Track A assembly (no LLM).
             # byrepo selection is already the deterministic reliability score; only the
             # 4-part prose is structured-filled. See docs/research/mcp_subscription_delegation.md.
             _log("Byrepo: key-free structured assembly (no LLM)...")
             doc = assemble_keyless_track_a_document(theme, works, count=target_count)
-            return _external_data_result(render_markdown(doc))
+            return _external_data_result(low_rel_warning + render_markdown(doc))
 
         # Convert to entries / fill text
         from src.pipeline.classify import classify_track_a
@@ -583,7 +593,7 @@ class StdinMcpServer:
             lines.append(f"4) 注意点: {entry.caution}")
             lines.append("")
 
-        return _external_data_result("\n".join(lines))
+        return _external_data_result(low_rel_warning + "\n".join(lines))
 
     def _execute_bynote(self, args: Dict[str, Any]) -> Dict[str, Any]:
         note = args.get("note_content")
@@ -658,10 +668,25 @@ class StdinMcpServer:
         diagnostics = bool(args.get("diagnostics", True))
 
         _log("Bybridge: collecting near-field seed papers...")
-        seeds = collect_and_filter(theme, CollectConfig(), max_count=seed_count, require_abstract=True)
+        # F-12 (field_observations_seihai.md, 2026-08-22): a seed with no referenced_works
+        # structurally CANNOT contribute a single bridge — 20/20 such records once filled the
+        # seed slots (zero-citation institutional-repository entries) and the whole 2-hop scan
+        # returned nothing. Liveness gate: overfetch, keep only seeds that can produce output
+        # (same principle as seihai's own "no zero-fire designs are ever seated" rule).
+        raw_seeds = collect_and_filter(
+            theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True
+        )
+        seeds = [w for w in raw_seeds if w.referenced_works][:seed_count]
+        dead_seed_count = len(raw_seeds) - sum(1 for w in raw_seeds if w.referenced_works)
         if not seeds:
+            detail = (
+                f"（候補 {len(raw_seeds)} 件はあったが、全件 referenced_works が空＝bridge を"
+                f"1本も生成できないレコードのため除外。検索キーワードが機関リポジトリ等の"
+                f"参考文献データを持たないレコード群に当たっている可能性が高い）"
+                if raw_seeds else ""
+            )
             return {
-                "content": [{"type": "text", "text": "近傍シード論文が見つからず、bridge プールを構築できませんでした。キーワードを見直してください。"}],
+                "content": [{"type": "text", "text": f"近傍シード論文が見つからず、bridge プールを構築できませんでした。キーワードを見直してください。{detail}"}],
                 "isError": False
             }
 
@@ -673,6 +698,11 @@ class StdinMcpServer:
         cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60, used_ids=used_ids)
         ranked_all = sorted(cands, key=bridge_rank_key, reverse=True) if cands else []
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
+        if diagnostics and dead_seed_count:
+            diag_line = (
+                f"- シード生存確認 (F-12): referenced_works が空で bridge を生成できないレコード "
+                f"{dead_seed_count} 件をシード候補から除外\n" + diag_line
+            )
         if not cands:
             head = (
                 f"citation 2-hop で交差候補が見つかりませんでした"
