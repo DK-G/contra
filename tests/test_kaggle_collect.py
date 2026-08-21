@@ -177,3 +177,34 @@ def test_collect_empty_query_returns_empty():
     works = collect_track_a_kaggle_works(_theme(include=[], field="", goal=""), client=client)
     assert works == []
     assert client.calls == []
+
+
+# --- F-03 (2026-08-22): Kaggle anchors render THEIR pillars, not GitHub's ------
+
+from src.core.output_spec import reliability_breakdown
+from src.core.models import Work as _Work
+
+
+def test_kaggle_breakdown_uses_kaggle_pillars():
+    w = _Work(id="https://kaggle.com/x", title="x", year=2026, venue="Kaggle", doi=None,
+              cited_by_count=5, abstract="", publication_type="kaggle_dataset",
+              source_meta={"reliability_score": 55, "adoption_score": 20,
+                           "activity_score": 14, "license_score": 7, "theme_fit_score": 14})
+    b = reliability_breakdown(w)
+    assert "Adoption: 20/40" in b and "Theme-fit: 14/20" in b
+    assert "Impl/Doc" not in b      # the 8/18 "all pillars 0" render came from these labels
+
+
+def test_github_breakdown_unchanged():
+    w = _Work(id="https://github.com/a/b", title="a/b", year=2026, venue="GitHub", doi=None,
+              cited_by_count=5, abstract="", publication_type="github_repository",
+              source_meta={"reliability_score": 80, "impl_doc_score": 25, "lma_score": 20,
+                           "community_score": 15, "security_score": 20})
+    assert "Impl/Doc: 25/30" in reliability_breakdown(w)
+
+
+def test_breakdown_absent_fields_yield_empty():
+    w = _Work(id="https://kaggle.com/y", title="y", year=2026, venue="Kaggle", doi=None,
+              cited_by_count=0, abstract="", publication_type="kaggle_kernel",
+              source_meta={"reliability_score": 30})
+    assert reliability_breakdown(w) == ""

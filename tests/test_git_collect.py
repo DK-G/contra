@@ -39,12 +39,38 @@ def _theme() -> ThemeInput:
     )
 
 
-def test_build_track_a_git_query_includes_theme_and_exclude_terms():
+def test_build_track_a_git_query_or_joins_all_keywords():
+    # F-03 pool fix: ALL include keywords OR-joined (the old query used only the first,
+    # so the pool never saw candidates matching the other keywords), field-scoped, and
+    # left to GitHub's best-match ranking.
     query = build_track_a_git_query(_theme())
-    assert "digital twin" in query
+    assert '"digital twin" OR "power grid" OR "fault recovery"' in query
+    assert "in:name,description,readme" in query
     assert "NOT gamification" in query
-    assert "demo in:readme" in query
-    assert "pushed:>2025-01-01" in query
+    assert "pushed:>" in query           # relative cutoff — no hardcoded date
+    assert "demo" not in query           # the demo-scoping AND term is legacy-only
+
+
+def test_build_track_a_git_query_operator_budget():
+    # GitHub allows at most 5 AND/OR/NOT operators. 5 keywords = 4 ORs, leaving room
+    # for exactly 1 NOT; further excludes must be dropped, not sent as an invalid query.
+    theme = _theme()
+    theme.keywords.include = ["k1", "k2", "k3", "k4", "k5"]
+    theme.keywords.exclude = ["x1", "x2", "x3"]
+    query = build_track_a_git_query(theme)
+    assert "k1 OR k2 OR k3 OR k4 OR k5" in query
+    assert "NOT x1" in query
+    assert "NOT x2" not in query and "NOT x3" not in query
+
+
+def test_build_track_a_git_query_legacy_fallback_without_keywords():
+    theme = _theme()
+    theme.keywords.include = []
+    theme.keywords.exclude = []
+    query = build_track_a_git_query(theme)
+    assert "energy systems" in query
+    assert "demo in:readme" in query     # legacy demo scoping survives only here
+    assert " OR " not in query
 
 
 

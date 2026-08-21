@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.core.models import ThemeInput, Work
+from src.pipeline.git_collect import _README_DENSITY_UNIT, _README_MIN_LEN
 
 # kind constants — also the suffix of publication_type ("huggingface_<kind>")
 KIND_MODEL = "model"
@@ -160,18 +161,36 @@ def _license_score(license_name: str) -> int:
     return 15
 
 
-def _theme_fit_score(theme: ThemeInput, text: str) -> int:
-    haystack = text.lower()
-    include_hits = sum(
-        1 for token in theme.keywords.include if token and token.lower() in haystack
-    )
+def _theme_fit_score(theme: ThemeInput, strong_text: str, card_text: str = "") -> int:
+    """Keyword fit: id/tags/pipeline/library hits earn full credit; card hits earn
+    length-normalised partial credit (occurrences per 10k chars, capped at 1.0).
+
+    Same F-03 fix as the GitHub readme fit: matching a [:2000] card prefix missed
+    mentions below the fold, while full-text presence made CARD LENGTH a relevance
+    proxy (model cards, like mega-READMEs, mention everything incidentally). The
+    density constants are shared with git_collect (calibrated on live probes).
+    """
+    strong = strong_text.lower()
+    card = card_text.lower()
+    denom = max(len(card), _README_MIN_LEN) / _README_DENSITY_UNIT
+
+    include_credit = 0.0
+    for token in theme.keywords.include:
+        t = (token or "").lower()
+        if not t:
+            continue
+        if t in strong:
+            include_credit += 1.0
+        elif card:
+            include_credit += min(card.count(t) / denom, 1.0)
     exclude_hits = sum(
-        1 for token in theme.keywords.exclude if token and token.lower() in haystack
+        1 for token in theme.keywords.exclude
+        if token and (token.lower() in strong or token.lower() in card)
     )
-    return max(min(include_hits * 7, 20) - min(exclude_hits * 7, 14), 0)
+    return max(min(int(round(include_credit * 7)), 20) - min(exclude_hits * 7, 14), 0)
 
 
-def _fit_text(item_id: str, tags: List[str], pipeline_tag: str, library: str, card: str) -> str:
+def _fit_text(item_id: str, tags: List[str], pipeline_tag: str, library: str, card: str = "") -> str:
     return " ".join([item_id, " ".join(tags), pipeline_tag, library, card])
 
 
@@ -195,13 +214,14 @@ def _normalize_item(
     license_name = _extract_license(tags)
     gated = item.get("gated")
 
-    card = _strip_card_frontmatter(card_text)[:card_char_limit] if card_text else ""
-    fit_text = _fit_text(item_id, tags, pipeline_tag, library, card)
+    full_card = _strip_card_frontmatter(card_text) if card_text else ""
+    card = full_card[:card_char_limit]          # truncation stays a DISPLAY concern only
+    strong_text = _fit_text(item_id, tags, pipeline_tag, library)
 
     adoption = _adoption_score(downloads, likes)
     activity = _activity_score(last_modified)
     license_pts = _license_score(license_name)
-    theme_fit = _theme_fit_score(theme, fit_text)
+    theme_fit = _theme_fit_score(theme, strong_text, full_card)
     reliability = min(adoption + activity + license_pts + theme_fit, 100)
 
     if card:

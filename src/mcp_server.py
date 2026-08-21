@@ -49,7 +49,7 @@ from src.pipeline.track_a import (
     collect_track_a_works,
     normalize_sources,
 )
-from src.core.output_spec import render_markdown
+from src.core.output_spec import reliability_breakdown, render_markdown
 
 
 def _log(msg: str) -> None:
@@ -565,9 +565,11 @@ class StdinMcpServer:
             meta = entry.work.source_meta
             lines.append(f"### {i}. {entry.work.title}")
             lines.append(f"- **関係軸**: {entry.label} (関係度: {entry.relationship_level})")
-            lines.append(f"- **Reliability Score**: {meta.get('reliability_score', 0)} "
-                         f"(Impl/Doc: {meta.get('impl_doc_score', 0)}, LMA: {meta.get('lma_score', 0)}, "
-                         f"Comm: {meta.get('community_score', 0)}, Sec: {meta.get('security_score', 0)})")
+            # Per-source pillar labels (F-03/8-18: printing GitHub pillars for Kaggle
+            # anchors rendered as "0/0/0/0" and read as a broken quality axis).
+            breakdown = reliability_breakdown(entry.work)
+            lines.append(f"- **Reliability Score**: {meta.get('reliability_score', 0)}"
+                         + (f" ({breakdown})" if breakdown else ""))
             # F-03: the ACTUAL sort key — reliability x relevance — so the caller can see
             # why an 86-quality off-topic repo now sits below an 83-quality on-topic one.
             lines.append(f"- **順位スコア**: {meta.get('anchor_rank_score', meta.get('reliability_score', 0))} "

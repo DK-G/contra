@@ -257,6 +257,15 @@
 
 **検証**: `tests/test_anchor_rank.py` 10ケース（実観測バグ2件の逆転を固定・密度較正4ケースは実測値を模写）。全体 **341 tests: 341 pass**。
 
+**追処置 2026-08-22（ユーザー指示「発見されたバグの対策をウェブで調べて対処」）— 前日の残件4件を処置**:
+
+1. **プール自体の質（真の律速だった）**: GitHub 検索の公式仕様を確認——リポジトリ検索は **OR 演算子対応（AND/OR/NOT 合計5個・256字まで）**、`in:name,description,readme` 修飾子あり、**既定ソートは best-match（関連度）で、現行コードは `sort=stars` を明示指定して人気順に上書きしていた**。`build_track_a_git_query` を全 include キーワードの OR 連結＋`in:` 修飾＋best-match（`sort=stars` 撤去・`GitCollectConfig.sort` で復元可）に書き換え。NOT は残り演算子予算内でのみ付与。`pushed:>` は相対日付化（ハードコード 2025-01-01 の経年ドリフト解消）。**実測 before/after（同一テーマ・実 API）**: 旧クエリ首位 deer-flow(★80k・無関係) → **新クエリ首位 `jakorostami/expectation`（"confidence sequences, sequential testing, e-processes, e-values の Python ライブラリ"＝テーマの理想解・旧クエリではプール不在）**。confseq 4位（"confidence sequence" が description 直撃で fit 20）・OpenBench(SPRT 分散検定) 5位。deer-flow/claude-skills/frankensqlite は**プールから消滅**。MCP 経由の全経路でも首位を確認
+2. **HF カードの切り詰め**: `hf_collect` にも card 先頭2000字切り詰めが存在（GitHub と同型）。密度正規化（強フィールド=id/tags/pipeline/library は全点・card は10,000字あたり出現数の部分点）を適用。切り詰めは表示用途のみに残置
+3. **Kaggle 柱ラベル不一致（8/18 の「全ゼロ」の正体）**: ソース別の柱内訳ヘルパ `reliability_breakdown` を新設——Kaggle/HF は Adoption/Activity/License/Theme-fit、GitHub は Impl/Doc/LMA/Comm/Sec で描画。構造化レンダラに Kaggle 分岐追加（従来は汎用 else 落ち）・LLM 経路の無条件 GitHub 柱印字を撤去
+4. **順位スコアの可視化**: 構造化レンダラにも `順位スコア = Reliability × 関連度係数` 行を追加
+
+**残る正直な限界**: best-match でもチェスエンジン系（SPRT はチェス検定の用語でもある）等のノイズは混入する（今回の実測では WolvenKit が fit 10 で3位）。ただし fit=0 の完全無関係群は下位に沈み、上から読んで最初に理想解に当たる状態にはなった。全 **349 tests: 349 pass**。
+
 ---
 
 ### F-09. delegate_finalize — 沈黙劣化と落選理由の不可視 — **対処済み 2026-08-21（同日2回目）**

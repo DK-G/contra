@@ -7,6 +7,36 @@
 
 ---
 
+## 2026-08-22（CL-0088） byrepo プール品質の根治: OR クエリ＋best-match／HF密度化／Kaggle柱ラベル修正
+
+### 概要
+* ユーザー指示「発見されたバグの対策をウェブで調べて対処」。前日 F-03 処置で発見・未修正だった4残件を処置。
+* **検索クエリの根治（真の律速）**: GitHub 公式仕様（REST search）を確認し、(a) include 先頭1語のみ→**全キーワード OR 連結**（演算子5個・256字の公式上限内で予算管理）、(b) `in:name,description,readme` 修飾、(c) **`sort=stars` の撤去＝既定の best-match（関連度）ソートに復帰**、(d) `pushed:` 相対日付化。実測: 同一テーマで首位が deer-flow(★80k・無関係)→**jakorostami/expectation（テーマの理想解・旧クエリではプール不在）**へ。
+* **HF カード切り詰め**: GitHub README と同型の [:2000] 切り詰めを発見→密度正規化を適用（定数は git_collect と共有）。
+* **Kaggle 柱ラベル**: `reliability_breakdown`（output_spec）新設でソース別柱表示。8/18 の「サブスコア全ゼロ」は Kaggle anchors に GitHub 柱ラベルを印字していた描画バグと確定・解消。構造化レンダラに Kaggle 分岐追加。
+* 構造化レンダラにも順位スコア行（Reliability × 関連度係数）を追加。
+* 全 **349 tests: 349 pass**。
+
+### 関連タスク
+* Task: contra 失敗対処（F-03 残件の根治）
+
+### Diffスナップショット（要約）
+
+```text
+# 1. 変更目的 (必須)
+byrepo の「本命がプールに入らない」を検索層で根治。密度正規化と柱ラベルをソース横断で整合させる。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/pipeline/git_collect.py(クエリ再設計+sort設定), src/pipeline/hf_collect.py(密度fit),
+src/core/output_spec.py(reliability_breakdown+Kaggle分岐+順位スコア行), src/mcp_server.py(ソース別柱表示),
+tests/test_git_collect.py(クエリ新仕様3件), tests/test_hf_collect.py(+3), tests/test_kaggle_collect.py(+3)
+
+# 3. 検証 (必須)
+349 tests 全緑。実 API before/after: 旧クエリ vs OR+best-match をプローブ2回＋collect_track_a_works 1回＋MCP 全経路1回。
+```
+
+---
+
 ## 2026-08-21（CL-0087） F-03/F-09/F-10/F-11(3) 一括対処（ユーザー立ち会い・「ガンガン回して潰す」指示）
 
 ### 概要

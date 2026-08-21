@@ -4,6 +4,20 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-08-22 — byrepo の検索は「OR 全キーワード＋GitHub の best-match」に委ねる（F-03 残件の根治）
+
+**決定**: `build_track_a_git_query` を全 include キーワードの OR 連結＋`in:name,description,readme`＋既定 best-match ソートへ書き換える。`sort=stars` は撤去（`GitCollectConfig.sort` で復元可能）。
+
+**根拠（公式仕様＋実測）**: GitHub リポジトリ検索は OR 対応（AND/OR/NOT 合計5個・256字）で、**既定ソートが best-match（関連度）**。現行コードは (1) include 先頭1語しか使わず、(2) `sort=stars` で関連度ソートを人気順に**わざわざ上書き**していた——「★80k の無関係リポジトリが毎回上位」という6週間の観測の直接の構造要因。同一テーマの実測で、新クエリは首位に **jakorostami/expectation**（"confidence sequences, sequential testing, e-processes, e-values"＝テーマの理想解）を返し、旧クエリの上位群（deer-flow 等）はプールから消えた。
+
+**設計上の選択**: (a) 複数クエリ発行＋マージではなく単一 OR クエリ——無認証 search は 10 req/分でレート予算が薄く、best-match が既に横断関連度を返すため。(b) NOT（exclude）は OR が使い残した演算子予算内でのみ付与し、超過分は静かに落とすのではなくテストで仕様化。(c) 「demo in:readme」の AND 縛りはキーワード無しの legacy fallback にのみ残置。(d) `pushed:>2025-01-01` のハードコードは相対日付（550日）へ——時計依存の経年ドリフト（昨日の LMA テストと同族）の先回り。
+
+**併せて**: HF カードの [:2000] 切り詰め（GitHub README と同型）に密度正規化を適用。Kaggle の「サブスコア全ゼロ」（8/18 観測）は**採点の欠陥ではなく描画バグ**（GitHub 柱ラベルの無条件印字）と確定し、`reliability_breakdown` でソース別柱表示に統一。
+
+**残る限界も記録**: best-match でも語義衝突ノイズ（SPRT＝チェス検定用語）は混入する。fit=0 の完全無関係群が下位へ沈む構造は確保。
+
+---
+
 ## 2026-08-21（同日3件目） — byrepo の関連度は「乗算＋密度正規化」で順位に入れる（F-03）
 
 **決定**: Track A の順位を `Reliability × (0.35 + 0.65 × relevance)` に変更。relevance は各ソース既存の `theme_fit_score` の正規化。README のキーワード照合は**出現の有無ではなく密度**（10,000字あたり出現数・上限1.0）で採点し、name/description/topics のヒットは全点とする。

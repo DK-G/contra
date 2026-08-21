@@ -172,3 +172,34 @@ def test_collect_empty_query_returns_empty():
     )
     assert works == []
     assert client.calls == []
+
+
+# --- F-03 (2026-08-22): card fit is density-normalised, not prefix-truncated ---
+
+from src.core.models import Keywords, Scope
+from src.pipeline.hf_collect import _theme_fit_score as _hf_fit
+
+
+def _kw_theme(*include):
+    return ThemeInput(
+        theme_overview="o", goal="g", why_problem="w", approach_type="application",
+        assumptions=[], scope=Scope(field="statistics", scale="small", time_range="last_10_years"),
+        keywords=Keywords(include=list(include), exclude=[]),
+    )
+
+
+def test_hf_fit_mention_below_2000_chars_now_counts():
+    # The old [:2000] prefix cut missed this mention entirely.
+    card = ("x" * 5000) + " anytime-valid inference " + ("y" * 1000)
+    assert _hf_fit(_kw_theme("anytime-valid"), "some/model tags", card) == 7
+
+
+def test_hf_fit_mega_card_scattered_mentions_earn_partial_credit_only():
+    chunk = "z" * 40_000
+    card = chunk + " e-value " + chunk + " e-value " + chunk
+    fit = _hf_fit(_kw_theme("e-value"), "some/model", card)
+    assert 0 <= fit <= 2      # 2 hits / 120KB ~= 0.17 credit, not a full 7
+
+
+def test_hf_fit_strong_field_hit_is_full_credit():
+    assert _hf_fit(_kw_theme("sprt"), "acme/sprt-toolkit tags", "q" * 100_000) == 7

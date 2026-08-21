@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Optional, Sequence
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Sequence
 
 from src.core.models import GitRepository, ThemeInput, Work
 from src.github.client import GitHubClient
@@ -45,6 +45,10 @@ class GitCollectConfig:
     # when the client carries a token. Set True/False to force.
     include_rich_signals: Optional[bool] = None
     rich_sample_size: int = 10
+    # Repository-search sort. None = GitHub's default best-match (relevance) ranking;
+    # "stars" restores the legacy popularity sort (F-03: stars-sorting guaranteed
+    # popularity-dominated pools).
+    sort: Optional[str] = None
 
 
 def _clean_token(token: str) -> str:
@@ -54,43 +58,75 @@ def _clean_token(token: str) -> str:
     return f'"{text}"' if " " in text else text
 
 
-def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> str:
-    tokens: List[str] = []
-    # To avoid 0 hits due to too many AND terms, only use the first include keyword
-    if theme.keywords.include:
-        tokens.append(theme.keywords.include[0])
-    elif theme.scope.field:
-        tokens.append(theme.scope.field)
-        
-    # Limit goal text in query to avoid overly specific queries
-    if theme.goal and _is_ascii_text(theme.goal) and len(theme.goal) < 60:
-        tokens.append(theme.goal)
-        
-    # Discovery Scoping: target demos/examples in README
-    tokens.append("demo in:readme")
-    
-    if extra_terms:
-        tokens.extend(extra_terms)
+# GitHub repository-search limits (docs.github.com/en/rest/search/search):
+#   - at most 5 AND/OR/NOT operators per query, at most 256 chars of terms
+#   - default sort is BEST MATCH (relevance); `sort=stars` overrides it
+_GH_MAX_OPERATORS = 5
+_GH_MAX_QUERY_CHARS = 256
+_GH_PUSHED_WITHIN_DAYS = 550  # ~18 months; relative so the staleness bar doesn't drift
 
-    unique_tokens: List[str] = []
+
+def _pushed_qualifier() -> str:
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=_GH_PUSHED_WITHIN_DAYS)
+    return f"pushed:>{cutoff.isoformat()}"
+
+
+def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> str:
+    """OR-join the include keywords and let GitHub's best-match ranking work.
+
+    The previous query used only the FIRST include keyword plus a "demo in:readme" AND
+    term, sorted by stars — six weeks of field observations (F-03) showed the result:
+    the pool filled with mega-star generic repos while the theme's obvious candidates
+    never surfaced. Live probe 2026-08-22 on the same theme: single-keyword+stars put
+    an 80k-star agent harness first; the OR query under best-match returned a library
+    whose description IS the theme ("confidence sequences, sequential testing,
+    e-processes") at #1. Excludes spend the leftover operator budget (NOT counts
+    toward the same 5-operator cap as OR).
+    """
+    include_terms: List[str] = []
     seen = set()
-    for token in tokens:
-        cleaned = _clean_token(token)
-        if cleaned and cleaned not in seen:
-            seen.add(cleaned)
-            unique_tokens.append(cleaned)
-            
-    exclude_tokens: List[str] = []
+    for token in list(theme.keywords.include) + list(extra_terms or []):
+        cleaned = _clean_token(token or "")
+        if cleaned and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            include_terms.append(cleaned)  # _clean_token already quotes multi-word terms
+
+    if include_terms:
+        # Operator budget: (n-1) ORs; trim from the tail if over budget or over length.
+        while len(include_terms) - 1 > _GH_MAX_OPERATORS:
+            include_terms.pop()
+        while len(include_terms) > 1 and sum(len(t) for t in include_terms) > _GH_MAX_QUERY_CHARS:
+            include_terms.pop()
+        head = " OR ".join(include_terms)
+        parts = [head, "in:name,description,readme"]
+        budget = _GH_MAX_OPERATORS - (len(include_terms) - 1)
+    else:
+        # Legacy fallback (no keywords): field/goal AND terms + demo scoping.
+        tokens: List[str] = []
+        if theme.scope.field:
+            tokens.append(theme.scope.field)
+        if theme.goal and _is_ascii_text(theme.goal) and len(theme.goal) < 60:
+            tokens.append(theme.goal)
+        tokens.append("demo in:readme")
+        parts = []
+        fb_seen = set()
+        for token in tokens:
+            cleaned = _clean_token(token)
+            if cleaned and cleaned not in fb_seen:
+                fb_seen.add(cleaned)
+                parts.append(cleaned)
+        budget = _GH_MAX_OPERATORS
+
     for token in theme.keywords.exclude:
-        if token.strip():
-            cleaned = _clean_token(token.strip())
-            if cleaned:
-                exclude_tokens.append(f"NOT {cleaned}")
-            
-    # Activity filtering: target repos pushed since 2025-01-01 to avoid stale code bases
-    all_parts = unique_tokens + exclude_tokens
-    all_parts.append("pushed:>2025-01-01")
-    return " ".join(all_parts)
+        if budget <= 0:
+            break
+        cleaned = _clean_token(token.strip()) if token.strip() else ""
+        if cleaned:
+            parts.append(f"NOT {cleaned}")
+            budget -= 1
+
+    parts.append(_pushed_qualifier())
+    return " ".join(parts)
 
 
 
@@ -731,15 +767,13 @@ def collect_track_a_git_repos(
     gh = client or GitHubClient()
     include_rich = _resolve_rich_signals(cfg, gh)
     query = build_track_a_git_query(theme)
-    payload = gh.get(
-        "/search/repositories",
-        {
-            "q": query,
-            "sort": "stars",
-            "order": "desc",
-            "per_page": cfg.per_page,
-        },
-    )
+    # Best-match (relevance) ranking is GitHub's DEFAULT; `sort=stars` was overriding it
+    # and guaranteed popularity-dominated pools (F-03: an 80k-star agent harness topped a
+    # sequential-testing theme for weeks). cfg.sort restores an explicit sort if wanted.
+    search_params: Dict[str, Any] = {"q": query, "per_page": cfg.per_page}
+    if cfg.sort:
+        search_params.update({"sort": cfg.sort, "order": "desc"})
+    payload = gh.get("/search/repositories", search_params)
     items = payload.get("items") or []
     repos: List[GitRepository] = []
     for item in items:

@@ -55,6 +55,37 @@ def _is_hf_work(work: Work) -> bool:
     return (work.publication_type or "").startswith("huggingface_")
 
 
+def _is_kaggle_work(work: Work) -> bool:
+    return (work.publication_type or "").startswith("kaggle_")
+
+
+def reliability_breakdown(work: Work) -> str:
+    """Per-source pillar breakdown for the reliability score.
+
+    F-03 field observation 2026-08-18: Kaggle anchors rendered with the GITHUB pillar
+    labels showed "Impl/Doc 0, LMA 0, Comm 0, Sec 0" — read as "the quality axis is
+    broken" when in fact Kaggle's scoring model simply has different pillars
+    (adoption/activity/license/theme-fit). Each source must be labelled with the
+    pillars it actually scores. Returns '' when the pillar fields are absent.
+    """
+    meta = work.source_meta or {}
+    if _is_github_work(work):
+        parts = [meta.get("impl_doc_score"), meta.get("lma_score"),
+                 meta.get("community_score"), meta.get("security_score")]
+        if any(p is None for p in parts):
+            return ""
+        return (f"Impl/Doc: {parts[0]}/30, LMA: {parts[1]}/25, "
+                f"Comm: {parts[2]}/20, Sec: {parts[3]}/25")
+    if _is_hf_work(work) or _is_kaggle_work(work):
+        parts = [meta.get("adoption_score"), meta.get("activity_score"),
+                 meta.get("license_score"), meta.get("theme_fit_score")]
+        if any(p is None for p in parts):
+            return ""
+        return (f"Adoption: {parts[0]}/40, Activity: {parts[1]}/25, "
+                f"License: {parts[2]}/15, Theme-fit: {parts[3]}/20")
+    return ""
+
+
 def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
     """Render the shared 4-part body: 概要 / 関連性 / 役に立つ可能性の仮説 / 注意点."""
     lines = []
@@ -80,6 +111,14 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append("")
     lines.append(f"- **関係度**: {entry.relationship_level or '—'}")
     lines.append(f"- **関係軸**: {entry.label or '—'}")
+    # F-03: show the actual sort key (reliability x relevance) so the reader can see WHY
+    # this anchor sits where it does — same instrument-first principle as bybridge's F-02.
+    _meta = entry.work.source_meta or {}
+    if "anchor_rank_score" in _meta:
+        lines.append(
+            f"- **順位スコア**: {_meta['anchor_rank_score']} = Reliability × 関連度係数 "
+            f"(theme関連度 {_meta.get('relevance', 0.0)})"
+        )
     if _is_github_work(entry.work):
         score = entry.work.source_meta.get("reliability_score", "—")
         issue_signal = entry.work.source_meta.get("issue_signal_summary", "—")
@@ -145,6 +184,24 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
         else:
             lines.append(f"- Reliability Score: {score}/100  |  License: {license_name}")
         lines.append(f"- Task/Pipeline: {pipeline_tag}")
+    elif _is_kaggle_work(entry.work):
+        # F-03 (2026-08-18): Kaggle anchors used to fall through to the generic paper
+        # renderer (and the LLM path printed GitHub pillar labels as 0/0/0/0). Show the
+        # pillars Kaggle actually scores.
+        meta = entry.work.source_meta
+        score = meta.get("reliability_score", "—")
+        kind = meta.get("kaggle_kind", "—")
+        votes = meta.get("votes", "—")
+        downloads = meta.get("downloads")
+        tail = f"  |  DL: {downloads}" if downloads is not None else ""
+        lines.append(
+            f"- 更新年: {entry.work.year or '—'}  |  種別: {entry.work.venue}/{kind}  |  votes: {votes}{tail}"
+        )
+        breakdown = reliability_breakdown(entry.work)
+        if breakdown:
+            lines.append(f"- Reliability Score: {score}/100 ({breakdown})")
+        else:
+            lines.append(f"- Reliability Score: {score}/100")
     else:
         lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")
