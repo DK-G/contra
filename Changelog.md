@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-08-21（CL-0086） F-11(1) OpenAlex リトライ／時計依存テストの修理／S-26 試験再開の反映
+
+### 概要
+* 同日の対処デー報告に対するユーザー裁定3件を実施。
+* **S-26 解除（ユーザー裁定「１解除で」）**: seihai 日次 SKILL の bybridge 停止注記3箇所を「2026-08-21 試験再開」へ更新（4種に復帰・最初の3回は観測run・3回とも旧様式なら恒久除外）。seihai 台帳 `docs/open-recommendations.md` の S-26 行にも再開を追記（seihai 側コミット `af3c4af`）。※SKILL・台帳の編集はユーザー在席・明示指示によるもので、無人ルーティンの「seihai を触らない」制約の例外。
+* **F-11(1) 実装（「(1)を今実装でできたらその後試して」）**: `src/openalex/client.py` の `get` に 429/5xx/タイムアウト系の指数バックオフ・リトライ（既定2回、`max_retries=0` で旧挙動＝可逆）。429 以外の 4xx は即時失敗のまま。新規 `tests/test_openalex_client_retry.py` 6ケース。実経路（bybridge raw）1回完走を確認。(2) polite pool は据え置き（個人情報送出の判断を伴うため）。
+* **時計依存テストの修理（「おススメの通り対処して」）**: `tests/test_git_collect.py::test_lma_floor_never_lowers_a_fresh_score` の `pushed_at` ハードコード（2026-06-10）を「現在から5日前」の相対日付に変更。書かれた2週間後から測定能力を失い、以後常に赤かった。`_is_completed_stable` の assert も追加し「floor が新鮮なスコアを引き下げない」を実際に検証する形に戻した。
+* **全 314 tests: 314 pass＝スイート全緑**（2026-08-18 から続いた常時赤を解消）。
+
+### 関連タスク
+* Task: contra 失敗対処デー 2026-08-21 の後続（ユーザー裁定分）
+
+### Diffスナップショット（要約）
+
+```text
+# 1. 変更目的 (必須)
+一過性 429 が「収穫ゼロ」に化ける経路を断つ（F-11(1)）。常時赤のテストが次の本物の失敗を隠す状態を解消する。
+
+# 2. 変更概要 (必須)
+変更ファイル: src/openalex/client.py, tests/test_openalex_client_retry.py(新規), tests/test_git_collect.py, docs/field_observations_seihai.md, Changelog.md, DECISION_LOG.md
+（リポジトリ外）seihai 日次 SKILL の停止注記3箇所・seihai docs/open-recommendations.md S-26 行。
+
+# 3. 検証 (必須)
+tests/test_openalex_client_retry.py 6ケース（429リトライ成功/5xx/上限/非対象4xx即時失敗/タイムアウト/retries=0の旧挙動）。
+全体 314 tests: 314 pass。実機 bybridge raw 経路1回完走（診断値は F-07 処置後と同一）。
+```
+
+---
+
 ## 2026-08-21（CL-0085） bybridge F-07 処置: 重複シードの折り畳み＋1シード群あたりの bridge プール占有上限
 
 ### 概要

@@ -198,8 +198,15 @@ def test_lma_no_floor_when_issues_pile_up_unresolved():
 
 
 def test_lma_floor_never_lowers_a_fresh_score():
-    repo = _stale_repo(pushed_at="2026-06-10T00:00:00Z")
-    assert _lma_score(repo) == 25
+    # pushed_at must be RELATIVE to now: a hardcoded date silently ages past the freshness
+    # tiers, and once freshness drops to the completed-stable floor (15) this test stops
+    # verifying anything (it sat red for weeks exactly that way — see Changelog 2026-08-21).
+    from datetime import datetime, timedelta, timezone
+
+    five_days_ago = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    repo = _stale_repo(pushed_at=five_days_ago)
+    assert _is_completed_stable(repo) is True     # the floor (15) is in play...
+    assert _lma_score(repo) == 25                 # ...yet max(freshness, floor) keeps the fresh 25
 
 
 def _scored_repo(name: str, pushed_at: str, lma: int) -> GitRepository:
