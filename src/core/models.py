@@ -63,6 +63,10 @@ class Work:
     source_meta: Dict[str, Any] = field(default_factory=dict)
     # OpenAlex ids of works this paper cites; seeds the citation 2-hop bridge pool.
     referenced_works: List[str] = field(default_factory=list)
+    # ISO language code from OpenAlex (e.g. "en", "ja"); None when the record omits it.
+    # C(iii) 2026-08-22: a Japanese-language theme pulled Japanese institutional-repository
+    # records as bybridge seeds — off-language seeds rarely carry the citation graph.
+    language: Optional[str] = None
 
 
 @dataclass

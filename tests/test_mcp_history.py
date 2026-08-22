@@ -109,3 +109,54 @@ def test_all_dead_seeds_explains_instead_of_empty_pool(monkeypatch):
     result = server.handle_tool_call("bybridge_collect", _bybridge_args())
     text = "\n".join(b.get("text", "") for b in result["content"])
     assert "referenced_works が空" in text     # the F-12 shape is named, not a generic "not found"
+
+
+# --- C(iii): seed language gate ----------------------------------------------
+
+def _lang_seed(wid, refs, language):
+    w = _seed_work(wid, refs)
+    w.language = language
+    return w
+
+
+def test_off_language_seeds_are_dropped_and_reported(monkeypatch):
+    en = _lang_seed("W_EN", ["R1"], "en")
+    ja = _lang_seed("W_JA", ["R2"], "ja")
+    nolang = _lang_seed("W_NONE", ["R3"], None)      # fail-open: missing code is kept
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: [ja, en, nolang])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [])
+    result = mcp_mod.StdinMcpServer().handle_tool_call("bybridge_collect", _bybridge_args(seed_count=3))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert "シード言語ゲート (C(iii))" in text and "1 件" in text
+    assert "W_EN" in text and "W_NONE" in text and "W_JA" not in text
+
+
+def test_seed_language_null_disables_gate(monkeypatch):
+    ja = _lang_seed("W_JA", ["R2"], "ja")
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: [ja])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [])
+    result = mcp_mod.StdinMcpServer().handle_tool_call(
+        "bybridge_collect", _bybridge_args(seed_language=None))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert "W_JA" in text and "シード言語ゲート" not in text
+
+
+# --- Plan X: bybridge delegation materials mode -------------------------------
+
+def test_materials_mode_returns_scoreable_json_with_bridge_signals(monkeypatch):
+    import json as _json
+    seed = _seed_work("S1", ["B1"])
+    seed.language = "en"
+    cand = _seed_work("W_CAND", ["B1"])
+    cand.abstract = "cross-domain abstract"
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: [seed])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [cand])
+    result = mcp_mod.StdinMcpServer().handle_tool_call(
+        "bybridge_collect", _bybridge_args(materials=True))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert "delegate_finalize" in text and "接地契約" in text      # scoring + grounding instructions
+    payload = text[text.index("["):]
+    mats = _json.loads(payload)
+    assert mats[0]["id"] == "W_CAND"
+    assert "bridge_signals" in mats[0]
+    assert mats[0]["bridge_signals"]["shared_bridge_count"] == 1

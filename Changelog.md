@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-08-22（CL-0091） 案X採用: 委譲経路を本番経路に昇格＋束2実装（C(iii)言語ゲート・A2距離プロトコル・bybridge materials）
+
+### 概要
+* ユーザー裁定「束１案X採用・束２実装まで進めて」。委譲経路（呼び手エージェント=LLM 役・contra=決定論検証）を **by\* の本番経路に昇格**。
+* **bybridge `materials:true`**（新設）: 構造的関連度順・上位窓多様化済みの交差候補を採点可能な materials JSON（bridge_signals 付き）で返す＝byserendipity raw_only の対称形。これで Track B 両ツールが完全な委譲フローを持つ。
+* **C(iii) シード言語ゲート**: Work に language を追加（parser で取得）。bybridge シードは既定 'en' 以外を除外（言語コード欠落は fail-open・`seed_language:null` で無効化）。F-12 run 1/3 の「日本語テーマ→日本語機関リポジトリ20/20」の再発防止。除外数は診断に明示。
+* **A2 距離プロトコル**: byserendipity raw_only の facets 指示に Near/Far/Very Far の3距離段階を明文化（F-06 のホームドメイン固着への処方）。
+* materials の bridge_signals.shared_bridge_count は annotation 副作用でなく直接計算（モックテストが暴いた脆さの修正）。
+* 全 **373 tests: 373 pass**。seihai 側 SKILL の委譲フロー化は別コミット（ユーザー承認済み）。
+
+---
+
 ## 2026-08-22（CL-0090） 承認済み総合対応の実装: C(順位多様性/構造的関連度)→B(同点解消)→A1(接地契約)
 
 ### 概要

@@ -181,6 +181,7 @@ def normalize_work(work: Dict[str, Any]) -> Work:
         is_retracted=is_retracted,
         source_meta=source_meta,
         referenced_works=referenced_works,
+        language=str(work.get("language")) if work.get("language") else None,
     )
 
 

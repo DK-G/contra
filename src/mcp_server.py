@@ -279,6 +279,8 @@ class StdinMcpServer:
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
+                        "materials": {"type": "boolean", "description": "DELEGATION MODE (production path since 2026-08-22): return the ranked cross-domain candidates as scoreable materials JSON (with bridge_signals) for the CALLING AGENT to score and pass to delegate_finalize — the byserendipity raw_only path's symmetric twin. The agent does the purpose/mechanism judgement and grounded prose with its OWN inference; contra verifies deterministically.", "default": False},
+                        "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
                         "structured": {"type": "boolean", "description": "When raw_only is true, format the deterministic bridge candidates into the full 4-part Track B document (key-free structured assembly; no LLM). The agent can then refine the prose/scores.", "default": False},
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
@@ -473,6 +475,10 @@ class StdinMcpServer:
                     "raw_only=true には facets が必要です。テーマの関係構造をドメイン中立な機能語で再記述し"
                     "（structure・構造制約は保持・テーマ表層語は除く）、遠ドメインごとに ~80語の仮想アブストラクト"
                     "（facets[].pseudo_abstract）を最大3つ生成して渡してください。contra が search.semantic で収集します。"
+                    "★A2 距離プロトコル: 3枚の facet は概念距離を段階化してください——(1) Near＝同トピック隣接領域、"
+                    "(2) Far＝同じ大分野の別サブ領域、(3) Very Far＝別分野で同じ関係構造（例: テーマが『生成器の"
+                    "過剰適合回避』なら Very Far は『生態学のニッチ選択圧による種多様性維持』）。ホームドメイン内の"
+                    "facet だけで3枚を埋めないこと（F-06 の失敗様式）。"
                 )}],
                 "isError": False,
             }
@@ -695,6 +701,17 @@ class StdinMcpServer:
         raw_seeds = collect_and_filter(
             theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True
         )
+        # C(iii) 2026-08-22: a Japanese-language theme pulled 20/20 Japanese institutional-
+        # repository records as seeds (F-12 run 1/3). The 2-hop mechanism needs seeds that
+        # carry the citation graph, which is overwhelmingly English-language; off-language
+        # records with references are usually repository mirrors. Fail-open on missing
+        # language codes; `seed_language: null` disables the gate.
+        seed_language = args.get("seed_language", "en")
+        lang_dropped = 0
+        if seed_language:
+            kept = [w for w in raw_seeds if w.language in (None, seed_language)]
+            lang_dropped = len(raw_seeds) - len(kept)
+            raw_seeds = kept
         seeds = [w for w in raw_seeds if w.referenced_works][:seed_count]
         dead_seed_count = len(raw_seeds) - sum(1 for w in raw_seeds if w.referenced_works)
         if not seeds:
@@ -728,6 +745,11 @@ class StdinMcpServer:
                 f"- シード生存確認 (F-12): referenced_works が空で bridge を生成できないレコード "
                 f"{dead_seed_count} 件をシード候補から除外\n" + diag_line
             )
+        if diagnostics and lang_dropped:
+            diag_line = (
+                f"- シード言語ゲート (C(iii)): 言語 '{seed_language}' 以外のレコード "
+                f"{lang_dropped} 件をシード候補から除外（seed_language:null で無効化可）\n" + diag_line
+            )
         if not cands:
             head = (
                 f"citation 2-hop で交差候補が見つかりませんでした"
@@ -736,6 +758,39 @@ class StdinMcpServer:
             # Seeds are shown even on this path: an empty result caused by off-topic seeds and one
             # caused by an over-aggressive home-domain exclusion look identical without them.
             return _external_data_result(f"{head}\n\n{diag_line}" if diagnostics else head)
+
+        if bool(args.get("materials")):
+            # Delegation-as-production (2026-08-22 ruling, plan X): return the ranked
+            # cross-domain candidates as scoreable MATERIALS — the byserendipity raw path's
+            # symmetric twin. The calling agent scores them (purpose_sim/mechanism_dist,
+            # quote-then-claim grounding) and passes them to delegate_finalize; contra's
+            # deterministic post-gate and grounding verifier do the rest. Bridge signals
+            # ride along as extra keys so the agent can weigh structural linkage.
+            _log("Bybridge: returning ranked candidates as delegation materials...")
+            mats = []
+            for w in ranked_all[:30]:
+                m = material_from_work(w)
+                meta = w.source_meta or {}
+                m["bridge_signals"] = {
+                    # computed directly (not from annotation side-effects) so the material
+                    # is correct regardless of which collection path produced the Work
+                    "shared_bridge_count": shared_bridge_count(w, bridges),
+                    "bridge_betweenness": meta.get("bridge_betweenness", 0),
+                    "bridge_strength": meta.get("bridge_strength", 0),
+                    "bridge_hybrid_score": meta.get("bridge_hybrid_score", 0.0),
+                }
+                mats.append(m)
+            instruction = (
+                f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順・上位窓多様化済み）。"
+                "各候補を purpose_sim/mechanism_dist（2桁小数・格子値回避）等で採点し、同じ材料を echo して "
+                "delegate_finalize へ渡してください。bridge_signals.bridge_strength はその候補が通る bridge を"
+                "引用するシード数＝構造的テーマ結合の強さです。"
+                "★接地契約: relationship / serendipity_rationale を書く場合は、テーマ側の逐語抜粋を theme_quote に、"
+                "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
+                "抜粋できない主張は書かないでください——contra が決定論的に照合し、照合失敗の散文は棄却されます。"
+            )
+            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + json.dumps(mats, ensure_ascii=False)
+            return {"content": [{"type": "text", "text": body}], "isError": False}
 
         if raw_only:
             if structured:
