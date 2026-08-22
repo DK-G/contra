@@ -125,7 +125,10 @@ def test_normalize_agent_scores_requires_fields():
 
 
 def test_finalize_passes_strong_candidate_and_honors_agent_prose():
-    mats = [_material("W", 0.7, 0.8, structural_depth=0.8, relationship="agent rel")]
+    # A1 grounding contract (default): agent prose needs verbatim quotes from both sides.
+    mats = [_material("W", 0.7, 0.8, structural_depth=0.8, relationship="agent rel",
+                      theme_quote="テーマ概要 目的 問題意識",
+                      source_quote="First. Second. Third.")]
     diag = {}
     doc = finalize_delegated_document(mats, _theme(), count=1, diag=diag)
     entry = doc.sections[0].entries[0]

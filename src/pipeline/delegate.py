@@ -235,6 +235,71 @@ def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+# --- A1 (2026-08-22 ruling): the grounding contract — quote-then-claim ------
+#
+# F-04/F-05: relational prose returned by the tools was a free generation conditioned on
+# the theme, not anchored in either text — it fabricated theme-side propositions ("需要の
+# 変動" on a theme that never mentions demand) and source-side summaries. The fix follows
+# the delegation architecture the user chose: the CALLING AGENT is the LLM, and contra is
+# the deterministic verifier. Any agent-supplied relational prose must arrive with two
+# verbatim quotes — one from the submitted theme text, one from the candidate's own
+# title/abstract — and code (not a model) checks the quotes actually occur in those
+# texts. Prose whose quotes fail verification is dropped (the deterministic structured
+# fill takes over) and the failure is named in the output, F-09 style. Scores are NOT
+# touched: the agent's judgement stands, only ungrounded prose is refused.
+
+_QUOTE_MIN_CHARS = 10   # a quote shorter than this can't anchor a claim (single-word gaming)
+
+
+def _norm_quote_space(text: str) -> str:
+    """Whitespace-insensitive, case-insensitive normal form for verbatim matching.
+
+    ALL whitespace is removed (not collapsed): an agent-side line break inside a Japanese
+    phrase would otherwise insert a space that spaceless Japanese text can never match.
+    Both haystack and needle get the same treatment, so ordering is preserved.
+    """
+    import re as _re
+    return _re.sub(r"\s+", "", str(text or "")).casefold()
+
+
+def theme_grounding_text(theme: ThemeInput) -> str:
+    """The submitted text a theme_quote may be drawn from — nothing else counts."""
+    parts = [
+        theme.theme_overview, theme.goal, theme.why_problem,
+        " ".join(theme.assumptions or []), getattr(theme, "concern", "") or "",
+    ]
+    return _norm_quote_space(" ".join(p for p in parts if p))
+
+
+def verify_grounding(material: Dict[str, Any], theme_text_norm: str) -> List[str]:
+    """Deterministically verify a candidate's quote-then-claim block.
+
+    Returns a list of failure reasons (empty = grounded). Rules:
+    - prose fields (relationship / serendipity_rationale) REQUIRE both quotes;
+    - theme_quote must occur verbatim (whitespace/case-normalised) in the submitted
+      theme text; source_quote must occur in the candidate's OWN title+abstract;
+    - quotes below _QUOTE_MIN_CHARS cannot anchor anything.
+    """
+    has_prose = bool(material.get("relationship") or material.get("serendipity_rationale"))
+    if not has_prose:
+        return []
+    failures: List[str] = []
+    theme_quote = _norm_quote_space(material.get("theme_quote") or "")
+    source_quote = _norm_quote_space(material.get("source_quote") or "")
+    if len(theme_quote) < _QUOTE_MIN_CHARS:
+        failures.append("theme_quote 欠落または短すぎ（10字以上の逐語抜粋が必要）")
+    elif theme_quote not in theme_text_norm:
+        failures.append("theme_quote が提出テーマ本文に存在しない（逐語一致が必要）")
+    source_text = _norm_quote_space(
+        f"{material.get('title') or ''} {material.get('abstract') or ''}"
+    )
+    if len(source_quote) < _QUOTE_MIN_CHARS:
+        failures.append("source_quote 欠落または短すぎ（10字以上の逐語抜粋が必要）")
+    elif source_quote not in source_text:
+        failures.append("source_quote が候補の title/abstract に存在しない（逐語一致が必要）")
+    return failures
+
+
 # Material fields the agent is contractually expected to echo back (F-09). They are not
 # hard-required (the join key + scores are), but when they are missing the rendered output
 # silently degrades to blank headings / "abstract欠損" / "年: 0" — which reads as a low-quality
@@ -288,6 +353,7 @@ def finalize_delegated_document(
     count: int = 1,
     config: Optional[GenerationConfig] = None,
     emit_fallback: bool = True,
+    grounded_only: bool = True,
     section_title: str = "Track B: 接続点フィーチャー（委譲採点 → post-gate）",
     diag: Optional[dict] = None,
     **gate_kwargs: Any,
@@ -298,7 +364,28 @@ def finalize_delegated_document(
     ``apply_post_gates`` re-applies the hard floors (anomaly / near-cap / serendipity /
     hollow / percentile / output-floor / fallback / M3) with NO LLM. Any agent-supplied
     4-part prose is honored; missing parts fall back to the deterministic structured fill.
+
+    A1 grounding contract (``grounded_only``, default True): agent-supplied relational
+    prose must carry a verbatim ``theme_quote`` (from the submitted theme text) and
+    ``source_quote`` (from the candidate's own title/abstract). Code verifies the quotes;
+    on failure ALL agent prose for that candidate is dropped (structured fill takes over),
+    scores are untouched, and the failure is recorded in ``diag["grounding_failures"]``.
     """
+    if grounded_only:
+        theme_text = theme_grounding_text(theme)
+        checked: List[Dict[str, Any]] = []
+        failures_by_id: List[Dict[str, Any]] = []
+        for material in materials:
+            reasons = verify_grounding(material, theme_text)
+            if reasons:
+                material = dict(material)
+                for field in ("relationship", "summary", "caution", "serendipity_rationale"):
+                    material.pop(field, None)
+                failures_by_id.append({"id": str(material.get("id") or "?"), "reasons": reasons})
+            checked.append(material)
+        materials = checked
+        if diag is not None and failures_by_id:
+            diag["grounding_failures"] = failures_by_id
     works, scores, by_id = normalize_agent_scores(materials)
     entries = apply_post_gates(
         scores, works,

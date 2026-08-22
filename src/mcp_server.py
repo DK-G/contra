@@ -317,6 +317,7 @@ class StdinMcpServer:
                         "count": {"type": "integer", "description": "Max entries to emit (cap, not target).", "default": 1},
                         "output_floor": {"type": "number", "description": "Output-quality floor for serendipity.", "default": 0.35},
                         "emit_fallback": {"type": "boolean", "description": "If false, a run with nothing above output_floor reports saturation instead of a weak single-best (M3).", "default": True},
+                        "grounded_only": {"type": "boolean", "description": "Grounding contract (default true): agent prose (relationship/serendipity_rationale) must carry verbatim theme_quote + source_quote; contra verifies them in code and drops ungrounded prose (scores kept, failure named in the output). Set false to restore the old trust-the-prose behaviour.", "default": True},
                         "no_history": {"type": "boolean", "description": "Skip recording adopted papers to this theme's history. By default the entries that pass the post-gate are recorded (data/history/, keyed by theme_overview hash) so the matching raw-collect on the next run excludes them.", "default": False},
                         "candidates": {
                             "type": "array",
@@ -344,7 +345,9 @@ class StdinMcpServer:
                                     "structural_depth": {"type": "number"},
                                     "has_causal_pm": {"type": "boolean"},
                                     "connection_label": {"type": "string"},
-                                    "serendipity_rationale": {"type": "string"}
+                                    "serendipity_rationale": {"type": "string"},
+                                    "theme_quote": {"type": "string", "description": "GROUNDING CONTRACT: verbatim extract (>=10 chars) from the SUBMITTED theme text (theme_overview/goal/why_problem/assumptions/concern) that your relational claim maps FROM. Required whenever relationship or serendipity_rationale is supplied; contra verifies it deterministically and DROPS ungrounded prose (scores kept)."},
+                                    "source_quote": {"type": "string", "description": "GROUNDING CONTRACT: verbatim extract (>=10 chars) from THIS candidate's own title/abstract that your relational claim maps TO. Verified like theme_quote."}
                                 },
                                 "required": ["id", "purpose_sim", "mechanism_dist"]
                             }
@@ -500,6 +503,10 @@ class StdinMcpServer:
             f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
             f"（semantic・ホームドメイン除外済・キー無し{hist_note}）。各候補を purpose_sim/mechanism_dist 等で"
             "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
+            "★接地契約: relationship / serendipity_rationale を書く場合は、その主張が対応づける"
+            "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
+            "必ず添えてください（各10字以上）。抜粋できない主張は書かないでください——contra が決定論的に"
+            "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
         )
         return {
             "content": [{"type": "text", "text": diag + "\n\n" + json.dumps(materials, ensure_ascii=False)}],
@@ -800,6 +807,7 @@ class StdinMcpServer:
         count = int(args.get("count") or 1)
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.35
         emit_fallback = bool(args.get("emit_fallback", True))
+        grounded_only = bool(args.get("grounded_only", True))
         # F-09 (1): missing echoed material renders as blank fields that read like a
         # low-quality hit — name the caller's omission explicitly instead of staying silent.
         echo_warnings = echo_completeness_warnings(materials)
@@ -807,7 +815,8 @@ class StdinMcpServer:
         try:
             doc = finalize_delegated_document(
                 materials, theme,
-                count=count, output_floor=output_floor, emit_fallback=emit_fallback, diag=diag,
+                count=count, output_floor=output_floor, emit_fallback=emit_fallback,
+                grounded_only=grounded_only, diag=diag,
             )
         except ValueError as exc:
             return {"content": [{"type": "text", "text": f"委譲採点の検証に失敗: {exc}"}], "isError": True}
@@ -834,6 +843,16 @@ class StdinMcpServer:
             extra += "\n" + "\n".join(echo_warnings)
         if rejection_lines:
             extra += "\n落選内訳:\n" + "\n".join(rejection_lines)
+        # A1: name every candidate whose prose failed the quote-then-claim verification —
+        # the prose was dropped (structured fill took over), the scores were kept.
+        grounding_lines = []
+        for g in diag.get("grounding_failures", []):
+            label = title_by_id.get(str(g["id"]), "")
+            label = f"「{label[:40]}」" if label else ""
+            grounding_lines.append(f"- {g['id']}{label}: {' / '.join(g['reasons'])}")
+        if grounding_lines:
+            extra += ("\n接地検証失敗（散文を棄却し構造整形で代替。スコアは保持）:\n"
+                      + "\n".join(grounding_lines))
         diag_line += extra
         if not entries:
             return {
