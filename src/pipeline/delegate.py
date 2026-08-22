@@ -26,7 +26,12 @@ from src.core.models import (
     Work,
 )
 from src.pipeline.classify import apply_post_gates
-from src.pipeline.bridges import annotate_bridge_signals, bridge_rank_key, shared_bridge_count
+from src.pipeline.bridges import (
+    annotate_bridge_signals,
+    diversify_head_by_bridge,
+    hybrid_bridge_rank_key,
+    shared_bridge_count,
+)
 from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
 from src.pipeline.generate import GenerationConfig, fill_track_entries
 
@@ -60,11 +65,13 @@ def select_bridge_candidates_raw(
     pool = list(cands)
     if drop_near_domain and profile is not None and not profile.is_empty():
         pool = [w for w in pool if not near_domain_signal(w, profile)]
-    # Rank by cross-community betweenness first, then co-citation strength (Phase 2):
-    # a candidate routing through a bridge that connects many fields beats one whose shared
-    # bridge only circulates inside a single field, even at equal shared-bridge count.
+    # Hybrid-first ranking (C(ii), 2026-08-22): when the caller annotated the pool with
+    # annotate_hybrid_rank (theme relevance leading, citations demoted to a tie-breaker),
+    # that score sorts first; unannotated pools fall back to the legacy structural order
+    # (betweenness, then co-citation strength) because every hybrid score is 0.0.
     annotate_bridge_signals(pool, bridges)
-    pool.sort(key=bridge_rank_key, reverse=True)
+    pool.sort(key=hybrid_bridge_rank_key, reverse=True)
+    pool = diversify_head_by_bridge(pool, bridges, window=max(count, 0), per_bridge_cap=2)
     return pool[: max(count, 0)]
 
 

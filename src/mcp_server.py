@@ -16,7 +16,12 @@ from src.pipeline.bridge_diagnostics import (
     render_diagnostics,
     resolve_work_labels,
 )
-from src.pipeline.bridges import bridge_rank_key, shared_bridge_count
+from src.pipeline.bridges import (
+    annotate_hybrid_rank,
+    diversify_head_by_bridge,
+    hybrid_bridge_rank_key,
+    shared_bridge_count,
+)
 from src.openalex.client import reset_run_stats, run_stats_caveat
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
@@ -696,7 +701,13 @@ class StdinMcpServer:
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
         cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60, used_ids=used_ids)
-        ranked_all = sorted(cands, key=bridge_rank_key, reverse=True) if cands else []
+        # C(ii): theme relevance leads the ranking, citations demoted to a tie-breaker;
+        # C(i): no single bridge may fill the display window (2026-08-22 ruling).
+        # Relevance for cross-domain candidates is structural (how many SEEDS cite the
+        # bridge they route through), not lexical — see annotate_hybrid_rank.
+        annotate_hybrid_rank(cands, theme, seeds=seeds, bridges=bridges)
+        ranked_all = sorted(cands, key=hybrid_bridge_rank_key, reverse=True) if cands else []
+        ranked_all = diversify_head_by_bridge(ranked_all, bridges) if ranked_all else []
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
         if diagnostics and dead_seed_count:
             diag_line = (
