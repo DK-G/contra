@@ -218,6 +218,16 @@ def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
         "connection_label": str(material.get("connection_label") or "構造的接続"),
         "serendipity_rationale": str(material.get("serendipity_rationale") or ""),
     }
+    # F-10 residue: optional fine within-band percentage — breaks ties the discrete
+    # grades create. Agent-supplied floats are usually continuous already, but agents
+    # that mirror contra's anchor grid (0.80 x 0.70) benefit from the same tie-breaker.
+    if material.get("purpose_pct") is not None:
+        try:
+            pct = max(0, min(100, int(material["purpose_pct"])))
+            row["purpose_pct"] = pct
+            row["fine_rank"] = round((pct / 100.0) * row["mechanism_dist"], 4)
+        except (TypeError, ValueError):
+            pass
     if material.get("structural_depth") is not None:
         row["structural_depth"] = _as_float(material["structural_depth"])
     if material.get("has_causal_pm") is not None:

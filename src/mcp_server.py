@@ -326,7 +326,13 @@ class StdinMcpServer:
                                 "concept_tags[{name,level,score}], referenced_works) AND carries the agent's "
                                 "scoring: purpose_sim (0-1), mechanism_dist (0-1), optional structural_depth "
                                 "(0-1) and has_causal_pm (bool), connection_label, serendipity_rationale, and "
-                                "optional relationship/summary/caution prose."
+                                "optional relationship/summary/caution prose. "
+                                "SCORING GUIDANCE (anti-tie): use the FULL 0-1 range with two decimals — do "
+                                "not cluster on grid values like 0.80/0.70 (observed failure: every hit tied "
+                                "at 0.56 and became unrankable). If two candidates feel equal, compare them "
+                                "head-to-head yourself and reflect the verdict as a score difference, or set "
+                                "the optional purpose_pct (integer 0-100, within-grade fine alignment) which "
+                                "contra uses as a deterministic tie-breaker."
                             ),
                             "items": {
                                 "type": "object",
@@ -334,6 +340,7 @@ class StdinMcpServer:
                                     "id": {"type": "string"},
                                     "purpose_sim": {"type": "number"},
                                     "mechanism_dist": {"type": "number"},
+                                    "purpose_pct": {"type": "integer", "description": "Optional 0-100 fine alignment within the grade; tie-breaker only."},
                                     "structural_depth": {"type": "number"},
                                     "has_causal_pm": {"type": "boolean"},
                                     "connection_label": {"type": "string"},

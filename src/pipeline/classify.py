@@ -469,10 +469,16 @@ def _score_b_chunk_pm(
                     "EVERY paper in the array MUST have ALL fields populated. paper_finding, "
                     "connection_label and serendipity_rationale are REQUIRED and must "
                     "NEVER be empty or omitted, even for low-scoring papers.\n\n"
+                    "purpose_pct: an INTEGER 0-100 refining alignment WITHIN the chosen "
+                    "purpose_level band (e.g. two 'strong' papers may be 62 vs 88). This is "
+                    "a tie-breaker only — the level still decides the gates. Use the full "
+                    "range; do NOT cluster on round values.\n"
+                    "mechanism_dist: give TWO decimals from the full 0-1 range (e.g. 0.73, "
+                    "0.86) — do NOT default to 0.80.\n\n"
                     "Return JSON array:\n"
                     '[{"id":"...","paper_purpose":"...","paper_mechanism":"...",'
                     '"paper_finding":"...","purpose_level":"none|partial|strong",'
-                    '"mechanism_dist":0.0,'
+                    '"purpose_pct":0,"mechanism_dist":0.0,'
                     '"connection_label":"...","serendipity_rationale":"..."}]'
                 ),
             },
@@ -563,17 +569,22 @@ def _score_b_candidates_pm(
                 scores[wid] = row
             continue
         # Self-consistency: aggregate k independent scorings by median of the numeric fields.
-        votes: Dict[str, dict] = defaultdict(lambda: {"purpose_sim": [], "mechanism_dist": [], "rows": []})
+        votes: Dict[str, dict] = defaultdict(
+            lambda: {"purpose_sim": [], "mechanism_dist": [], "purpose_pct": [], "rows": []}
+        )
         for _ in range(k):
             chunk_best = _score_one_chunk_complete(papers_input, chunk_ids, theme_schema, theme, model)
             for wid, (row, complete) in chunk_best.items():
                 votes[wid]["purpose_sim"].append(row["purpose_sim"])
                 votes[wid]["mechanism_dist"].append(row["mechanism_dist"])
+                votes[wid]["purpose_pct"].append(row.get("purpose_pct", 0))
                 votes[wid]["rows"].append((row, complete))
         for wid, v in votes.items():
             rep = dict(max(v["rows"], key=lambda rc: rc[1])[0])  # prefer a complete row for text
             rep["purpose_sim"] = _median(v["purpose_sim"])
             rep["mechanism_dist"] = _median(v["mechanism_dist"])
+            rep["purpose_pct"] = _median(v["purpose_pct"])
+            rep["fine_rank"] = round((rep["purpose_pct"] / 100.0) * rep["mechanism_dist"], 4)
             scores[wid] = rep
     return scores
 
@@ -607,9 +618,19 @@ def _parse_pm_items(items: Optional[list]) -> List[Tuple[str, dict, bool]]:
         label = str(item.get("connection_label") or "")
         rationale = str(item.get("serendipity_rationale") or "")
         complete = bool(label and rationale)
+        # F-10 residue (2026-08-22 ruling, package B): a fine within-band percentage breaks
+        # the ties the 3-level anchors create (observed: every hit at 0.80 x 0.70 = 0.56).
+        # The anchors still drive every GATE (R3's anti-jitter decision stands); purpose_pct
+        # only orders candidates the anchors cannot separate.
+        try:
+            purpose_pct = max(0, min(100, int(item.get("purpose_pct", 0) or 0)))
+        except (TypeError, ValueError):
+            purpose_pct = 0
         out.append((wid, {
             "purpose_sim": max(0.0, min(1.0, purpose_sim)),
             "mechanism_dist": max(0.0, min(1.0, mechanism_dist)),
+            "purpose_pct": purpose_pct,
+            "fine_rank": round((purpose_pct / 100.0) * max(0.0, min(1.0, mechanism_dist)), 4),
             "connection_label": label or "構造的接続",
             "serendipity_rationale": rationale,
             "paper_purpose": str(item.get("paper_purpose") or ""),
@@ -935,7 +956,11 @@ def _apply_causal_cap(
         if s.get("has_causal_pm") is False and purpose > cap:
             s["purpose_sim_uncapped"] = purpose
             s["purpose_sim"] = cap
-            ser = ser * (cap / purpose) if purpose else ser
+            if purpose:
+                ser = ser * (cap / purpose)
+                # keep the fine tie-breaker consistent with the demoted grade
+                if s.get("fine_rank"):
+                    s["fine_rank"] = round(s["fine_rank"] * (cap / purpose), 4)
         out.append((ser, wid, s))
     return out
 
@@ -1007,7 +1032,9 @@ def _quality_gate_and_build(
             _update_diag(diag, status="saturated", reason="no_qualified", scored=scored_n,
                          anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
             return []
-        fallback_pool = sorted(all_scored, key=lambda x: x[0], reverse=True)
+        fallback_pool = sorted(
+            all_scored, key=lambda x: (x[0], x[2].get("fine_rank", 0.0)), reverse=True
+        )
         best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
         if best_list:
             ser, wid, s = best_list[0]
@@ -1042,7 +1069,11 @@ def _quality_gate_and_build(
     if count > 1 and len(qualified) > 1:
         final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
     else:
-        final = sorted(qualified, key=lambda x: x[0], reverse=True)[:count]
+        # F-10 residue: the discrete anchors tie every hit at the same product (0.56);
+        # fine_rank (within-band pct x mechanism) orders what the anchors cannot separate.
+        final = sorted(
+            qualified, key=lambda x: (x[0], x[2].get("fine_rank", 0.0)), reverse=True
+        )[:count]
     _record_rejections(
         diag, {wid for _s, wid, _d in qualified}, {wid for _s, wid, _d in final},
         floor=f"not_selected(count={count})", threshold=count,
