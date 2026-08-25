@@ -217,6 +217,94 @@ def resolve_work_labels(
         return {}
 
 
+def resolve_ids_batched(
+    work_ids: Sequence[str],
+    client: Any = None,
+    *,
+    chunk: int = 50,
+) -> Set[str]:
+    """The subset of ``work_ids`` that OpenAlex still resolves to a real work.
+
+    One ``ids.openalex:`` call per ``chunk`` ids. Raises on transport failure so callers can
+    decide — a *silent* empty answer here would look identical to "every bridge is dead".
+    """
+    ids: List[str] = []
+    seen: Set[str] = set()
+    for wid in work_ids or []:
+        sid = short_id(wid)
+        if sid and sid not in seen:
+            seen.add(sid)
+            ids.append(sid)
+    if not ids:
+        return set()
+    if client is None:
+        from src.openalex.client import OpenAlexClient
+        client = OpenAlexClient()
+    live: Set[str] = set()
+    for i in range(0, len(ids), max(1, chunk)):
+        batch = ids[i:i + max(1, chunk)]
+        payload = client.get({
+            "filter": "ids.openalex:" + "|".join(batch),
+            "per_page": len(batch),
+            "select": "id",
+        })
+        for item in (payload or {}).get("results", []) or []:
+            sid = short_id(item.get("id", ""))
+            if sid:
+                live.add(sid)
+    return live
+
+
+def filter_live_bridges(
+    bridges: Iterable[str],
+    client: Any = None,
+) -> "tuple[Set[str], List[str]]":
+    """Split a bridge pool into (live, dead). Fails OPEN — on error everything counts as live.
+
+    **Why this gate exists (F-01's true root cause, 2026-08-25).** ``referenced_works`` is a raw
+    reference list: OpenAlex merges and deletes work records, but the *old* ids stay behind in
+    every citing paper's reference list. Such a dangling id is not a shared intellectual
+    ancestor — it is a bibliographic scar, and it can be an enormous one. Measured on the
+    seihai theme family: the pool's most-travelled bridge ``W4285719527`` **does not exist**
+    (404 / zero hits by id) yet sits in **4,906,577** reference lists — 176x the citer count of
+    the largest *live* bridge in the same pool (27,948). Because the 2-hop scan ORs the whole
+    pool into one ``cites:`` filter, that one phantom swallowed 59 of 60 candidates and the
+    result degenerated into "the most-cited works in OpenAlex, minus the home field" — thematic
+    analysis, TAM, LSTM, G*Power. That is the exact shape recorded as F-01 for seven weeks.
+
+    Note what does **not** discriminate: size. The same pool held four other dead ids with
+    4,194 / 2,749 / 554 / 59 citers, while its biggest live bridges (Fama-French 27,948; GARCH
+    22,513) are legitimate domain classics. A centrality penalty would have kept the small
+    phantoms and punished the real ancestors — which is why the 2026-08-18 instrument run
+    rejected that prescription. Resolvability is the discriminator, not degree.
+
+    Fail-open is deliberate: a transient OpenAlex failure must degrade to the old behaviour,
+    never to an empty pool.
+    """
+    # Bridges travel as FULL ids ('https://openalex.org/W1') because they come straight out of
+    # referenced_works, and every downstream set-intersection (seed contribution, concentration,
+    # shared_bridge_count) compares against that form. Resolve on the short id, but hand back the
+    # caller's original strings — returning short ids silently zeroes every bridge statistic.
+    originals: Dict[str, str] = {}
+    for b in bridges or []:
+        sid = short_id(b)
+        if sid:
+            originals.setdefault(sid, str(b))
+    if not originals:
+        return set(), []
+    ids = list(originals)
+    try:
+        live_ids = resolve_ids_batched(ids, client)
+    except Exception:      # transport failure -> keep the old behaviour, drop nothing
+        return {originals[i] for i in ids}, []
+    if not live_ids:       # an all-dead answer is far likelier to be a bad response than truth
+        return {originals[i] for i in ids}, []
+    return (
+        {originals[i] for i in ids if i in live_ids},
+        [i for i in ids if i not in live_ids],
+    )
+
+
 def _fmt_int(n: Optional[int]) -> str:
     return f"{int(n):,}" if isinstance(n, int) else "?"
 
@@ -300,5 +388,7 @@ __all__ = [
     "bridge_usage",
     "bridge_concentration",
     "resolve_work_labels",
+    "resolve_ids_batched",
+    "filter_live_bridges",
     "render_diagnostics",
 ]

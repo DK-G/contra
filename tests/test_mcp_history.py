@@ -69,8 +69,27 @@ def test_adopt_no_entries_is_noop(tmp_path):
 # A seed with no referenced_works structurally cannot contribute a bridge; 20/20 such
 # records once filled the seed slots and the whole 2-hop scan returned nothing.
 
+import pytest
+
 import src.mcp_server as mcp_mod
 from src.core.models import Work as _W
+
+
+@pytest.fixture(autouse=True)
+def _no_openalex(monkeypatch):
+    """Keep the bybridge end-to-end cases OFF the network.
+
+    These tests stub the collectors but not the two id-resolving helpers the diagnostics block
+    and the bridge liveness gate call. Both fail soft, so the assertions used to survive — until
+    OpenAlex started returning 429, at which point the F-11 fetch caveat was appended to the
+    result body and the materials case could no longer parse its own JSON payload. Observed on
+    unmodified HEAD, so this is test hygiene, not a behaviour change: stub them and the suite
+    stops depending on whether api.openalex.org happens to be reachable.
+    """
+    monkeypatch.setattr(mcp_mod, "resolve_work_labels", lambda *a, **k: {})
+    monkeypatch.setattr(mcp_mod, "filter_live_bridges", lambda b, *a, **k: (set(b), []))
+    from src.openalex import client as _client
+    _client.reset_run_stats()
 
 
 def _seed_work(wid, refs):

@@ -615,6 +615,7 @@ def collect_citation_candidates(
     used_ids: Optional[Set[str]] = None,
     bridge_cap: int = 50,
     max_refs: int = 100,
+    bridges: Optional[Iterable[str]] = None,
 ) -> List[Work]:
     """Citation 2-hop scan: papers citing the seeds' references but OUTSIDE the seeds' domain.
 
@@ -625,7 +626,10 @@ def collect_citation_candidates(
     dumps (the false-bridge traps). Seeds and `used_ids` are never returned.
     """
     cfg = config or CollectConfig()
-    bridges = _bridge_pool_from_seeds(seeds, cap=bridge_cap)
+    # `bridges` lets the caller hand in a pool it has already built AND vetted (the MCP path
+    # drops dangling reference ids first — see filter_live_bridges). Recomputing it here would
+    # silently put the rejected bridges back into the `cites:` filter. None = build it as before.
+    bridges = list(bridges) if bridges is not None else _bridge_pool_from_seeds(seeds, cap=bridge_cap)
     if not bridges:
         return []
 

@@ -13,6 +13,7 @@ from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
 from src.pipeline.bridge_diagnostics import (
     bridge_concentration,
     bridge_usage,
+    filter_live_bridges,
     render_diagnostics,
     resolve_work_labels,
 )
@@ -281,6 +282,7 @@ class StdinMcpServer:
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
                         "materials": {"type": "boolean", "description": "DELEGATION MODE (production path since 2026-08-22): return the ranked cross-domain candidates as scoreable materials JSON (with bridge_signals) for the CALLING AGENT to score and pass to delegate_finalize — the byserendipity raw_only path's symmetric twin. The agent does the purpose/mechanism judgement and grounded prose with its OWN inference; contra verifies deterministically.", "default": False},
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
+                        "bridge_liveness": {"type": "boolean", "description": "Drop bridge-pool ids that OpenAlex no longer resolves (one batched call, fails open). referenced_works keeps the ids of merged/deleted records, and such a phantom is a bibliographic scar rather than a shared ancestor: the measured worst case, W4285719527, resolves to nothing yet sits in 4.9M reference lists and captured 59/60 candidates, collapsing the output into the globally most-cited works. Set false to restore the old behaviour.", "default": True},
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
                         "structured": {"type": "boolean", "description": "When raw_only is true, format the deterministic bridge candidates into the full 4-part Track B document (key-free structured assembly; no LLM). The agent can then refine the prose/scores.", "default": False},
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
@@ -728,10 +730,26 @@ class StdinMcpServer:
 
         bridges = set(_bridge_pool_from_seeds(seeds, cap=50))
 
+        # F-01 root cause (2026-08-25): OpenAlex merges/deletes work records but leaves the old
+        # ids behind in every citing paper's referenced_works. Such a dangling id is a
+        # bibliographic scar, not a shared ancestor — and `W4285719527`, which does not resolve
+        # at all, sits in 4.9M reference lists. Since the 2-hop scan ORs the pool into one
+        # `cites:` filter, one phantom bridge captured 59/60 candidates and the output collapsed
+        # into "the most-cited works in OpenAlex". Same doctrine as the F-12 seed gate, one hop
+        # later: verify before seating. Fails open; `bridge_liveness: false` restores the old
+        # behaviour. Costs one batched OpenAlex call per run.
+        dead_bridges: List[str] = []
+        if bool(args.get("bridge_liveness", True)):
+            live_bridges, dead_bridges = filter_live_bridges(bridges)
+            if live_bridges:
+                bridges = live_bridges
+
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
-        cands = collect_citation_candidates(seeds, CollectConfig(), max_count=60, used_ids=used_ids)
+        cands = collect_citation_candidates(
+            seeds, CollectConfig(), max_count=60, used_ids=used_ids, bridges=sorted(bridges)
+        )
         # C(ii): theme relevance leads the ranking, citations demoted to a tie-breaker;
         # C(i): no single bridge may fill the display window (2026-08-22 ruling).
         # Relevance for cross-domain candidates is structural (how many SEEDS cite the
@@ -744,6 +762,14 @@ class StdinMcpServer:
             diag_line = (
                 f"- シード生存確認 (F-12): referenced_works が空で bridge を生成できないレコード "
                 f"{dead_seed_count} 件をシード候補から除外\n" + diag_line
+            )
+        if diagnostics and dead_bridges:
+            diag_line = (
+                f"- bridge 生存確認 (F-01): OpenAlex に実在しない参照 id {len(dead_bridges)} 本を"
+                f"bridge プールから除外（{', '.join(dead_bridges[:5])}"
+                f"{' …' if len(dead_bridges) > 5 else ''}）"
+                f"＝削除・統合済みレコードの残骸で、共通の祖先文献ではない"
+                f"（bridge_liveness:false で無効化可）" + "\n" + diag_line
             )
         if diagnostics and lang_dropped:
             diag_line = (

@@ -1,0 +1,28 @@
+{
+  "_comment": "Reproduction fixture for F-13 (docs/field_observations_seihai.md): the seihai theme family of 2026-08-24, where the seed roster collapsed into international-trade / political-economy papers because the anchor token 'trade'/'trading' is an established term in a completely different field. Wording follows the observation record so remediation days can re-measure the roster-drift instrument against a fixed input.",
+  "theme_overview": "自動売買戦略の生成器が出す候補は、利益と損失のペイオフが非対称である。少数の大勝ちと多数の小負けで期待値が立つ設計なので、探索木の枝を早期に刈ると、期待値を支えていた稀な枝が丸ごと落ちる(枝崩壊)。枝崩壊が起きても集合レベルの平均指標は悪化しないため、探索器は自分が壊れたことに気づかない。非対称ペイオフ下で枝の生存価値をどう測るか、枝刈り規則が稀事象の寄与を消していないことをどう検定するかを決めたい。",
+  "goal": "非対称ペイオフを持つ探索空間で、枝刈りが稀な高価値枝を消していないことを検定できる指標を得る。",
+  "why_problem": "平均や中央値ベースの枝評価は、少数の大きな正の裾に支えられた枝を低評価する。枝を刈った瞬間に期待値の源泉が消えるが、集合平均は動かないので検出できない。",
+  "approach_type": "application",
+  "assumptions": [
+    "候補戦略のペイオフ分布は右に長い裾を持ち、平均は少数の観測に支配される",
+    "枝刈り規則は観測数の少ない枝を優先的に落とすため、裾の寄与と相関する",
+    "集合レベルの平均指標は枝崩壊に対して感度を持たない"
+  ],
+  "scope": {
+    "field": "evolutionary computation",
+    "scale": "small",
+    "time_range": "last_10_years"
+  },
+  "keywords": {
+    "include": [
+      "trading strategy",
+      "asymmetric payoff",
+      "heavy tailed returns",
+      "branch pruning",
+      "rare event estimation"
+    ],
+    "exclude": []
+  },
+  "concern": "枝刈りで稀な高価値枝が消えても集合平均が動かないため、探索器の劣化が検出できない"
+}
