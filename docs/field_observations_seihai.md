@@ -68,6 +68,8 @@
 | **2026-08-26** | **byrepo** | `interpretable` / `model-selection` | **4/4 が無関係**。contra 自身が冒頭で「theme 関連度が全アンカーで低い（**最大 0.33**）— キーワードの語彙衝突」と警告。`RinDig/Interpretable-Context-Methodology`（**LLM エージェントのフォルダ構成**＝"interpretable" の衝突）／`keon/awesome-nlp`（**NLP のリンク集**・関連度 0.2）／`atilaahmettaner/tradingview-mcp`（**関連度 0.0**）。問い（「候補集合の構造多様性を認証する実装」）に触れた anchor はゼロ
 | **2026-08-26** | **bybridge** | 構造語 `selection` / `candidate` / `batch` | **シード20件が本テーマと無関係**（kNN チュートリアル / Buccaneer タンパク質鎖トレース / EEG 分類レビュー / LiDAR 点群 / 構造ヘルスモニタリング）。★**本日は自己招来の疑いがある**＝S-26 の趣旨に沿ってテーマ文から分野語を**意図的に抜いた**構造記述（"candidate configurations" / "batch-level statistic" / "limited live slot"）で投げたため、semantic 検索が**構造語に反応して機械学習一般へ流れた**可能性。⇒ **次回は分野語を1〜2語だけ残して対照を取る**（この対照が取れれば F-13 の処方が「語を減らす」なのか「語を選ぶ」なのかが決まる）
 | **2026-08-27** | **bybridge** | 構造語 `sequential` / `period` / `run` / `retirement` | **シード20件が全てテーマ外**（消費者信用の契約価格 Econometrica / 外国語学習 / ガーナの農業気象情報サービス / トマト市場 / 雑草の水利用 / 慢性耳鳴り S3 ガイドライン / 乳香の農牧経済 / 緑の革命）。**逐次検定・変化点検出・トレーディングのシードは 0 件**。交差候補 30 件も消費者行動・マーケティング・植物キャノピー・fMRI で**関連 0/30** |
+| **2026-08-28** | **bybridge** | **分野語を意図的に残した対照**（`trading strategy` / `algorithmic trading` を本文に維持） | **★8/26 の「自己招来」仮説を反証する対照が取れた。** 分野語を残しても**シード20件の大半はテーマ外**（電力系統の分散最適化 IEEE TSG / ガウス場と GMRF の SPDE / ニューロモルフィック計算 / cap-and-trade / **GPERF: A Perfect Hash Function Generator** / 実時間モーションプランニング）。⇒ **F-13 の処方は「語を減らす／増やす」ではない**——分野語の有無で名簿は変わらなかった。★**ただし2件は構造的に的中していた**（[The Oracle Problem in Software Testing: A Survey](https://doi.org/10.1109/tse.2014.2372785)・[Apples and Oranges? The Problem of Equivalence in Comparative Research](https://doi.org/10.1093/pan/mpr028)）＝**8/26・8/27 の「関連 0/20」からは改善**。それでも**交差候補 30/30 は無関係**（RNA-seq 発現解析 DESeq2/voom/edgeR・放射線科の CNN・BioBERT・GLM 教科書）で、**最頻 bridge = Generalized Linear Models（被引用 20,450）＝分野外の汎用方法論ハブ**。**上流で当たった2本が 2-hop で洗い流されている** |
+| **2026-08-28** | **byrepo** | `strategy similarity` / `anytime-valid` / `sequential testing` / `backtest overfitting` / `trade log` | contra 自身が「**theme 関連度が全アンカーで低い（最大 0.33）**」と警告。3件中2件は主題ドメインではある（`ml4t/diagnostic`＝バックテスト評価の統計検証・`jianweiweng05/qsx-strategy-score`＝取引ログから過剰適合と偶然のタイミングを検出）が、**問い（2本の腕の行動的重複を約定ログから検出する実装）に答えたものは無い**。3件目 `atilaahmettaner/tradingview-mcp`（★4,259）は**関連度 0.23 の市場データ MCP サーバ**＝完全に無関係なのに順位スコア 45.7 で2位と 0.2 差の3位に入った。⇒ **F-03/F-17 の「Reliability が高い無関係」が、関連度係数を掛けた後もまだ上位に残る**（Reliability 91 × 0.23 が Reliability 81 × 0.33 とほぼ並ぶ＝**係数の効きが弱い**） |
 
 ★**2026-08-26 の重要な副産物＝失敗の所在が初めて特定できた。** S-11／F-02 の対処（使ったシードを出力に含める）が入っているため、bybridge の**シード20件が可視化**され、それが本テーマと1件も接点が無いことを直接読めた。⇒ 本日の収穫ゼロは**「橋が汎用ハブに吸われた」(F-01/S-38) ではなく「シード検索そのものの失敗」**。**S-11 の起票文が「シードが見えない限り両者を区別できない」と書いたその区別が、S-11 の実装によって初めて可能になり、今日答えが出た。**★併せて S-26 の観測項目も記録: **(i) 最頻 bridge の上位10件占有率 20%**（実際に使われた bridge 13本＝**bridge 段の多様化は効いている**）／**(ii) 最頻 bridge = Optimization by Simulated Annealing（被引用 44,995）＝分野外の巨大ハブ**。**「上位は多様化したが収穫はゼロ」は旧様式の再現ではなく新しい観測**であり、**bridge 段の処置がすべて効いていても、シードが主題から外れている限り下流は正しく動いて収穫ゼロを返す**。
 
@@ -288,6 +290,21 @@
 **seihai 側からの仮説（contra 側で検証されたい）**: (a) OpenAlex `search.semantic` が facet ごとに返す件数が**上限一律でなく類似度で足切りされている**ため、主題語彙から遠い facet ほど閾値を割って全滅する。(b) ホームドメイン除外がドメイン判定を誤って facet 3 を巻き込んだ。**(a) なら「遠い facet ほど落ちる」＝A2 プロトコルの目的（遠さを稼ぐ）と検索の挙動が正面から衝突している**ことになるので、切り分けの価値が高い。
 
 **回避策として seihai 側が本日やったこと（有効だった）**: **Very Far だけを単独の facet として別呼び出しで投げ直した**（ドメイン＝サッカーの監督解任と平均への回帰）。**28件が返り、そのうち2本は本日の結論に直接効いた**（[firing a coach の計量経済評価](https://doi.org/10.1080/0003684022000015946)・[noise-signal ratio in the firing of football managers](https://doi.org/10.1177/1742715011420315)）。⇒ **遠い facet は「引けない」のではなく「近い facet と同居させると負ける」**可能性が高く、これは (a) 仮説を支持する。**当面の運用処方＝Very Far は単独呼び出しで引く。**
+
+
+**★2026-08-28（2回目・r05/F9）＝同一 facet の単独再走で機序がほぼ確定した（決定的対照）**
+
+| facet | 距離 | ドメイン | 返った候補数（全60中） |
+|---|---|---|---|
+| 1 | Near | 臨床試験の非劣性・assay sensitivity | **44** |
+| 2 | Far | 群集生態学・限定類似性／機能的冗長性 | **16** |
+| 3 | **Very Far** | **ソフトウェア工学・等価変異体（equivalent mutants）** | **0** |
+
+**同じ日に、facet 3 の擬似アブストラクトを（語をほぼ変えずに）単独 facet として投げ直したら 42 件返り、上位20件すべてが主題（等価変異体の検出・コスト）だった**——`Are mutants a valid substitute for real faults` / `Automatically detecting equivalent mutants and infeasible paths` / `The Impact of Equivalent Mutants` / `(Un-)Covering Equivalent Mutants` 等。**うち1件は本日の delegate_finalize を通過して結論に直接効いた**（[(Un-)Covering Equivalent Mutants](https://doi.org/10.1109/icst.2010.30)＝カバレッジ変化を等価判定の代理にする・精度75%/再現56%）。
+
+⇒ **「遠い facet は引けない」のではなく「近い facet と同居させると引かれない」**が、**同一日・同一文言・同一エージェント**という条件下で再現した。8/27 の (a) 仮説（同居時の相対的足切り）を支持し、(b) 仮説（ホームドメイン除外の巻き込み）は**単独走で 42 件返った時点で否定される**（除外規則は facet 構成に依存しないため）。
+
+**★併せて、診断ブロックが欠損を「影響なし」と申告していた**: 3 facet の run の取得診断は `OpenAlex リクエスト 2 件中 / 一時失敗→リトライ 1 回（リトライで回復済み・結果への影響なし）` と出た。**facet は3枚なのにリクエストは2件**で、しかも「結果への影響なし」と明示している。呼び手は**出力に facet 別の内訳が無い限りこの欠損に気づけない**（今回は3件しか採点しなかったので気づいたが、60件を機械的に採点していたら気づかない）。⇒ **処方の提案は2つ**: (1) **facet 別の返却件数を診断ブロックに常時出す**（0件の facet を名指しする）、(2) **facet 数とリクエスト数が一致しないときは「影響なし」と書かない**。これは seihai 側の S-68（「情報が無い」を中立値で表現するとテストにも人にも検出できない故障になる）と同型なので、**seihai 側の教訓としても引く**。
 
 ---
 
