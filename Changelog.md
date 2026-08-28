@@ -7,6 +7,20 @@
 
 ---
 
+## 2026-08-28（CL-0093） F-18 の真因を特定して対処: 最遠 facet は「引けなかった」のではなく「検索されていなかった」
+
+### 概要
+* **2日連続で収穫0だった Very Far facet の正体は、contra 自身が3枚目を1度も検索していなかったこと。** `_collect_track_b_semantic` は facet を順に引いて候補を連結し、`len(works) >= max_count` で break していた。semantic エンドポイントは1リクエスト最大50件・上限は60件なので、**facet 1+2 で枠が埋まり facet 3 のリクエストは発行されない**。A2 距離プロトコルは facet を Near → Far → **Very Far** の順に並べるため、**構造的に必ず最遠の1枚が餓死する**——プロトコルが買おうとしていたものだけが毎回捨てられていた。
+* **seihai の観測がそのまま署名だった**: 「facet は3枚なのにリクエストは2件」は取りこぼしではなく、**3枚目を呼んでいない事実の直接の表示**。seihai の2仮説（(a) OpenAlex の類似度足切り／(b) ホームドメイン除外の巻き込み）は**どちらも外れ**で、故障は呼ばれる側でなく呼ぶ側にあった。
+* **実装**（加算的・可逆）: (1) 全 facet を必ず検索し、上限を facet 間でラウンドロビン配分（`_interleave_facet_buckets`）——薄い facet は未使用枠を譲るので**候補総数は減らない**。`CollectConfig(facet_fair_share=False)` で旧挙動。(2) **facet 別内訳を診断ブロックに常時出力**（`stats_out` → `_facet_breakdown_line`）＝各 facet の `返却 / ホーム除外・重複後 / 提出` と**収穫0の facet の名指し**。(3) `run_stats_caveat` の「結果への影響なし」を撤回し、HTTP 応答しか見ていない旨と facet 別内訳への誘導に差し替え。
+* **実測 before/after**（8/28 の r05/F9 と同一3 facet・実 API・同一セッション A/B）: facet 別提出が **42/18/0 → 20/20/20**、OpenAlex リクエスト **2 → 3**、候補総数は 60 のまま、**新規候補 22/60**。seihai が単独呼び出しでしか引けなかった等価変異体の文献（`Are mutants a valid substitute for real faults` / `The Impact of Equivalent Mutants` / `Automatically detecting equivalent mutants and infeasible paths`）が**3枚同居のまま上位に返る**。before 側は seihai の実測 43/17/0・44/16/0 をほぼそのまま再現した。
+* MCP 本番経路（`byserendipity raw_only`）でも実機確認済み（3/3 facet・20/20/20・内訳行が出力に載る）。
+* **seihai 側への申し送り**: 当面の運用処方「Very Far は単独呼び出しで引く」は**不要になった**（禁止ではない）。今後 0件の facet が出たら、それは打ち切りではなく検索側の性質である。
+* 新規 `tests/test_facet_fair_share.py` 8ケース。全 **390 tests: 390 pass**。
+* **同型の残件（起票のみ）**: `_collect_track_b_lexical`（キー経路のフォールバック）に同じ形の break がある。per_query 割当があるため通常は届くが、1ページが割当を超えると同じ餓死が起きうる。本番経路ではないので未対処。
+
+---
+
 ## 2026-08-25（CL-0092） F-01 の真の機序を特定して対処: bridge 生存確認ゲート（phantom bridge の除外）
 
 ### 概要

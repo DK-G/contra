@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from src.core.models import ThemeInput, Work
 from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
@@ -36,6 +36,10 @@ class CollectConfig:
     max_pages: int = 5
     mailto: Optional[str] = None
     relax_search: bool = True
+    # F-18: give every facet a share of ``max_count`` instead of letting the first facets fill it.
+    # False restores the pre-2026-08-28 behaviour (facets queried in order, loop breaks as soon as
+    # the cap is reached — which structurally starved the LAST facet, i.e. the most distant one).
+    facet_fair_share: bool = True
 
 
 class Collector:
@@ -723,6 +727,7 @@ def collect_track_b_from_spec(
     used_titles: Optional[Set[str]] = None,
     used_dois: Optional[Set[str]] = None,
     home_field_ids: Optional[List[str]] = None,
+    stats_out: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Work]:
     """Key-free semantic Track B collection from an agent-supplied SerendipitySpec (no LLM).
 
@@ -731,12 +736,17 @@ def collect_track_b_from_spec(
     runs only the OpenAlex ``search.semantic`` retrieval + validation + client-side home-domain
     exclusion — no LLM, no API key. Unlike :func:`collect_track_b` there is NO lexical fallback
     (that path calls the LLM); an empty result simply means the agent should revise the facets.
+
+    ``stats_out``: when given, one dict per facet is appended (domain / status / returned / kept /
+    selected) so the caller can report a per-facet breakdown. F-18: without it a facet that
+    contributed nothing is invisible to the calling agent.
     """
     cfg = config or CollectConfig()
     collector = Collector(cfg)
     home_ids = home_field_ids if home_field_ids is not None else resolve_field_ids(theme.scope.field)
     return _collect_track_b_semantic(
-        theme, collector, "", max_count, used_ids, used_titles, used_dois, home_ids, cfg, spec=spec
+        theme, collector, "", max_count, used_ids, used_titles, used_dois, home_ids, cfg,
+        spec=spec, stats_out=stats_out,
     )
 
 
@@ -752,6 +762,7 @@ def _collect_track_b_semantic(
     cfg: CollectConfig,
     *,
     spec: Optional[SerendipitySpec] = None,
+    stats_out: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Work]:
     """HyDE/semantic Track B collection: targeted-abstraction facets -> search.semantic -> validate.
 
@@ -760,18 +771,32 @@ def _collect_track_b_semantic(
     no facets exist or every facet's query fails the non-empty / home-convergence gate. The
     semantic endpoint returns up to 50 works in a single page (no pagination), so each facet is one
     request.
+
+    F-18 (2026-08-28): every facet is queried and every facet gets a share of ``max_count``.
+    The previous loop appended each facet's hits in order and broke as soon as the cap was reached,
+    so with the endpoint returning up to 50 per facet, facets 1+2 filled the 60 slots and facet 3
+    was NEVER REQUESTED. Because the A2 distance protocol orders facets Near -> Far -> Very Far,
+    the starved facet was always the most distant one — the exact thing the protocol exists to buy.
     """
     if spec is None:
         spec = generate_serendipity_facets(theme, model)
     if spec.is_empty():
         return []
 
-    works: List[Work] = []
     seen_ids: Set[str] = set(used_ids or set())
     seen_titles: Set[str] = set(used_titles or set())
     seen_dois: Set[str] = set(used_dois or set())
+    buckets: List[List[Work]] = []
+    stats: List[Dict[str, Any]] = []
     valid_facets = 0
     for facet in spec.facets:
+        rec: Dict[str, Any] = {"domain": facet.domain, "status": "ok",
+                               "returned": 0, "kept": 0, "selected": 0}
+        stats.append(rec)
+        if not cfg.facet_fair_share and sum(len(b) for b in buckets) >= max_count:
+            # Legacy behaviour kept behind the flag: stop once the cap is full (facet unqueried).
+            rec["status"] = "未取得（上限到達で打ち切り）"
+            continue
         sq = build_semantic_query(spec.structure, facet.pseudo_abstract)
         try:
             payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
@@ -780,13 +805,17 @@ def _collect_track_b_semantic(
             # returns 5xx; one flaky facet must not abort the whole collection, so skip it and let
             # the remaining facets contribute (each facet is an independent semantic query).
             print(f"[info] Track B semantic facet '{facet.domain}' 取得失敗 ({exc}) — スキップ")
+            rec["status"] = f"取得失敗 ({exc})"
             continue
         raw = filter_retracted(normalize_results(payload))
+        rec["returned"] = len(raw)
         ok, reason = validate_semantic_results(raw, home_field_ids)
         if not ok:
             print(f"[info] Track B semantic facet '{facet.domain}' 棄却 ({reason})")
+            rec["status"] = f"棄却 ({reason})"
             continue
         valid_facets += 1
+        bucket: List[Work] = []
         for w in exclude_home_field(raw, home_field_ids):
             norm_title = _norm_title(w.title)
             norm_doi = _norm_doi(w.doi)
@@ -798,12 +827,43 @@ def _collect_track_b_semantic(
                     seen_titles.add(norm_title)
                 if norm_doi:
                     seen_dois.add(norm_doi)
-                works.append(w)
-        if len(works) >= max_count:
-            break
+                bucket.append(w)
+        rec["kept"] = len(bucket)
+        buckets.append(bucket)
+
+    works = (_interleave_facet_buckets(buckets, max_count) if cfg.facet_fair_share
+             else [w for b in buckets for w in b][:max_count])
+    chosen = {w.id for w in works}
+    bi = 0
+    for rec in stats:
+        if rec["status"] == "ok":
+            rec["selected"] = sum(1 for w in buckets[bi] if w.id in chosen)
+            bi += 1
+    if stats_out is not None:
+        stats_out.extend(stats)
     if valid_facets:
-        print(f"[info] Track B semantic: {valid_facets}/{len(spec.facets)} facet 採用 -> {len(works)} 候補")
-    return works[:max_count]
+        share = " / ".join(f"{r['domain']}:{r['selected']}" for r in stats)
+        print(f"[info] Track B semantic: {valid_facets}/{len(spec.facets)} facet 採用 -> "
+              f"{len(works)} 候補（facet 別 {share}）")
+    return works
+
+
+def _interleave_facet_buckets(buckets: List[List[Work]], max_count: int) -> List[Work]:
+    """Round-robin across facets so each one owns a share of the cap (F-18).
+
+    A facet with fewer hits simply donates its unused slots to the others, so this never returns
+    fewer candidates than the old concatenate-and-truncate did — it only changes WHICH ones.
+    """
+    out: List[Work] = []
+    depth = 0
+    while len(out) < max_count and any(len(b) > depth for b in buckets):
+        for b in buckets:
+            if depth < len(b):
+                out.append(b[depth])
+                if len(out) >= max_count:
+                    break
+        depth += 1
+    return out
 
 
 def _collect_track_b_lexical(

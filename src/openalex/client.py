@@ -44,7 +44,8 @@ def run_stats_caveat() -> str:
     tail = (
         "。結果が薄い場合は「収穫ゼロ」ではなく取得失敗の可能性があります（再実行を推奨）。"
         if RUN_STATS["gave_up"]
-        else "（リトライで回復済み・結果への影響なし）。"
+        else "（リトライで回復済み。ただしこの行は HTTP 応答だけを見ており、"
+        "段や facet ごとの欠損は保証しない——facet 別内訳を参照）。"
     )
     return "⚠ 取得診断: " + " / ".join(parts) + tail
 

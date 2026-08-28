@@ -271,7 +271,9 @@
 
 ---
 
-### F-18. byserendipity — **A2 の3距離 facet のうち最遠の1枚が収穫 0 で、プロトコルが実質2距離へ潰れる**（2026-08-27 初観測・F-06 の裏面／`raw_only` 委譲経路）
+### F-18. byserendipity — **A2 の3距離 facet のうち最遠の1枚が収穫 0 で、プロトコルが実質2距離へ潰れる**（2026-08-27 初観測・F-06 の裏面／`raw_only` 委譲経路） → **原因を特定し対処済み（2026-08-28）。下記「対処済み」節 F-18-R へ**
+
+**★結論を先に**: OpenAlex の足切りでもホームドメイン除外でもなく、**contra 自身の収集ループが3枚目の facet を1度も検索していなかった**（候補上限 60 に達した時点で break していたため）。seihai が記録した「facet は3枚なのにリクエストは2件」がその直接の署名だった。
 
 **症状**: 委譲経路で呼び手が A2 の距離3段階（Near / Far / Very Far）の facet を3枚自作して渡したのに、**返る候補が近い側の facet に極端に偏り、最遠の facet からは1件も返らない**。呼び手から見ると「多様な3距離で引いた」ことになっているが、実体は2距離である。
 
@@ -338,6 +340,37 @@ S-26 が記録を指示している2項目:
 ---
 
 ## 対処済み
+
+### F-18-R. byserendipity — 最遠 facet の収穫 0 の真因＝**3枚目の facet が検索されていなかった**（上限到達で break） — **対処済み 2026-08-28**
+
+**seihai の2仮説はどちらも外れ**（それ自体が成果として記録する価値がある）。(a)「OpenAlex が類似度で足切りしている」でも (b)「ホームドメイン除外が巻き込んだ」でもなく、**故障は contra 側の収集ループ**にあった。
+
+**真の機序**（`_collect_track_b_semantic` / `src/pipeline/collect.py`）: facet を**順番に**引き、各 facet の候補を連結し、`if len(works) >= max_count: break` で打ち切っていた。semantic エンドポイントは1リクエストで最大 50件を返し、上限は 60件。⇒ **facet 1（〜50件）+ facet 2（〜10件）で 60 枠が埋まり、facet 3 は検索リクエスト自体が発行されない。** A2 距離プロトコルは facet を Near → Far → **Very Far** の順に並べるよう指示しているので、**構造的に必ず最遠の1枚が餓死する**——プロトコルが買おうとしていた当のものが、実装の都合で毎回捨てられていた。
+
+**seihai の観測がそのまま署名になっていた**: 「**facet は3枚なのにリクエストは2件**」（8/28 の取得診断）は取りこぼしでも通信失敗でもなく、**3枚目を呼んでいないという事実の直接の表示**だった。「単独で投げ直すと 42件返る」も同じ事実の裏面（単独なら上限に達する前に必ず引かれる）。
+
+**実装**（加算的・可逆）:
+1. **全 facet を必ず検索し、上限を facet 間でラウンドロビン配分する**（`_interleave_facet_buckets`）。件数の少ない facet は未使用枠を他へ譲るので、**候補総数は減らない**（実測でも 60 のまま）。`CollectConfig(facet_fair_share=False)` で旧挙動に戻せる。
+2. **facet 別内訳を診断ブロックに常時出す**（`stats_out` → `_facet_breakdown_line`）: 各 facet の `返却 / ホーム除外・重複後 / 提出` と、**収穫0の facet を名指しする警告**。取得失敗・棄却も facet 名つきで出る。⇒ seihai の処方 (1) をそのまま実装。
+3. **`run_stats_caveat` の「結果への影響なし」を撤回**: この行は HTTP 応答しか見ておらず、段や facet ごとの欠損を保証しない旨を明記して facet 別内訳へ誘導。⇒ seihai の処方 (2)（S-68 と同型の「情報が無いことを中立値で表すな」）。
+
+**実測 before/after**（8/28 の r05/F9 と同一の3 facet ＝ 臨床非劣性 / 群集生態学の限定類似性 / SE の等価変異体・実 API・同一セッションで A/B）:
+
+| | facet1 提出 | facet2 提出 | **facet3（Very Far）提出** | OpenAlex リクエスト | 候補総数 |
+|---|---|---|---|---|---|
+| before（旧挙動） | 42 | 18 | **0** | **2**（3枚目は未発行） | 60 |
+| after（本対処） | 20 | 20 | **20** | **3** | 60 |
+
+**8/27・8/28 の seihai 実測（43/17/0・44/16/0）を before 側がほぼそのまま再現**した。after では、**seihai が単独呼び出しでしか引けなかった等価変異体の文献が、3枚同居のまま上位に返る**——`Are mutants a valid substitute for real faults in software testing?` / `The Impact of Equivalent Mutants` / `Automatically detecting equivalent mutants and infeasible paths`（うち1本は 8/28 の delegate_finalize を通過して結論に効いた当の文献）。新規候補は 60件中 **22件が before に無かったもの**。
+
+**MCP 本番経路（`byserendipity raw_only`）でも実機確認**: 3/3 facet 採用・20/20/20・診断ブロックに `★facet 別内訳: [1] … 返却 50 / ホーム除外・重複後 41 / 提出 20 ・ [2] … ・ [3] software engineering (equivalent mutants): 返却 50 / … / 提出 20` が出る。
+
+**⇒ seihai 側への申し送り**: **「Very Far は単独呼び出しで引く」という当面の運用処方は不要になった**（3枚同居で引ける）。ただし単独呼び出しは今後も有効な手段なので、禁止ではなく「必須ではなくなった」。**次回の raw_only run では診断ブロックの `★facet 別内訳` を必ず記録してほしい**——0件の facet が出たらそれは今度こそ検索側の性質であって、contra の打ち切りではない。
+
+**新規テスト** `tests/test_facet_fair_share.py` 8ケース（旧挙動を `facet_fair_share=False` で回帰として固定・公平配分・薄い facet の枠譲渡・単一 facet 不変・失敗 facet の記録・内訳行の文言3件）。全 **390 tests: 390 pass**。
+
+**同型の残件（起票のみ・未対処）**: `_collect_track_b_lexical`（LLM キー経路のフォールバック）にも同じ形の `if len(works) >= max_count: break` がある。こちらは `per_query = max_count // len(queries)` の割当があるため通常は最後のクエリまで届くが、1ページが per_query を超えて返ると同じ餓死が起きうる。**本番の委譲経路ではないので今回は触らず、様式として記録する。**
+
 
 ### F-01-R. bybridge — 巨大ハブ吸着の**真の機序＝存在しない参照 id（phantom bridge）** — **対処済み 2026-08-25**
 

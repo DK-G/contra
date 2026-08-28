@@ -187,6 +187,39 @@ def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_
     return len(ids)
 
 
+def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
+    """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
+
+    Without this the calling agent cannot tell "this facet returned nothing" from "this facet was
+    never queried": in the 2026-08-27/28 observations the Very Far facet contributed 0 candidates
+    while the fetch caveat reported the run as clean. Any facet that yields nothing is NAMED here.
+    """
+    if not stats:
+        return ""
+    parts: List[str] = []
+    empty: List[str] = []
+    for i, r in enumerate(stats, 1):
+        dom = r.get("domain") or f"facet{i}"
+        if r.get("status") != "ok":
+            parts.append(f"[{i}] {dom}: {r.get('status')}")
+            empty.append(dom)
+            continue
+        sel = r.get("selected", 0)
+        parts.append(
+            f"[{i}] {dom}: 返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+        )
+        if not sel:
+            empty.append(dom)
+    line = "★facet 別内訳: " + " ・ ".join(parts)
+    if empty:
+        line += (
+            "\n⚠ 収穫0の facet: " + ", ".join(empty) + "。この距離段は今回の材料に含まれていません"
+            "（A2 の3距離が実質的に潰れている状態）。その距離を確実に引くには、当該 facet を単独の"
+            "呼び出しで投げ直してください。"
+        )
+    return line
+
+
 class StdinMcpServer:
     def __init__(self) -> None:
         self.initialized = False
@@ -492,22 +525,26 @@ class StdinMcpServer:
             }
         used_ids, used_titles, used_dois = _history_exclusions(theme, args)
         _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
+        facet_stats: List[Dict[str, Any]] = []
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
+            stats_out=facet_stats,
         )
+        facet_diag = _facet_breakdown_line(facet_stats)
         if not works:
             return {
                 "content": [{"type": "text", "text": (
                     f"semantic 収集で候補が0件でした（facet {len(spec.facets)} 件・ホーム収束/非空ゲート"
                     f"または履歴除外 {len(used_ids)} 件で全滅）。facet をより遠い/具体的なドメインへ見直すか、"
-                    "テーマが飽和している可能性があります。"
+                    "テーマが飽和している可能性があります。\n\n" + facet_diag
                 )}],
                 "isError": False,
             }
         materials = [material_from_work(w) for w in works]
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
         diag = (
+            facet_diag + "\n"
             f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
             f"（semantic・ホームドメイン除外済・キー無し{hist_note}）。各候補を purpose_sim/mechanism_dist 等で"
             "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
