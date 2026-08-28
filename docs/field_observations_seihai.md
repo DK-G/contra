@@ -55,7 +55,7 @@
 
 ---
 
-### F-13. 全 by\* 共通 — **シード／候補の取得段で語彙が衝突し、bridge 段や採点段に入る前に主題から外れる**（2026-08-24 初観測・S-62 と S-26 が同じ機序に落ちた）
+### F-13. 全 by\* 共通 — **シード／候補の取得段で語彙が衝突し、bridge 段や採点段に入る前に主題から外れる**（2026-08-24 初観測・S-62 と S-26 が同じ機序に落ちた） → **bybridge シード段は 2026-08-28 に三層対処（field 限定＋semantic レッグ＋整合計器）。同分野内ドリフトと byrepo は残**
 
 **症状**: 検索語がホームドメインとまったく別の分野で確立した術語と同綴りのとき、取得段の名簿がその別分野で埋まる。以降の段（bridge 構築・関連度採点・多様化）は**外れた名簿の上で正しく動く**ので、診断ブロックの数字は健全に見える。
 
@@ -72,6 +72,33 @@
 | **2026-08-28** | **byrepo** | `strategy similarity` / `anytime-valid` / `sequential testing` / `backtest overfitting` / `trade log` | contra 自身が「**theme 関連度が全アンカーで低い（最大 0.33）**」と警告。3件中2件は主題ドメインではある（`ml4t/diagnostic`＝バックテスト評価の統計検証・`jianweiweng05/qsx-strategy-score`＝取引ログから過剰適合と偶然のタイミングを検出）が、**問い（2本の腕の行動的重複を約定ログから検出する実装）に答えたものは無い**。3件目 `atilaahmettaner/tradingview-mcp`（★4,259）は**関連度 0.23 の市場データ MCP サーバ**＝完全に無関係なのに順位スコア 45.7 で2位と 0.2 差の3位に入った。⇒ **F-03/F-17 の「Reliability が高い無関係」が、関連度係数を掛けた後もまだ上位に残る**（Reliability 91 × 0.23 が Reliability 81 × 0.33 とほぼ並ぶ＝**係数の効きが弱い**） |
 
 ★**2026-08-26 の重要な副産物＝失敗の所在が初めて特定できた。** S-11／F-02 の対処（使ったシードを出力に含める）が入っているため、bybridge の**シード20件が可視化**され、それが本テーマと1件も接点が無いことを直接読めた。⇒ 本日の収穫ゼロは**「橋が汎用ハブに吸われた」(F-01/S-38) ではなく「シード検索そのものの失敗」**。**S-11 の起票文が「シードが見えない限り両者を区別できない」と書いたその区別が、S-11 の実装によって初めて可能になり、今日答えが出た。**★併せて S-26 の観測項目も記録: **(i) 最頻 bridge の上位10件占有率 20%**（実際に使われた bridge 13本＝**bridge 段の多様化は効いている**）／**(ii) 最頻 bridge = Optimization by Simulated Annealing（被引用 44,995）＝分野外の巨大ハブ**。**「上位は多様化したが収穫はゼロ」は旧様式の再現ではなく新しい観測**であり、**bridge 段の処置がすべて効いていても、シードが主題から外れている限り下流は正しく動いて収穫ゼロを返す**。
+
+**✅ contra 側の対処（2026-08-28・部分実装＝bybridge シード段の三層化。bynote 調査に基づく）**:
+
+bynote 調査（NotebookLM `Contra Search Query Precision` に Deep Research 10ソース追加）と一次資料の読解で、機序を2段特定した:
+
+1. **シード検索はテーマ本文を一度も見ていない**。`keywords.include` 数語の prefix ladder を `title_and_abstract.search` に投げるだけで、テーマの主語（「多様性の維持」「集合レベル統計の誤診」）は検索に入らない。
+2. **home field 限定が未配線だった**。`StructuredQuery.field_ids` は実装済みなのにシード検索のクエリビルダが渡しておらず、さらに**0件時の generic-search フォールバックが全分野横断**——8/27 の耳鳴りガイドライン・乳香の農牧経済がシードに入った直接の経路。文献側の裏付け: 短い語彙クエリの多義衝突には (a) DB 層の分野フィルタ (b) 長文擬似文書クエリ (c) 取得後の分布乖離検知が標準処方（Clarity score / query difficulty prediction 系）。
+
+**実装（加算的・可逆・各層フラグつき）**:
+
+- **(B) field 限定の配線**: シード段の全クエリ（ladder・PRF 拡張・**フォールバック含む**）に `primary_topic.field.id` を付与。`seed_field_scope:false` で旧挙動。`scope.field` が解決しないときは無限定のまま（fail-open）
+- **(C) semantic シードレッグ**: テーマ本文（overview+goal+why）を `search.semantic` へ投げ、home field を**残す側**でクライアント選別（`keep_home_field`・未分類は保持）、語彙シードと公平配分マージ（F-18 と同じ round-robin）。`seed_semantic:false` で無効。取得失敗は空リスト＝語彙シードが常に床（fail-open）
+- **(A) シード主題整合の計器**: 名簿の `primary_topic.field` 分布 vs home field の一致率＋**上位分野の名指し**を診断ブロックに常時出力（`シード主題整合 (F-13)` 行）。一致率 50% 未満で警告。分野未解決時は 0% でなく「判定不能」（S-68 と同型の教訓）
+
+**実測（8/28 の r05/F9 テーマ・実 API・同一セッション A/B/C）**:
+
+| 条件 | home分野一致 | 上位分野 |
+|---|---|---|
+| A: 語彙のみ・限定なし（旧） | **10/20 = 50%** | Economics 10 / Decision Sciences 6 / Business 1 |
+| B: 語彙 + field 限定 | 20/20 = 100% | Economics 20 |
+| C: B + semantic 統合（新既定） | **20/20 = 100%** | Economics 20 |
+
+semantic レッグ単独は 14件・全件 referenced_works 保持（13〜24本）＝bridge シードとして成立し、中身が語彙シードより明確に主題寄り（"Algorithm Switching: Co-Adaptation in the Market Ecology" / "Computation of Implementation Shortfall by **Sequence Alignment**"＝約定列の整列比較そのもの）。MCP 本番経路のエンドツーエンドでも確認: 最終シード20件に semantic 由来が5件入り、F-12/C(iii)/F-01 の既存ゲートと共存、診断に F-13 行が出る。
+
+**残る限界（正直に記録）**: (i) **同分野内の主題ドリフト（8/24 の trade→貿易政策型）は field 一致率では捕まらない**——貿易政策も Economics。計器はこの型では警告せず、シード題名の目視（F-02 の表）が引き続き検出手段。semantic レッグがこの型への実質的な処方だが、**収穫（交差候補の主題適合）が改善したかは seihai の次回 run が判定する**。(ii) field 限定は隣接分野の準主題シード（Decision Sciences の GAN トレーディング等）を落とす——semantic レッグの未分類保持と `seed_field_scope:false` が逃げ道。(iii) byrepo の同型問題（GitHub 検索の語彙衝突）は**未対処**——GitHub 側に field フィルタ相当が無く、別の処方が要る。
+
+**⇒ seihai 側への申し送り**: 次回 bybridge run の診断ブロックに `シード主題整合 (F-13)` 行が出る。**一致率と上位分野を insights に記録してほしい**。シードが主題に寄ったのに交差候補がなお無関係なら、故障はさらに下流（bridge 選定 or 2-hop の性質）に局在化する——F-07→F-12→F-13 と2段さかのぼった切り分けの次の一手がそこで決まる。
 
 **示唆**: 関連度の自己申告値は**語がマッチしたか**を測っていて、**問いに答えているか**は測っていない。S-39 の対処（関連度をランキングに入れた）は「無関係な優良リポジトリが上位に来る」を直したが、**「語だけ合っている無関係」は素通りする**。⇒ 呼び手側の暫定処方は S-62 と同じ「問いを選ぶ」だが、**ツール側にも「取得段の名簿が主題ドメインに属するかの事後チェック」を置けるはず**（例: シード名簿の concept 分布と theme の scope_field の乖離を診断ブロックに出す。今回なら "International trade"/"Political economy" が上位に立つので一目で分かる）。
 

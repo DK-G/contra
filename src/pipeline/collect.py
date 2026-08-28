@@ -15,6 +15,7 @@ from src.pipeline.bridges import annotate_bridge_signals
 from src.pipeline.query import (
     ROUTE_FILTER,
     ROUTE_SEARCH,
+    ROUTE_SEMANTIC,
     StructuredQuery,
     dominant_field_ids,
     resolve_field_ids,
@@ -26,6 +27,7 @@ from src.pipeline.serendipity_query import (
     build_semantic_query,
     exclude_home_field,
     generate_serendipity_facets,
+    keep_home_field,
     validate_semantic_results,
 )
 
@@ -152,11 +154,27 @@ def collect_and_filter(
     require_abstract: bool = True,
     use_assumption_queries: bool = True,
     use_prf: bool = True,
+    home_field_ids: Optional[List[str]] = None,
 ) -> List[Work]:
+    """Near-field lexical collection (keyword ladder + assumption queries + PRF).
+
+    ``home_field_ids`` (F-13, 2026-08-28): when given, every query in the run — ladder rungs,
+    assumption queries, PRF expansions, and the generic-search fallbacks — carries a
+    ``primary_topic.field.id`` scope, so a homograph collision ('trade' -> trade policy,
+    'sequential' -> consumer credit) cannot pull the roster into another discipline at the
+    database layer. Empty/None keeps the historical unscoped behaviour (fail-open: an
+    unresolvable ``scope.field`` must not turn into zero recall).
+    """
     cfg = config or CollectConfig()
     collector = Collector(cfg)
     collected: List[Work] = []
     seen_ids: Set[str] = set()
+    scope_ids = [str(f) for f in (home_field_ids or []) if f]
+
+    def _scoped(sq: StructuredQuery) -> StructuredQuery:
+        if scope_ids and not sq.field_ids:
+            sq.field_ids = list(scope_ids)
+        return sq
 
     def _absorb(sq: StructuredQuery, *, fallback: bool = True) -> bool:
         """Collect one query, filter, dedup into `collected`. Returns True when max_count reached.
@@ -194,7 +212,7 @@ def collect_and_filter(
     ]
 
     for sq in base_variants + assumption_variants:
-        if _absorb(sq):
+        if _absorb(_scoped(sq)):
             return collected
 
     # Pseudo-relevance feedback (PRF): the user's keywords are an incomplete description of the
@@ -214,10 +232,64 @@ def collect_and_filter(
         primary_anchor = [head] if head else [theme.scope.field]
         existing = list(theme.keywords.include) + [theme.scope.field, theme.goal]
         for term in _salient_terms(collected[:_PRF_SEED_POOL], existing):
-            if _absorb(StructuredQuery(anchor_terms=primary_anchor + [term]), fallback=False):
+            if _absorb(_scoped(StructuredQuery(anchor_terms=primary_anchor + [term])), fallback=False):
                 return collected
 
     return limit_count(collected, max_count)
+
+
+def collect_seeds_semantic(
+    theme: ThemeInput,
+    config: Optional[CollectConfig] = None,
+    *,
+    max_count: int = 60,
+    home_field_ids: Optional[List[str]] = None,
+) -> List[Work]:
+    """Semantic near-field seed retrieval: the theme's own prose -> ``search.semantic`` (F-13).
+
+    The lexical seed path matches a handful of keywords by surface form, so it never sees the
+    theme's actual subject ("the theme's subject is diversity maintenance, but the seed search
+    pulls on 'trade'"). This is the complementary leg: the full theme description (overview +
+    goal + why) is one long pseudo-document query against OpenAlex's embedding endpoint — the
+    same route whose 80-word facet queries land on-topic for the SAME themes where the lexical
+    seed roster drifts (F-16/F-18 evidence). Home-Field keeping runs client-side (the endpoint
+    400s on field filters); works without a field id are kept, and failures return [] so the
+    lexical path always remains the floor (fail-open).
+    """
+    cfg = config or CollectConfig()
+    collector = Collector(cfg)
+    text = " ".join(t for t in (theme.theme_overview, theme.goal, theme.why_problem) if t).strip()
+    if not text:
+        return []
+    sq = StructuredQuery(anchor_terms=[text], route=ROUTE_SEMANTIC, work_type="article")
+    try:
+        payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
+    except OpenAlexError as exc:
+        print(f"[info] semantic シード取得失敗 ({exc}) — 語彙シードのみで続行")
+        return []
+    works = filter_has_abstract(filter_retracted(normalize_results(payload)))
+    return keep_home_field(works, home_field_ids or [])[:max_count]
+
+
+def merge_seed_pools(lexical: List[Work], semantic: List[Work], max_count: int) -> List[Work]:
+    """Round-robin merge of the lexical and semantic seed pools, deduped by id (F-13).
+
+    Same fair-share doctrine as ``_interleave_facet_buckets`` (F-18): both retrieval legs own a
+    share of the cap, and a thin leg donates its unused slots — so the merge never yields fewer
+    seeds than either leg alone, it only changes WHICH ones fill the roster.
+    """
+    seen: Set[str] = set()
+    lex_bucket: List[Work] = []
+    sem_bucket: List[Work] = []
+    for w in lexical:
+        if w.id not in seen:
+            seen.add(w.id)
+            lex_bucket.append(w)
+    for w in semantic:
+        if w.id not in seen:
+            seen.add(w.id)
+            sem_bucket.append(w)
+    return _interleave_facet_buckets([lex_bucket, sem_bucket], max_count)
 
 
 def filter_by_used_ids(

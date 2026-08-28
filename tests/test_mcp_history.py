@@ -88,6 +88,9 @@ def _no_openalex(monkeypatch):
     """
     monkeypatch.setattr(mcp_mod, "resolve_work_labels", lambda *a, **k: {})
     monkeypatch.setattr(mcp_mod, "filter_live_bridges", lambda b, *a, **k: (set(b), []))
+    # F-13: the semantic seed leg is a real search.semantic request — stub it to "no extra
+    # seeds" so the lexical stubs above stay the single source of the roster.
+    monkeypatch.setattr(mcp_mod, "collect_seeds_semantic", lambda *a, **k: [])
     from src.openalex import client as _client
     _client.reset_run_stats()
 

@@ -121,11 +121,22 @@ def test_semantic_route_clamps_per_page_and_composes_safe_filters_only():
 
 
 def test_fallback_is_recall_safe_search_twin():
+    # F-13 (2026-08-28): the twin now KEEPS the home-Field scope — dropping it on fallback was
+    # the drift door (homograph collisions roam every discipline on an unscoped generic search).
+    # Every other precision filter is still dropped.
     sq = StructuredQuery(anchor_terms=["a", "b"], field_ids=["17"], cites=["W1"])
     fb = sq.fallback()
     assert fb.route == ROUTE_SEARCH
-    assert fb.field_ids == [] and fb.cites == []
-    assert fb.to_params()["search"] == "a b"
+    assert fb.field_ids == ["17"] and fb.cites == []
+    params = fb.to_params()
+    assert params["search"] == "a b"
+    assert params["filter"] == "primary_topic.field.id:17"
+
+
+def test_fallback_without_field_scope_is_pure_generic_search():
+    fb = StructuredQuery(anchor_terms=["a"], cites=["W1"]).fallback()
+    params = fb.to_params()
+    assert params["search"] == "a" and "filter" not in params
 
 
 def test_anchor_comma_cannot_corrupt_the_filter_grammar():

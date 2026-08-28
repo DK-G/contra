@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 from src.core.input_schema import validate_and_normalize
 from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
 from src.pipeline.bridge_diagnostics import (
+    render_seed_alignment,
+    seed_domain_alignment,
     bridge_concentration,
     bridge_usage,
     filter_live_bridges,
@@ -32,9 +34,12 @@ from src.pipeline.collect import (
     _norm_title,
     collect_and_filter,
     collect_citation_candidates,
+    collect_seeds_semantic,
     collect_track_b,
     collect_track_b_from_spec,
+    merge_seed_pools,
 )
+from src.pipeline.query import resolve_field_ids
 from src.pipeline.concept_distance import build_theme_profile
 from src.pipeline.history import compute_theme_hash, load_history, save_history
 from src.pipeline.delegate import (
@@ -322,7 +327,9 @@ class StdinMcpServer:
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, cross-domain candidates already surfaced for this theme are excluded and adopted ones recorded (data/history/), so re-runs return NEW papers.", "default": False},
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."},
-                        "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True}
+                        "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's field-alignment line (F-13), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
+                        "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
+                        "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). false restores lexical-only seeding.", "default": True}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -737,9 +744,26 @@ class StdinMcpServer:
         # seed slots (zero-citation institutional-repository entries) and the whole 2-hop scan
         # returned nothing. Liveness gate: overfetch, keep only seeds that can produce output
         # (same principle as seihai's own "no zero-fire designs are ever seated" rule).
-        raw_seeds = collect_and_filter(
-            theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True
+        # F-13 (2026-08-28): the lexical keyword search alone repeatedly landed the roster in
+        # the wrong discipline (homograph collisions), so the seed stage is now three-layered:
+        # (B) every lexical query carries the theme's home-Field scope at the database layer,
+        # (C) a semantic leg queries the theme's own prose against search.semantic (the route
+        # that stays on-topic for the same themes where keywords drift), and the two pools are
+        # fair-share merged; (A) the roster's field alignment is measured and reported below.
+        # `seed_field_scope:false` / `seed_semantic:false` restore the old behaviour per layer.
+        home_ids = resolve_field_ids(theme.scope.field)
+        seed_field_scope = bool(args.get("seed_field_scope", True))
+        scope_ids = home_ids if seed_field_scope else []
+        lex_seeds = collect_and_filter(
+            theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True,
+            home_field_ids=scope_ids,
         )
+        sem_seeds: List[Any] = []
+        if bool(args.get("seed_semantic", True)):
+            sem_seeds = collect_seeds_semantic(
+                theme, CollectConfig(), max_count=seed_count * 3, home_field_ids=scope_ids,
+            )
+        raw_seeds = merge_seed_pools(lex_seeds, sem_seeds, seed_count * 3)
         # C(iii) 2026-08-22: a Japanese-language theme pulled 20/20 Japanese institutional-
         # repository records as seeds (F-12 run 1/3). The 2-hop mechanism needs seeds that
         # carry the citation graph, which is overwhelmingly English-language; off-language
@@ -795,6 +819,17 @@ class StdinMcpServer:
         ranked_all = sorted(cands, key=hybrid_bridge_rank_key, reverse=True) if cands else []
         ranked_all = diversify_head_by_bridge(ranked_all, bridges) if ranked_all else []
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
+        if diagnostics:
+            # F-13 instrument: always reported, not only on warning — a roster that LOOKS fine
+            # must still show where it landed (the drifted rosters were only ever caught by a
+            # human reading the seed titles; this line makes the field distribution one glance).
+            align = seed_domain_alignment(seeds, home_ids)
+            diag_line = (
+                render_seed_alignment(align, home_label=theme.scope.field)
+                + f"（語彙シード {len(lex_seeds)} 件・semantic シード {len(sem_seeds)} 件を統合"
+                + ("・field 限定あり" if scope_ids else "・field 限定なし")
+                + "）\n" + diag_line
+            )
         if diagnostics and dead_seed_count:
             diag_line = (
                 f"- シード生存確認 (F-12): referenced_works が空で bridge を生成できないレコード "

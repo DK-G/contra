@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-08-28（CL-0094） F-13 部分対処: bybridge シード段の三層化（field 限定＋semantic シード＋主題整合計器）
+
+### 概要
+* **bynote 調査に基づく同日2件目。** F-13（取得段の語彙衝突）の機序を2段特定: (1) シード検索は keywords 数語の表層一致のみでテーマ本文を見ていない (2) `StructuredQuery.field_ids` は実装済みなのに未配線で、0件時の generic-search フォールバックは全分野横断＝ドリフトの扉。
+* **実装（加算的・可逆）**: (B) シード段全クエリ＋フォールバックに `primary_topic.field.id` 限定（`seed_field_scope:false` で旧挙動・fail-open）。(C) テーマ本文を `search.semantic` に投げる semantic シードレッグ新設（`collect_seeds_semantic`＋`keep_home_field`＋`merge_seed_pools` 公平配分・`seed_semantic:false` で無効・失敗時は語彙のみ）。(A) `seed_domain_alignment`/`render_seed_alignment` 計器＝home分野一致率＋上位分野名指しを診断に常時出力・50%未満で警告・分野未解決は「判定不能」。
+* **実測 A/B/C**（r05/F9 テーマ・実 API）: home一致 50%（旧）→100%（新既定）。semantic レッグ14件は全件 referenced_works 保持で bridge シード成立、内容は明確に主題寄り（Sequence Alignment による約定列比較等）。MCP 実機で最終シード20件中 semantic 由来5件・既存ゲート（F-12/C(iii)/F-01）と共存。
+* **残**: 同分野内ドリフト（8/24型）は field 一致率で捕まらない（semantic レッグが実質処方・収穫改善は seihai 次回 run が判定）／byrepo の同型は未対処。
+* fallback の契約変更1点: `StructuredQuery.fallback()` は field_ids を**保持**（他フィルタは従来どおり落とす）。既存テスト1件を新契約に更新。
+* 新規 `tests/test_seed_field_scope.py` 13ケース＋既存 autouse fixture に semantic レッグの stub 追加。全 **404 tests: 404 pass**。
+
+---
+
 ## 2026-08-28（CL-0093） F-18 の真因を特定して対処: 最遠 facet は「引けなかった」のではなく「検索されていなかった」
 
 ### 概要

@@ -200,13 +200,25 @@ class StructuredQuery:
                 return base
             # Nothing was field-scopeable -> fall through to generic search (recall-safe).
         # ROUTE_SEARCH (and a filter route with nothing scopeable) executes as generic full-text
-        # search so recall is never worse than the legacy behaviour.
+        # search so recall is never worse than the legacy behaviour. F-13 (2026-08-28): when the
+        # caller declared a home Field, the generic route KEEPS that scope (search= composes with
+        # filter= on OpenAlex) — an unscoped generic search is exactly where homograph collisions
+        # ('trade' -> trade policy, 'sequential' -> consumer credit) flooded the seed roster.
         base["search"] = self.anchor_string()
+        if self.field_ids:
+            base["filter"] = "primary_topic.field.id:" + "|".join(str(f) for f in self.field_ids)
         return base
 
     def fallback(self) -> "StructuredQuery":
-        """A recall-safe generic-search twin (same anchor, ``route='search'``, no filters)."""
-        return StructuredQuery(anchor_terms=list(self.anchor_terms), route=ROUTE_SEARCH)
+        """A recall-safe generic-search twin (same anchor + field scope, ``route='search'``).
+
+        F-13: the twin keeps ``field_ids`` — dropping the home-Field scope on fallback was the
+        drift door (the precise filter misses, then the loose retry roams every discipline).
+        All OTHER precision filters are still dropped, so recall is no worse than legacy for
+        callers that never set field_ids.
+        """
+        return StructuredQuery(anchor_terms=list(self.anchor_terms),
+                               field_ids=list(self.field_ids), route=ROUTE_SEARCH)
 
 
 def structured_query_from_theme(theme: ThemeInput, *, route: str = ROUTE_FILTER) -> StructuredQuery:

@@ -242,6 +242,21 @@ def exclude_home_field(works: Sequence[Work], home_field_ids: Iterable[str]) -> 
     return [w for w in works if _field_id(w) not in home]
 
 
+def keep_home_field(works: Sequence[Work], home_field_ids: Iterable[str]) -> List[Work]:
+    """Keep only works whose primary_topic Field IS a home Field (the seed-side inverse of
+    :func:`exclude_home_field`).
+
+    F-13 (2026-08-28): bybridge seeds must be NEAR-FIELD papers, but the semantic endpoint cannot
+    compose a positive ``primary_topic.field.id:`` filter either (same 400 family as the negation),
+    so home-keeping runs client-side. Works with no field id are kept (fail-open: an unclassified
+    record must not be silently dropped), and an empty ``home_field_ids`` keeps everything.
+    """
+    home = {str(f) for f in home_field_ids if f}
+    if not home:
+        return list(works)
+    return [w for w in works if _field_id(w) in home or not _field_id(w)]
+
+
 def validate_semantic_results(
     works: Sequence[Work],
     home_field_ids: Iterable[str],

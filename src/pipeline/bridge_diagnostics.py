@@ -305,6 +305,81 @@ def filter_live_bridges(
     )
 
 
+# ---------------------------------------------------------------------------
+# F-13: seed-roster domain alignment (the "did the retrieval land in the theme's
+# discipline at all?" instrument). This is a metadata-level clarity check: instead of a
+# language-model KL divergence (Cronen-Townsend's Clarity score), it compares the roster's
+# primary_topic Field distribution against the theme's declared home Fields — deterministic,
+# key-free, one pass over already-fetched metadata. It cannot see WITHIN-field drift (the
+# 2026-08-24 'trade' -> trade-policy case stays inside Economics), which is why the top
+# field NAMES are always printed: "International trade / Political economy at the top" was
+# readable at a glance in every recorded F-13 incident.
+# ---------------------------------------------------------------------------
+
+def seed_domain_alignment(
+    seeds: Sequence[Work], home_field_ids: Iterable[str]
+) -> Dict[str, Any]:
+    """Field-distribution stats for a seed roster vs the theme's home Fields.
+
+    Returns ``{total, home, fraction, unknown, top_fields}`` where ``top_fields`` is
+    ``[(field_name, count), ...]`` sorted by count. Works with no field id count into
+    ``unknown`` and are excluded from the fraction's denominator (a missing classification
+    is not evidence of drift — S-68: never encode "no information" as a bad value).
+    """
+    home = {str(f) for f in home_field_ids if f}
+    total = len(seeds)
+    counts: Dict[str, int] = {}
+    in_home = 0
+    unknown = 0
+    for w in seeds:
+        meta = getattr(w, "source_meta", None) or {}
+        fid = str(meta.get("primary_topic_field_id") or "")
+        fname = str(meta.get("primary_topic_field_name") or "") or (f"Field {fid}" if fid else "")
+        if not fid:
+            unknown += 1
+            continue
+        counts[fname] = counts.get(fname, 0) + 1
+        if fid in home:
+            in_home += 1
+    known = total - unknown
+    fraction = (in_home / known) if (known and home) else None
+    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return {"total": total, "home": in_home, "unknown": unknown,
+            "fraction": fraction, "top_fields": top}
+
+
+# Warn threshold, calibrated on live measurements (2026-08-28, the r05/F9 theme):
+# unscoped lexical roster = 50% home, field-scoped roster = 100%, and the recorded 8/27
+# incident roster (agriculture/medicine records on an economics theme) reads ~0%. With the
+# field scope on by default a healthy run sits at ~100%, so anything below 0.5 means the
+# scope failed, was disabled, or scope.field did not resolve — exactly the states worth a
+# warning. Audit lesson applied: the boundary was checked against a real drifted roster and
+# a real healthy roster, not chosen as a round number a priori.
+SEED_ALIGNMENT_WARN_BELOW = 0.5
+
+
+def render_seed_alignment(stats: Dict[str, Any], *, home_label: str = "") -> str:
+    """One diagnostics line naming where the seed roster actually landed (F-13)."""
+    top = " / ".join(f"{name} {n}" for name, n in stats["top_fields"][:3]) or "（分類なし）"
+    frac = stats["fraction"]
+    frac_txt = f"{frac:.0%}" if frac is not None else "判定不能（home分野未解決）"
+    label = f"（home={home_label}）" if home_label else ""
+    line = (
+        f"- シード主題整合 (F-13): home分野一致 {stats['home']}/{stats['total'] - stats['unknown']} "
+        f"= {frac_txt}{label}・上位分野 {top}"
+    )
+    if stats["unknown"]:
+        line += f"・分野未分類 {stats['unknown']} 件"
+    if frac is not None and frac < SEED_ALIGNMENT_WARN_BELOW:
+        line += (
+            f"\n  ⚠ シード名簿がテーマの分野から外れています（一致 {frac_txt} < "
+            f"{SEED_ALIGNMENT_WARN_BELOW:.0%}）。この run の下流（bridge 構築・交差候補・採点）は"
+            "外れた名簿の上で正しく動くため、診断の他の数字が健全でも収穫は主題に当たりません。"
+            "キーワードの語彙衝突（F-13）を疑ってください。"
+        )
+    return line
+
+
 def _fmt_int(n: Optional[int]) -> str:
     return f"{int(n):,}" if isinstance(n, int) else "?"
 
