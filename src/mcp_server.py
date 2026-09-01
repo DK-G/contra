@@ -46,6 +46,7 @@ from src.pipeline.delegate import (
     assemble_keyless_bridge_document,
     assemble_keyless_track_a_document,
     echo_completeness_warnings,
+    has_unverifiable_failure,
     finalize_delegated_document,
     material_from_work,
 )
@@ -1004,12 +1005,23 @@ class StdinMcpServer:
             label = f"「{label[:40]}」" if label else ""
             grounding_lines.append(f"- {g['id']}{label}: {' / '.join(g['reasons'])}")
         if grounding_lines:
-            extra += ("\n接地検証失敗（散文を棄却し構造整形で代替。スコアは保持）:\n"
-                      + "\n".join(grounding_lines))
-        diag_line += extra
+            header = "接地検証失敗（散文を棄却し構造整形で代替。スコアは保持）:"
+            # F-19: when the failure is 照合不能 (empty haystack), the cause is the echo
+            # warning printed a few lines above. The two blocks used to be independent, so
+            # the caller read the second one as "my quotes were fabricated" and re-audited
+            # its own prose. State the causal link where it is actually read.
+            if any(has_unverifiable_failure(g["reasons"]) for g in diag.get("grounding_failures", [])):
+                header += ("\n  ※「照合不能」は引用の誤りではありません。上の「材料欄が欠けた"
+                           "まま送信されています」が直接の原因です（照合は contra が保持する原本では"
+                           "なく、呼び手が送った材料に対して走ります）。候補材料を全欄 echo して"
+                           "同じ引用のまま再投すれば成立します。")
+            extra += "\n" + header + "\n" + "\n".join(grounding_lines)
+        # F-19 (formatting): `履歴記録 N 件` used to be appended AFTER `extra`, so it
+        # glued itself onto the last rejection/grounding bullet ("…再投してください） /
+        # 履歴記録 1 件"). Keep the counters on the head line and the bullets below it.
         if not entries:
             return {
-                "content": [{"type": "text", "text": f"{diag_line}\n\n決定論ゲートを通過した候補がありませんでした（飽和または全棄却）。"}],
+                "content": [{"type": "text", "text": f"{diag_line}{extra}\n\n決定論ゲートを通過した候補がありませんでした（飽和または全棄却）。"}],
                 "isError": False
             }
         # Record adopted papers so the next run on this theme excludes them (closes the
@@ -1017,6 +1029,7 @@ class StdinMcpServer:
         adopted = _history_adopt(theme, args, entries)
         if adopted:
             diag_line += f" / 履歴記録 {adopted} 件"
+        diag_line += extra
         md = render_markdown(doc)
         return _external_data_result(f"{diag_line}\n\n{md}")
 

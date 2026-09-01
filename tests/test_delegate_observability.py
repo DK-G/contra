@@ -108,3 +108,19 @@ def test_material_roundtrip_still_holds():
     # guard: the new warning path must not disturb the existing echo contract
     w = work_from_material(_material("W1", 0.5, 0.8))
     assert material_from_work(w)["title"] == "Paper W1"
+
+
+def test_echo_warning_names_the_grounding_consequence_f19():
+    # F-19: the warning used to read as a cosmetic/rendering problem, so callers skipped it
+    # and then read the grounding failure as "my quote was wrong".
+    bare = _material("W1", 0.5, 0.8)
+    bare.pop("title"); bare.pop("abstract")
+    line = echo_completeness_warnings([bare])[0]
+    assert "接地検証も不能にします" in line
+
+
+def test_echo_warning_without_text_fields_omits_grounding_note():
+    m = _material("W1", 0.5, 0.8)
+    m.pop("year")                      # not part of the source_quote haystack
+    line = echo_completeness_warnings([m])[0]
+    assert "year" in line and "接地検証" not in line

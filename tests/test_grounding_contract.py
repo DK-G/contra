@@ -119,3 +119,59 @@ def test_grounded_only_false_restores_old_behaviour():
     doc = finalize_delegated_document([fabricated], _theme(), count=1, diag=diag,
                                       grounded_only=False)
     assert "接地なしの散文" in doc.sections[0].entries[0].relationship
+
+
+# --- F-19 (2026-09-01, seihai): 照合不能 vs 不一致 -----------------------------------
+# Verification runs against the material the CALLER echoed, not contra's own record. When
+# the caller sends only `id` + scores, the haystack is empty and a verbatim-correct quote
+# was reported as "存在しない（逐語一致が必要）" — which reads as "your quote was
+# fabricated" and sent seihai to re-audit its own prose (the material-echo warning was
+# printed in a separate block with no stated causal link).
+
+def test_missing_material_is_reported_as_unverifiable_not_as_mismatch():
+    bare = _material(
+        relationship="論文の主張はテーマの盲点に対応する",
+        theme_quote="規則の見ていない軸での劣化",
+        source_quote="a dedicated pre-specified rule is required",   # verbatim-correct
+    )
+    bare.pop("title"); bare.pop("abstract")                          # caller echoed neither
+    failures = verify_grounding(bare, theme_grounding_text(_theme()))
+    assert len(failures) == 1
+    assert "照合不能" in failures[0]
+    assert "材料欄の欠落が原因" in failures[0]
+    assert "存在しない" not in failures[0]        # must NOT accuse the quote
+
+
+def test_partial_echo_mismatch_names_the_missing_field():
+    # title echoed, abstract dropped: a real mismatch, but the abstract quote could never
+    # have matched. Say so rather than letting it read as fabrication.
+    partial = _material(
+        relationship="r",
+        theme_quote="規則の見ていない軸での劣化",
+        source_quote="a dedicated pre-specified rule is required",
+    )
+    partial.pop("abstract")
+    failures = verify_grounding(partial, theme_grounding_text(_theme()))
+    assert len(failures) == 1
+    assert "存在しない" in failures[0]            # still a mismatch...
+    assert "abstract が送られていません" in failures[0]   # ...with its likely cause named
+
+
+def test_genuine_mismatch_with_full_material_stays_unqualified():
+    # Regression guard: when every field IS echoed, a fabricated quote must still be
+    # reported plainly — the F-19 hint must not soften real fabrication.
+    m = _material(
+        relationship="r",
+        theme_quote="規則の見ていない軸での劣化",
+        source_quote="this sentence appears in neither the title nor the abstract",
+    )
+    failures = verify_grounding(m, theme_grounding_text(_theme()))
+    assert len(failures) == 1
+    assert "存在しない" in failures[0]
+    assert "照合不能" not in failures[0] and "※" not in failures[0]
+
+
+def test_has_unverifiable_failure_predicate():
+    from src.pipeline.delegate import has_unverifiable_failure
+    assert has_unverifiable_failure(["照合不能: 候補の title/abstract が送られていない…"])
+    assert not has_unverifiable_failure(["source_quote が候補の title/abstract に存在しない（逐語一致が必要）"])

@@ -250,6 +250,27 @@ def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
 
 _QUOTE_MIN_CHARS = 10   # a quote shorter than this can't anchor a claim (single-word gaming)
 
+# F-19 (2026-09-01, seihai): verification runs against the material the CALLER echoed back,
+# NOT against contra's own record of the candidate. When the caller sends only `id` + its
+# score fields, the haystack is empty and every quote — including a verbatim-correct one —
+# is reported as "存在しない（逐語一致が必要）". That message reads as "your quote was
+# fabricated" and sends the caller to re-check its own prose; the actual cause is the
+# missing echo field, reported in a SEPARATE block with no causal link between the two.
+# An empty haystack is not a mismatch — it is 照合不能 — and its cause must be named in
+# the same sentence.
+_UNVERIFIABLE_MARK = "照合不能"
+_ECHO_REMEDY = "contra が返した候補材料を全欄 echo して、同じ引用のまま再投してください"
+
+
+def _empty_fields(material: Dict[str, Any], keys: Sequence[str]) -> List[str]:
+    """Which of ``keys`` the caller left empty/absent in the echoed material."""
+    return [k for k in keys if not str(material.get(k) or "").strip()]
+
+
+def has_unverifiable_failure(reasons: Sequence[str]) -> bool:
+    """True when any failure reason is a missing-material 照合不能 (not a real mismatch)."""
+    return any(_UNVERIFIABLE_MARK in str(r) for r in reasons)
+
 
 def _norm_quote_space(text: str) -> str:
     """Whitespace-insensitive, case-insensitive normal form for verbatim matching.
@@ -288,15 +309,38 @@ def verify_grounding(material: Dict[str, Any], theme_text_norm: str) -> List[str
     source_quote = _norm_quote_space(material.get("source_quote") or "")
     if len(theme_quote) < _QUOTE_MIN_CHARS:
         failures.append("theme_quote 欠落または短すぎ（10字以上の逐語抜粋が必要）")
+    elif not theme_text_norm:
+        # F-19 theme-side twin: nothing was submitted to match against.
+        failures.append(
+            f"{_UNVERIFIABLE_MARK}: 提出テーマ本文が空のため theme_quote を照合できません"
+            "（引用の誤りではなく theme 欄の欠落が原因です）"
+        )
     elif theme_quote not in theme_text_norm:
         failures.append("theme_quote が提出テーマ本文に存在しない（逐語一致が必要）")
+    source_missing = _empty_fields(material, ("title", "abstract"))
     source_text = _norm_quote_space(
         f"{material.get('title') or ''} {material.get('abstract') or ''}"
     )
     if len(source_quote) < _QUOTE_MIN_CHARS:
         failures.append("source_quote 欠落または短すぎ（10字以上の逐語抜粋が必要）")
+    elif not source_text:
+        # F-19: the haystack itself is absent. Distinguish 照合不能 from 不一致 and name
+        # the cause in the same sentence — the caller must not be sent to audit its quotes.
+        failures.append(
+            f"{_UNVERIFIABLE_MARK}: 候補の {'/'.join(source_missing) or 'title/abstract'} が"
+            "送られていないため source_quote を照合できません"
+            f"（引用の誤りではなく材料欄の欠落が原因です。{_ECHO_REMEDY}）"
+        )
     elif source_quote not in source_text:
-        failures.append("source_quote が候補の title/abstract に存在しない（逐語一致が必要）")
+        msg = "source_quote が候補の title/abstract に存在しない（逐語一致が必要）"
+        if source_missing:
+            # Partial echo: title present, abstract absent. A correct abstract quote still
+            # fails here, so say so rather than letting it read as fabrication.
+            msg += (
+                f" ※ ただし {'/'.join(source_missing)} が送られていません"
+                f"——{'/'.join(source_missing)} からの引用であればこれが原因です（{_ECHO_REMEDY}）"
+            )
+        failures.append(msg)
     return failures
 
 
@@ -317,10 +361,19 @@ def echo_completeness_warnings(materials: Sequence[Dict[str, Any]]) -> List[str]
         ]
         if missing:
             wid = str(material.get("id") or f"#{i}")
-            warnings.append(
+            line = (
                 f"⚠ 候補 {wid}: 材料欄が欠けたまま送信されています（{', '.join(missing)}）"
                 "— 該当欄は空のまま描画されます。contra が返した候補材料を全欄 echo してください。"
             )
+            # F-19: this warning used to read as a cosmetic/rendering problem, so callers
+            # ignored it and then read the grounding failure as "my quote was wrong".
+            # title/abstract are also the ONLY haystack source_quote is matched against.
+            if any(k in ("title", "abstract") for k in missing):
+                line += (
+                    " ★ この欠落は接地検証も不能にします（source_quote は送られた"
+                    " title/abstract に対してのみ照合されるため、正しい引用でも失敗します）。"
+                )
+            warnings.append(line)
     return warnings
 
 
