@@ -474,6 +474,8 @@ _TRACK_A_LABEL = "実装アンカー"
 
 
 def _reliability_level(score: int) -> str:
+    """Quality band of the Reliability score. NOT the 関係度 label (F-17) — kept for callers
+    that want to name the quality band explicitly."""
     if score >= 70:
         return "高"
     if score >= 40:
@@ -483,7 +485,9 @@ def _reliability_level(score: int) -> str:
 
 def build_track_a_entries(works: Sequence[Work], *, count: int = 3) -> List[OutputEntry]:
     """Deterministic Track A entries: reliability x relevance ranking (F-03), no LLM."""
-    from src.pipeline.track_a import anchor_rank_key  # local import avoids a cycle
+    from src.pipeline.track_a import (   # local import avoids a cycle
+        anchor_rank_key, anchor_relevance, relevance_level,
+    )
     chosen = sorted(works, key=anchor_rank_key, reverse=True)[: max(count, 0)]
     return [
         OutputEntry(
@@ -493,7 +497,11 @@ def build_track_a_entries(works: Sequence[Work], *, count: int = 3) -> List[Outp
             caution="",
             track="A",
             label=_TRACK_A_LABEL,
-            relationship_level=_reliability_level(work.source_meta.get("reliability_score", 0)),
+            # F-17 (2026-09-01): 関係度 is the theme-relevance band. It used to be
+            # _reliability_level(reliability_score) — a quality band with no theme in it —
+            # so the one on-topic anchor read 「中」 and two off-topic ones read 「高」.
+            # Reliability still renders on its own line under its own name.
+            relationship_level=relevance_level(anchor_relevance(work)),
         )
         for work in chosen
     ]

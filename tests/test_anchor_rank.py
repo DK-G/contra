@@ -126,3 +126,43 @@ def test_tiny_readme_is_not_inflated():
     repo = GitRepository(full_name="a/b", html_url="", description="",
                         readme_text="the SPRT implementation")
     assert _theme_fit_score(_theme_with_keywords("SPRT"), repo) == 10  # capped at 1.0 credit
+
+
+# --- F-17 (seihai 2026-08-27): the 関係度 label must follow theme relevance ----------
+# Real observed case: frouros (relevance 1.0, reliability 62) rendered 「中」 while Kats
+# (0.33, ≈90) and security-investigator (0.33, ≈83) rendered 「高」 — the label was the
+# reliability band wearing the relevance name. Ranking was already right (F-03).
+
+def _labelled(works):
+    from src.pipeline.delegate import build_track_a_entries
+    annotate_anchor_rank(works)
+    return {e.work.id: e for e in build_track_a_entries(works, count=len(works))}
+
+
+def test_observed_bug_2026_08_27_label_follows_relevance_not_reliability():
+    frouros = _anchor("frouros", 62, 30)              # fit 30/30 -> relevance 1.0
+    kats = _anchor("Kats", 90, 10)                    # fit 10/30 -> relevance 0.33
+    secinv = _anchor("security-investigator", 83, 10)
+    e = _labelled([frouros, kats, secinv])
+    # ranking (F-03) unchanged: the on-topic anchor stays first
+    assert max(e.values(), key=lambda x: anchor_rank_key(x.work)).work.id == "frouros"
+    # label (F-17): now the relevance band
+    assert e["frouros"].relationship_level == "高"
+    assert e["Kats"].relationship_level == "低"
+    assert e["security-investigator"].relationship_level == "低"
+
+
+def test_relevance_level_bands_align_with_low_relevance_warning():
+    from src.pipeline.track_a import RELEVANCE_LOW, relevance_level
+    assert RELEVANCE_LOW == 0.35                       # same threshold as the byrepo warning
+    assert relevance_level(0.34) == "低"
+    assert relevance_level(0.35) == "中"
+    assert relevance_level(0.66) == "中"
+    assert relevance_level(0.67) == "高"
+
+
+def test_relationship_label_renders_with_its_coefficient():
+    from src.core.output_spec import _render_track_a_entry
+    e = _labelled([_anchor("frouros", 62, 30)])["frouros"]
+    md = "\n".join(_render_track_a_entry(0, 0, e))
+    assert "- **関係度**: 高（theme関連度 1.0）" in md

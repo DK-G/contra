@@ -175,8 +175,10 @@ def test_build_track_a_entries_ranks_by_reliability():
     entries = build_track_a_entries(works, count=2)
     assert [e.work.id for e in entries] == ["high", "mid"]
     assert entries[0].track == "A"
-    assert entries[0].relationship_level == "高"   # 85 >= 70
-    assert entries[1].relationship_level == "中"   # 55 in [40,70)
+    # F-17 (2026-09-01): 関係度 is the theme-relevance band, no longer the reliability
+    # band. These works carry no fit score, so relevance is 0 → 低 regardless of quality.
+    assert entries[0].relationship_level == "低"
+    assert entries[1].relationship_level == "低"
 
 
 def test_keyless_track_a_document_fills_prose_without_llm():

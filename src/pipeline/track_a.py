@@ -154,3 +154,39 @@ def anchor_rank_key(work: Work) -> float:
     if "anchor_rank_score" in meta:
         return float(meta["anchor_rank_score"])
     return float(meta.get("reliability_score", 0) or 0)
+
+
+# --- F-17: the 関係度 label must be a function of theme relevance ------------
+#
+# Until 2026-09-01 the structured byrepo path stamped `relationship_level` (rendered as
+# 「関係度」= degree of relation TO THE THEME) from the RELIABILITY band — a repo-quality
+# measure with no theme in it. seihai 2026-08-27: the one on-topic anchor (frouros,
+# relevance 1.0, reliability 62) read 「中」 while two off-topic ones (Kats / a security
+# tool, relevance 0.33, reliability ≈ 90 / 83) read 「高」. The ranking was right (F-03);
+# the label was a different quantity wearing the wrong name. The 8/29 refinement — "not
+# inverted, just unrelated to the coefficient" — is exactly this.
+#
+# Bands are calibrated on that real case, not on round numbers: 0.33 (one keyword hit in
+# three) must read 低, which also matches the existing all-anchors-low warning at 0.35.
+RELEVANCE_LOW = 0.35     # below: 低  (same threshold as the byrepo low-relevance warning)
+RELEVANCE_HIGH = 0.67    # at/above: 高
+
+
+def anchor_relevance(work: Work) -> float:
+    """Theme relevance (0-1) of a Track A anchor; recomputed when not yet annotated."""
+    meta = work.source_meta or {}
+    if "relevance" in meta:
+        try:
+            return float(meta["relevance"] or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+    return _relevance_of(work)
+
+
+def relevance_level(relevance: float) -> str:
+    """高/中/低 band of theme relevance — what the 関係度 label is supposed to mean."""
+    if relevance >= RELEVANCE_HIGH:
+        return "高"
+    if relevance >= RELEVANCE_LOW:
+        return "中"
+    return "低"

@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-09-01（CL-0096） F-17 対処: byrepo `関係度` ラベルの正体は Reliability の帯だった——theme 関連度の帯に差し替え、係数を同じ行に描画
+
+### 概要
+* **同日2件目。** seihai 8/27 の「唯一有用な frouros が『中』、無関係な Kats / security-investigator が『高』」の真因: `build_track_a_entries` が `relationship_level` を `_reliability_level(reliability_score)`＝**品質の帯**から作っていた。theme 関連度はラベルにどこにも入っておらず、F-03（順位に関連度を入れた 8/21）の姉妹経路の数え上げ漏れ。8/29 の精緻化「逆転ではなく無関係」がそのまま正しい。3件の順位スコア（62.0 / 51.0 / 47.0）から Reliability を逆算すると 62 / ≈90 / ≈83 で、旧ラベル 中/高/高 が計算で再現する。
+* **実装（加算的・可逆・順位不変）**: (1) `track_a.py` に `anchor_relevance()` / `relevance_level()` 新設、`関係度` = theme 関連度の帯（高 ≥0.67／中 ≥0.35／低 <0.35。0.33 が低に落ちること・下限が既存の低関連度警告 0.35 と一致することで較正）。(2) `output_spec.py` でラベルと係数を同じ行に（`関係度: 高（theme関連度 1.0）`）。(3) Reliability の帯は `Reliability Score` 行に別名で残る。
+* **実測 before/after**（新規 `scripts/f17_label_probe.py`・offline 再演）: frouros 中→**高(1.0)**、Kats 高→**低(0.33)**、security-investigator 高→**低(0.33)**。before は seihai の表を文言まで再現。順位・順位スコアは不変。
+* 新規回帰3件（3件すべてが `78fb9f0` で落ちることを確認）。旧契約を固定していた既存テスト1件を新契約に更新。**410 → 413 tests: 413 pass**。GitHub トークン無しのため実 API E2E は未実施。
+* **残**: 係数自体が語の一致（F-13/F-14）なので、8/31 型の run では全件「高」になる。ラベルはその欠陥を隠さず見せる。
+
+---
+
 ## 2026-09-01（CL-0095） F-19 対処: 接地失敗の「不一致」と「照合不能」を分け、材料欠落との因果を同じ文に書く
 
 ### 概要

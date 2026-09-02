@@ -109,11 +109,15 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines = []
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
     lines.append("")
-    lines.append(f"- **関係度**: {entry.relationship_level or '—'}")
+    _meta = entry.work.source_meta or {}
+    # F-17: the label and the number it is derived from sit on ONE line, so a reader can
+    # never again see 「高」 next to theme関連度 0.33 without noticing the contradiction.
+    _rel = _meta.get("relevance")
+    _rel_note = f"（theme関連度 {_rel}）" if _rel is not None else ""
+    lines.append(f"- **関係度**: {entry.relationship_level or '—'}{_rel_note}")
     lines.append(f"- **関係軸**: {entry.label or '—'}")
     # F-03: show the actual sort key (reliability x relevance) so the reader can see WHY
     # this anchor sits where it does — same instrument-first principle as bybridge's F-02.
-    _meta = entry.work.source_meta or {}
     if "anchor_rank_score" in _meta:
         lines.append(
             f"- **順位スコア**: {_meta['anchor_rank_score']} = Reliability × 関連度係数 "
