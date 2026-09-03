@@ -64,6 +64,7 @@
 |---|---|---|---|
 | 2026-08-22 | byrepo | `"admission"` | 3/3 が Kubernetes admission controller（`kubescape`/`kyverno`/`LuaN1aoAgent`）＝ S-62 |
 | **2026-08-24** | **bybridge** | **`trade` / `trading`** | **シード20件中18件が国際貿易政策・開発経済・政治経済**（"Chapter 28 Political economy of trade policy" / "Climate Clubs" / "Accounting for Corruption: Economic Structure, Democracy, and Trade" / "In-Kind Finance: A Theory of Trade Credit" …）。主題に触れたのは2件のみ（"Do Funds Make More When They Trade More?"・"Nonparametric estimation of structural models for high-frequency currency market data"） |
+| **2026-09-04** | **bybridge** | **`strategy selection` / `complementarity` / `distance` / `correlation`** | **シード20件が国際貿易・労働経済で埋まる**（"The Skill Complementarity of Broadband Internet" / "Estimates of the Trade and Welfare Effects of NAFTA" / "Regional Trade Agreements" / "Oxford COVID-19 Government Response Tracker" / "The Persuasive Effect of Fox News"）。最頻 bridge は **The Skill Content of Recent Technological Change**（労働経済・被引用6,090）。交差候補 **30/30 が主題無関係**（FDI・貿易自由化・ロボットと雇用・国際物流・銀行競争）。★**ただし F-07 対処後の集中度は保たれている**＝最頻 bridge の上位10件占有率 **20%**（旧様式は 100%）・使われた bridge **25 本**（旧様式は 6 本）。**集中は直り、主題適合は直っていない** |
 | **2026-08-24** | **byrepo** | `algorithmic-trading` 等 | 4/4 が汎用メガリポジトリ（ML4T 20.6k★ / QuantConnect Lean 21.3k★ / awesome リスト 6.4k★ / HF の RL モデル）。**問い（「reward/risk 比を明示的な設計変数として扱う実装」）に答えたものは1件も無い**のに `theme関連度 1.0` が3件に付いた |
 | **2026-08-25** | **bybridge** | 取引・予測の表層語 | **シード20件が「AI×金融予測」の総説と名簿型レコードで埋まった**（"Navigating AI-Driven Financial Forecasting" / "Stock Market Forecasting: From Traditional Predictive Models to LLMs" / "PRIORITY AREAS OF RESEARCH IN THE SCIENTIFIC ACTIVITY OF TEACHERS" / 公衆の場でのスピーチ不安の30年 …）。**テーマ本文の主語は「多様性の維持」と「集合レベル統計の誤診」だが、シード検索はそこを引いていない**。3回目の再現 |
 | **2026-08-26** | **byrepo** | `interpretable` / `model-selection` | **4/4 が無関係**。contra 自身が冒頭で「theme 関連度が全アンカーで低い（**最大 0.33**）— キーワードの語彙衝突」と警告。`RinDig/Interpretable-Context-Methodology`（**LLM エージェントのフォルダ構成**＝"interpretable" の衝突）／`keon/awesome-nlp`（**NLP のリンク集**・関連度 0.2）／`atilaahmettaner/tradingview-mcp`（**関連度 0.0**）。問い（「候補集合の構造多様性を認証する実装」）に触れた anchor はゼロ
@@ -110,6 +111,21 @@ semantic レッグ単独は 14件・全件 referenced_works 保持（13〜24本�
 **示唆**: 関連度の自己申告値は**語がマッチしたか**を測っていて、**問いに答えているか**は測っていない。S-39 の対処（関連度をランキングに入れた）は「無関係な優良リポジトリが上位に来る」を直したが、**「語だけ合っている無関係」は素通りする**。⇒ 呼び手側の暫定処方は S-62 と同じ「問いを選ぶ」だが、**ツール側にも「取得段の名簿が主題ドメインに属するかの事後チェック」を置けるはず**（例: シード名簿の concept 分布と theme の scope_field の乖離を診断ブロックに出す。今回なら "International trade"/"Political economy" が上位に立つので一目で分かる）。
 
 ---
+#### ★2026-09-04 — **F-13 の対処で入れた計器（`シード主題整合`）が、外れた名簿を「100% 一致」と申告する**
+
+**実測**（seihai r05・テーマ＝戦略選択における成果冗長性の測り方）: 診断ブロックは
+
+> `シード主題整合 (F-13): home分野一致 20/20 = 100%`・`上位分野 Economics, Econometrics and Finance 20`（語彙シード 60 件・semantic シード 2 件を統合・field 限定あり）
+
+と申告した。**その 20 件の実体が上の表の行**（NAFTA・ブロードバンド・COVID 政策トラッカー・Fox News）である。
+
+**⇒ 何が起きているか**: 2026-08-28 の三層対処（field 限定＋semantic レッグ＋整合計器）のうち **field 限定は設計どおり効いている**——名簿は確かに全件 `Economics, Econometrics and Finance` に入っている。**破れているのは「Field が一致すれば主題も近い」という前提**のほうで、この Field は国際貿易・労働経済・開発経済・金融工学を1つに含むほど広い。**計器は Field 一致率を測っており、主題適合は測っていない**。
+
+**なぜ悪質か**: `100%` は緑の表示なので、**呼び手は名簿を見に行かない**。8/24 に F-13 を起こした時の症状（名簿が外れる）は**そのまま残っているのに、それを検出するために入れた計器が「正常」と言う**。9/01 の別観測では同じ計器が `home分野一致 0/20 = 判定不能`（`scope_field` 未解決で fail-open）に落ちており、**この計器は「外れているのに 100%」と「判定不能」の両方の縮退様式を持つ**ことになる。
+
+**contra 側で見るとよい点**: (a) Field 一致率と併せて、**シード名簿とテーマ本文の意味的距離**（テーマの `theme_overview` 埋め込みとシード title/abstract のコサイン中央値など、既に semantic レッグで計算している量の再利用）を出す。(b) `Economics, Econometrics and Finance` のように広い Field では **subfield / primary_topic レベルまで降りて一致率を出す**。(c) **緑の単一スカラを出さない**——`20/20 = 100%` は「調べた結果、問題なし」に見えるが、実際に測ったのは1つの粗い属性だけ。
+
+**呼び手側の教訓**: 診断が緑でも**シード名簿の実体を毎回1回は目視する**。本日それをしたから捕まった（seihai `S-67` の裁定材料へ計上）。
 
 ### F-14. byrepo — **2)関連性・3)仮説の欄が全件同一の定型文**（2026-08-24 初観測・`structured:true` 経路）
 
@@ -128,6 +144,26 @@ semantic レッグ単独は 14件・全件 referenced_works 保持（13〜24本�
 
 **再現（2026-09-02・4回目）＋定型文と関連度ゼロの重畳**: テーマ＝「相関した候補集団に対する集約 PBO veto の較正」。4/4 が同一定型文で、かつ**順位スコアが 14.7 で完全に横並び**（`theme関連度 0.0` が全件に掛かるため、Reliability の差だけが残るはずが 42/100 も同値）。⇒ **定型文（F-14）と関連度ゼロ（F-13）が同時に起きると、出力は「4件とも同じ文・同じ点数」になり、読み手が優劣を判断する手掛かりが一切残らない。** seihai 側の当日の収穫はゼロ。
 ---
+#### 再現（2026-09-04・**語彙衝突が無いテーマでの収穫ゼロ＝7週連続**／seihai r05 担当日）
+
+**テーマ**: 「戦略のリターン系列の相関で戦略集合を選ぶ／短標本の相関 shrinkage／構造でなく成果でアンサンブル member を選ぶ多様性指標」。`keywords_include` は `strategy correlation` / `backtest` / `portfolio diversification` / `shrinkage covariance` / `strategy selection`。
+
+**★このテーマを選んだ理由**: 2026-08-22 の S-62 起票時、seihai 側は「**今週の失敗はツールの欠陥ではなく適合の問題**（`"admission"` が Kubernetes に衝突した＝F-13）」と留保をつけた。本日のテーマは **(i) 語彙衝突が無く**、**(ii) `ledoit-wolf` / `PyPortfolioOpt` / `riskfolio-lib` / hierarchical risk parity など実在の実装が多数ある**領域なので、**留保が正しいかを分離できる**。
+
+**返ってきたもの**:
+
+| 順位 | repo | 関連度 | 順位スコア | Reliability | stars | 実体 |
+|---|---|---|---|---|---|---|
+| 1 | `dtquocbao/ai-market` | 高 **0.67** | 54.8 | 70 | 374 | 「AI Market Analysis System」。README のみ・相関/shrinkage の記述なし |
+| 2 | `HKUDS/Vibe-Trading` | 低 **0.33** | 53.3 | 94 | 32,389 | 汎用トレーディングエージェント |
+| 3 | `atilaahmettaner/tradingview-mcp` | 低 **0.33** | 52.1 | 92 | 4,347 | TradingView の MCP サーバ |
+| 4 | `coding-kitties/investing-algorithm-framework` | 低 **0.33** | 51.0 | 90 | 2,042 | 汎用バックテスト框架 |
+
+**⇒ 診断（S-62 の留保が外れる）**: 衝突が無くても収穫はゼロだった。**上位4件は「トレーディング一般で star が多い repo」であり、5つの keyword のうち相関・shrinkage・多様性を扱うものは1件も無い**。関連度が **0.67 / 0.33 / 0.33 / 0.33** と事実上2値へ潰れているため、**順位を決めているのは Reliability（≒stars・保守性・ライセンス）**である。⇒ これは F-03（関連度がランキングに効かない・2026-08-21 対処済み）が**別の経路で再発している**か、あるいは**関連度の粒度が粗すぎて対処が効かない**かのいずれか。**F-17-R で `関係度` ラベルの正体が Reliability だったと判明した件と併せて読む価値がある**。
+
+**contra 側で見るとよい点**: (a) keyword が repo の name/description/topics に当たったかを **keyword ごとに**返す（現在は合算の 0.33/0.67 なので、どの語も当たっていないのか1語だけ当たったのかが呼び手に見えない）。(b) 全候補の関連度が 0.33 に潰れた実行は「**このテーマに対して byrepo は無情報**」と申告する（F-15 と同じく、順位を出さずに saturation を宣言する経路）。
+
+**呼び手側の帰結**: seihai は S-62（byrepo を毎日から条件付きへ）に本実測を追記する。**7週連続で使える収穫ゼロ**。
 
 ### F-15. delegate_finalize — **percentile_gate の閾値が提出バッチ内の分位なので、採点に正直な分散を付けるほど落選する**（2026-08-24 初観測・様式の記録であって欠陥断定ではない）
 
@@ -479,6 +515,19 @@ S-26 が記録を指示している2項目:
 **contra 側で見るとよい点**: (a) 連結クエリの長さを送信前に測り、上限超なら**切り詰めて再送**する（現在は 400 をそのまま facet 失敗にしている）。(b) 400 に限り**1回だけ短縮リトライ**すれば、呼び手の手動再投と同じ結果が自動で得られる。(c) 3枚渡した実行の中で1枚だけ落ちるのは、**同一実行内でクエリ長が facet ごとに違う**ことを示唆する（`structure` は共通なので pseudo_abstract 長が効いている）。
 
 **呼び手側の教訓**: 距離段の欠損は「収穫が減る」ではなく「**A2 プロトコルの前提が崩れる**」。Near が欠けた材料だけで採点すると、遠い候補ばかりが並んで `mechanism_dist` の分散が縮み、post-gate の分位閾値（F-15）まで動く。**落ちた facet は必ず単独で投げ直す**。
+
+---
+
+#### 再現（2026-09-04・**長さ仮説が全強度で確認された**／seihai r05 担当日）
+
+**症状は 8/31 より強い形で出た**: A2 の3距離 facet（(1) 群集生態学の保護区設計 / (2) センサ配置と環境モニタリング網設計 / (3) 育種の交配親選抜）を渡した `raw_only` 実行で、**3枚すべてが `取得失敗 (request failed: HTTP Error 400: Bad Request)`**。診断は「semantic 収集で候補が0件でした（facet 3 件・ホーム収束/非空ゲートまたは履歴除外 0 件で全滅）。**facet をより遠い/具体的なドメインへ見直すか、テーマが飽和している可能性があります**」と返した。
+
+**★8/31 の (a)(b) 処方をそのまま呼び手が手で実行したら直った**: **facet のドメインも枚数も変えず、`structure` 本文と3枚の `pseudo_abstract` をそれぞれ約半分の長さに縮めただけ**で再投 → **返却 50/50/50・ホーム除外後 45/35/33・提出 20/20/20＝合計 60 件**。**同じドメイン語・同じ3枚・同じ履歴で成功した**ので、8/31 の診断「400 はドメイン依存ではなくペイロード依存」は**単独 facet の特殊事情ではなく一般に成立する**。
+
+**★今回いちばん害があったのは 400 そのものではなく診断文である**: 診断は原因候補として「facet が近すぎる」「テーマが飽和している」の2つを名指しし、**長さには一言も触れない**。呼び手はこの日、**「このテーマはもう飽和した」と誤って結論する寸前だった**（seihai 側は当日の insights にそう書きかけている）。⇒ 8/31 の処方 (a)(b) に加えて **(d) 400 の診断文から「飽和/近すぎ」の推測を外し、まず「クエリ長」を挙げる**。原因が特定済み（8/31）でメッセージだけが未追随という状態は、**contra 自身が seihai へ何度も指摘している「診断は出るが因果が結ばれない」型**（F-19/S-73）そのもの。
+
+**併記（同日2回目の呼び出し）**: 別テーマ（bynote 代替の接地用・3 facet）では facet [2]（`Information retrieval result diversification`）が **`取得失敗 (request failed after 3 attempts: HTTP Error 504: Gateway Timeout)`**。他2枚は 50/50 で成功。⇒ **F-11 の (2) polite pool 据え置きと合わせて読む**＝3回リトライでも 504 は抜けられない場合がある。呼び手は A3（実文献接地）の規約に従い、**接地できなかった距離段の類推を出力しない**という形で欠損を吸収した（＝プロトコルは守られたが、その距離段の知見は失われた）。
+
 
 ---
 
