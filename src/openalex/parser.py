@@ -101,6 +101,26 @@ def _get_source_meta(work: Dict[str, Any]) -> Dict[str, Any]:
             fname = fld.get("display_name")
             if fname:
                 meta["primary_topic_field_name"] = str(fname)
+        # Subfield/Topic, one and two levels BELOW Field. A Field such as "Economics,
+        # Econometrics and Finance" contains international trade, labour economics and asset
+        # pricing alike, so a Field-level match says almost nothing about subject fit (F-13,
+        # 2026-09-04: a roster of NAFTA/broadband/Fox-News papers scored "100% home field" on a
+        # strategy-selection theme). These finer levels are what the drift is actually readable
+        # in. Additive source_meta enrichment, same as the Field above.
+        sfld = ptopic.get("subfield") or {}
+        if isinstance(sfld, dict):
+            sid = sfld.get("id")
+            if sid:
+                meta["primary_topic_subfield_id"] = str(sid).rsplit("/", 1)[-1]
+            sname = sfld.get("display_name")
+            if sname:
+                meta["primary_topic_subfield_name"] = str(sname)
+        tid = ptopic.get("id")
+        if tid:
+            meta["primary_topic_id"] = str(tid).rsplit("/", 1)[-1]
+        tname = ptopic.get("display_name")
+        if tname:
+            meta["primary_topic_name"] = str(tname)
     locations = work.get("locations") or []
     if isinstance(locations, list):
         for loc in locations:

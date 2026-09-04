@@ -22,8 +22,10 @@ route renders only the safe filters and leaves home-domain exclusion to the clie
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from src.core.models import ThemeInput
@@ -292,6 +294,88 @@ def resolve_field_ids(field_name: str) -> List[str]:
     return hits
 
 
+# --- Subfield level (one below Field) ---------------------------------------------------
+# The Field level has 26 buckets and "Economics, Econometrics and Finance" is one of them, so
+# a roster of trade-policy and labour-economics papers scores 100% Field alignment on a
+# trading theme — the 2026-09-04 F-13 incident, where the instrument reported "20/20 = 100%"
+# for a roster of NAFTA / broadband / COVID-policy papers. The Subfield level separates
+# Finance from Economics and Econometrics, which is where that drift is measurable.
+#
+# Subfield NAMES come from metadata the run has already fetched (every OpenAlex work carries
+# primary_topic.subfield), so this costs no API call and cannot go stale. A cached copy of the
+# full taxonomy (scripts/fetch_openalex_subfields.py -> data/openalex_subfields.json) is
+# merged in when it exists; without it the vocabulary is whatever the run retrieved, and a
+# scope naming a subfield that appears nowhere in the run reports 判定不能 rather than 0% —
+# the conservative direction (S-68: never render "not measured" as a bad value).
+
+SUBFIELD_TAXONOMY_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "openalex_subfields.json"
+)
+
+
+def load_subfield_taxonomy(path: Optional[Path] = None) -> Dict[str, str]:
+    """Cached OpenAlex Subfield taxonomy as ``id -> display name`` ( ``{}`` when absent)."""
+    target = Path(path) if path else SUBFIELD_TAXONOMY_PATH
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if isinstance(raw, dict):
+        return {str(k): str(v[0] if isinstance(v, (list, tuple)) else v) for k, v in raw.items()}
+    if isinstance(raw, list):  # [[id, name, field_id], ...] as the fetch script emits
+        return {str(r[0]): str(r[1]) for r in raw if isinstance(r, (list, tuple)) and len(r) >= 2}
+    return {}
+
+
+def subfield_vocabulary(works: Iterable[Any], *, include_taxonomy: bool = True) -> Dict[str, str]:
+    """Subfield ``id -> name`` seen in these works, plus the cached taxonomy if available."""
+    vocab: Dict[str, str] = load_subfield_taxonomy() if include_taxonomy else {}
+    for w in works:
+        meta = getattr(w, "source_meta", None) or {}
+        sid = meta.get("primary_topic_subfield_id")
+        name = meta.get("primary_topic_subfield_name")
+        if sid and name:
+            vocab.setdefault(str(sid), str(name))
+    return vocab
+
+
+def resolve_subfield_ids(field_name: str, vocabulary: Dict[str, str]) -> List[str]:
+    """Resolve a theme's free-text ``scope.field`` against a Subfield vocabulary (STRICT).
+
+    Matching is deliberately narrow — precision is the entire reason to descend below Field,
+    so a loose match would rebuild the blindness this level exists to remove:
+
+    * the scope text equals a Subfield name, or
+    * a Subfield name occurs as a whole phrase inside the scope text
+      ("quantitative finance and asset pricing" -> Finance).
+
+    A scope that names a FIELD ("medicine") therefore resolves to nothing rather than to every
+    Subfield whose name merely contains the word, and the instrument reports 判定不能 instead
+    of a number.
+    """
+    text = " ".join((field_name or "").strip().lower().split())
+    if not text:
+        return []
+    hits: List[str] = []
+    for sid, name in (vocabulary or {}).items():
+        nl = str(name).strip().lower()
+        if not nl:
+            continue
+        if nl == text or re.search(r"\b" + re.escape(nl) + r"\b", text):
+            hits.append(str(sid))
+    return sorted(set(hits))
+
+
+def subfield_labels(subfield_ids: Iterable[str], vocabulary: Dict[str, str]) -> str:
+    """Human-readable names for resolved Subfield ids (diagnostics label)."""
+    seen: List[str] = []
+    for sid in subfield_ids:
+        name = (vocabulary or {}).get(str(sid))
+        if name and name not in seen:
+            seen.append(str(name))
+    return " / ".join(seen)
+
+
 def dominant_field_ids(works: Iterable[Any], *, max_fields: int = 2, min_count: int = 2) -> List[str]:
     """The Field id(s) that dominate a pool's ``primary_topic`` — the empirical home domain.
 
@@ -316,6 +400,10 @@ __all__ = [
     "structured_query_from_theme",
     "structured_query_variants",
     "resolve_field_ids",
+    "resolve_subfield_ids",
+    "subfield_labels",
+    "subfield_vocabulary",
+    "load_subfield_taxonomy",
     "dominant_field_ids",
     "OPENALEX_FIELDS",
     "ROUTE_FILTER",

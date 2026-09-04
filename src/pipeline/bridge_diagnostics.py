@@ -306,78 +306,204 @@ def filter_live_bridges(
 
 
 # ---------------------------------------------------------------------------
-# F-13: seed-roster domain alignment (the "did the retrieval land in the theme's
-# discipline at all?" instrument). This is a metadata-level clarity check: instead of a
-# language-model KL divergence (Cronen-Townsend's Clarity score), it compares the roster's
-# primary_topic Field distribution against the theme's declared home Fields — deterministic,
-# key-free, one pass over already-fetched metadata. It cannot see WITHIN-field drift (the
-# 2026-08-24 'trade' -> trade-policy case stays inside Economics), which is why the top
-# field NAMES are always printed: "International trade / Political economy at the top" was
-# readable at a glance in every recorded F-13 incident.
+# F-13: seed-roster provenance (the "where did the retrieval actually land?" instrument).
+# A metadata-level clarity check: instead of a language-model KL divergence
+# (Cronen-Townsend's Clarity score), it reads the roster's own OpenAlex Topic hierarchy
+# (Domain>Field>Subfield>Topic) against what the caller declared — deterministic, key-free,
+# one pass over already-fetched metadata.
+#
+# 2026-09-04 (this instrument's OWN failure, recorded in field_observations_seihai.md): the
+# first version reported only the Field match, and a roster of NAFTA / broadband / COVID
+# policy / Fox-News papers on a strategy-selection theme scored "home分野一致 20/20 = 100%".
+# The Field "Economics, Econometrics and Finance" contains international trade, labour
+# economics and asset pricing alike, so a Field match says almost nothing about subject fit —
+# and because 100% reads as "checked, fine", the caller stops reading the roster. That is the
+# exact shape contra itself named in S-68: a coarse attribute reported as a green verdict
+# becomes an undetectable failure. Three changes follow from it:
+#
+#   (a) SUBFIELD alignment, when the caller's scope resolves to one, is the headline number.
+#       Measured 2026-09-04 on live rosters, home subfield = Finance: the drifted 9/04 roster
+#       is 1/20 = 5%, two deliberately on-topic controls are 13/20 = 65% and 12/17 = 71%.
+#   (b) The TOPIC names are always printed. Drift is readable there and nowhere else
+#       ("Healthcare Policy and Management 3 / COVID-19 Pandemic Impacts 2" on a trading
+#       theme), and every recorded F-13 incident was in fact caught by a human reading titles.
+#   (c) The Field number never stands alone as a verdict — it is labelled as the coarse
+#       26-way bucket it is, and the semantic leg's supply is reported beside it, because a
+#       roster built with zero theme-prose retrieval has not had its subject fit tested at all.
+#
+# Topic DISPERSION was tried as a discriminator the same day and rejected: the drifted roster
+# spread over 12 topics while an on-topic one spread over 6 — but a second on-topic roster
+# spread over 7 and a partly-drifted one over 4, so the ranges overlap and no threshold on it
+# would be honest. Recorded (field_observations_seihai.md F-13-I) rather than shipped.
 # ---------------------------------------------------------------------------
 
 def seed_domain_alignment(
-    seeds: Sequence[Work], home_field_ids: Iterable[str]
+    seeds: Sequence[Work],
+    home_field_ids: Iterable[str],
+    *,
+    home_subfield_ids: Iterable[str] = (),
+    semantic_count: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Field-distribution stats for a seed roster vs the theme's home Fields.
+    """Topic-hierarchy stats for a seed roster vs the theme's declared home domain.
 
-    Returns ``{total, home, fraction, unknown, top_fields}`` where ``top_fields`` is
-    ``[(field_name, count), ...]`` sorted by count. Works with no field id count into
-    ``unknown`` and are excluded from the fraction's denominator (a missing classification
-    is not evidence of drift — S-68: never encode "no information" as a bad value).
+    Returns the Field-level keys ``{total, home, fraction, unknown, top_fields}`` plus the
+    finer levels ``{sub_home, sub_unknown, sub_fraction, top_subfields, top_topics,
+    distinct_topics, semantic_count}``. Works with no classification at a given level count
+    into that level's ``unknown`` and are excluded from its denominator (a missing
+    classification is not evidence of drift — S-68: never encode "no information" as a bad
+    value). ``semantic_count`` is carried through untouched for rendering.
     """
     home = {str(f) for f in home_field_ids if f}
+    sub_home_ids = {str(s) for s in home_subfield_ids if s}
     total = len(seeds)
     counts: Dict[str, int] = {}
+    sub_counts: Dict[str, int] = {}
+    topic_counts: Dict[str, int] = {}
     in_home = 0
     unknown = 0
+    sub_in_home = 0
+    sub_unknown = 0
     for w in seeds:
         meta = getattr(w, "source_meta", None) or {}
         fid = str(meta.get("primary_topic_field_id") or "")
         fname = str(meta.get("primary_topic_field_name") or "") or (f"Field {fid}" if fid else "")
         if not fid:
             unknown += 1
-            continue
-        counts[fname] = counts.get(fname, 0) + 1
-        if fid in home:
-            in_home += 1
+        else:
+            counts[fname] = counts.get(fname, 0) + 1
+            if fid in home:
+                in_home += 1
+        sid = str(meta.get("primary_topic_subfield_id") or "")
+        sname = str(meta.get("primary_topic_subfield_name") or "") or (f"Subfield {sid}" if sid else "")
+        if not sid:
+            sub_unknown += 1
+        else:
+            sub_counts[sname] = sub_counts.get(sname, 0) + 1
+            if sid in sub_home_ids:
+                sub_in_home += 1
+        tname = str(meta.get("primary_topic_name") or "")
+        if tname:
+            topic_counts[tname] = topic_counts.get(tname, 0) + 1
     known = total - unknown
+    sub_known = total - sub_unknown
     fraction = (in_home / known) if (known and home) else None
+    sub_fraction = (sub_in_home / sub_known) if (sub_known and sub_home_ids) else None
     top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    top_sub = sorted(sub_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    top_topics = sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))
     return {"total": total, "home": in_home, "unknown": unknown,
-            "fraction": fraction, "top_fields": top}
+            "fraction": fraction, "top_fields": top,
+            "sub_home_resolved": bool(sub_home_ids),
+            "sub_home": sub_in_home, "sub_unknown": sub_unknown,
+            "sub_fraction": sub_fraction, "top_subfields": top_sub,
+            "top_topics": top_topics, "distinct_topics": len(topic_counts),
+            "semantic_count": semantic_count}
 
 
-# Warn threshold, calibrated on live measurements (2026-08-28, the r05/F9 theme):
-# unscoped lexical roster = 50% home, field-scoped roster = 100%, and the recorded 8/27
-# incident roster (agriculture/medicine records on an economics theme) reads ~0%. With the
-# field scope on by default a healthy run sits at ~100%, so anything below 0.5 means the
-# scope failed, was disabled, or scope.field did not resolve — exactly the states worth a
-# warning. Audit lesson applied: the boundary was checked against a real drifted roster and
-# a real healthy roster, not chosen as a round number a priori.
+# Warn thresholds, both calibrated against real rosters rather than chosen as round numbers.
+#
+# FIELD (26-way bucket): unscoped lexical roster = 50% home, field-scoped roster = 100%
+# (2026-08-28, r05/F9 theme), and the recorded 8/27 incident roster (agriculture/medicine
+# records on an economics theme) reads ~0%. Below 0.5 means the scope failed, was disabled, or
+# scope.field did not resolve.
+#
+# SUBFIELD (252-way): measured live 2026-09-04 with the 9/04 seihai keywords plus two
+# deliberately on-topic controls, home subfield = Finance:
+#   drifted 9/04 roster (NAFTA / broadband / COVID / Fox News) ...   1/20 =  5%
+#   control "pairs trading / statistical arbitrage / cointegration" 13/20 = 65%
+#   control "backtest overfitting / deflated sharpe / CV" .......   12/17 = 71%
+# 0.35 sits between the observed failure and the observed healthy band with margin on both
+# sides; deliberately NOT 0.5, which would sit inside the healthy band for genuinely
+# cross-subfield themes.
 SEED_ALIGNMENT_WARN_BELOW = 0.5
+SEED_SUBFIELD_WARN_BELOW = 0.35
 
 
-def render_seed_alignment(stats: Dict[str, Any], *, home_label: str = "") -> str:
-    """One diagnostics line naming where the seed roster actually landed (F-13)."""
-    top = " / ".join(f"{name} {n}" for name, n in stats["top_fields"][:3]) or "（分類なし）"
+def render_seed_alignment(
+    stats: Dict[str, Any],
+    *,
+    home_label: str = "",
+    subfield_label: str = "",
+) -> str:
+    """Diagnostics block naming where the seed roster actually landed (F-13).
+
+    Deliberately multi-line and deliberately without a single green scalar: the 2026-09-04
+    failure of this very instrument was that ``100%`` on one coarse attribute read as
+    "checked, no problem" and stopped the caller from looking at the roster at all.
+    """
     frac = stats["fraction"]
     frac_txt = f"{frac:.0%}" if frac is not None else "判定不能（home分野未解決）"
     label = f"（home={home_label}）" if home_label else ""
-    line = (
-        f"- シード主題整合 (F-13): home分野一致 {stats['home']}/{stats['total'] - stats['unknown']} "
-        f"= {frac_txt}{label}・上位分野 {top}"
-    )
+    known = stats["total"] - stats["unknown"]
+    top_fields = " / ".join(f"{name} {n}" for name, n in stats["top_fields"][:3]) or "（分類なし）"
+    lines = [
+        f"- シード名簿の素性 (F-13): {stats['total']} 件を OpenAlex の Topic 階層で読む{label}",
+        f"  ・分野(Field) 一致 {stats['home']}/{known} = {frac_txt}・上位分野 {top_fields}"
+        "　※Field は 26 分類の最粗レベルで、主題適合ではない"
+        "（『Economics, Econometrics and Finance』は国際貿易も労働経済も資産価格も含む）",
+    ]
     if stats["unknown"]:
-        line += f"・分野未分類 {stats['unknown']} 件"
+        lines[-1] += f"・分野未分類 {stats['unknown']} 件"
+
+    sub_frac = stats.get("sub_fraction")
+    sub_known = stats["total"] - stats.get("sub_unknown", 0)
+    sub_top = " / ".join(f"{n} {c}" for n, c in stats.get("top_subfields", [])[:3]) or "（分類なし）"
+    sub_label = f"（home サブフィールド={subfield_label}）" if subfield_label else ""
+    if sub_frac is None:
+        # Two different "cannot say"s, and they call for different actions: the caller can fix
+        # an unresolved scope by naming an OpenAlex Subfield, but an unclassified roster is the
+        # data's doing. Neither is rendered as 0% (S-68).
+        why = (
+            "名簿側に Subfield 分類が無い"
+            if stats.get("sub_home_resolved")
+            else "scope が OpenAlex のサブフィールド名に解決しない"
+        )
+        lines.append(
+            f"  ・サブフィールド(Subfield) 一致: 判定不能（{why}）・上位 {sub_top}"
+        )
+    else:
+        lines.append(
+            f"  ・サブフィールド(Subfield) 一致 {stats['sub_home']}/{sub_known} = "
+            f"{sub_frac:.0%}{sub_label}・上位 {sub_top}"
+        )
+
+    topics = stats.get("top_topics", [])
+    top_txt = " / ".join(f"{n} {c}" for n, c in topics[:5]) or "（分類なし）"
+    lines.append(
+        f"  ・上位トピック {top_txt}"
+        f"（{stats['total']} 件が {stats.get('distinct_topics', 0)} トピックに分布）"
+        "　← 名簿が主題から外れているかは、この行と下のシード表で読む"
+    )
+
+    sem = stats.get("semantic_count")
+    if sem is not None:
+        lines.append(
+            f"  ・semantic レッグ供給 {sem} 件"
+            "（テーマ本文そのものを検索に入れる唯一の取得レッグ）"
+        )
+
     if frac is not None and frac < SEED_ALIGNMENT_WARN_BELOW:
-        line += (
-            f"\n  ⚠ シード名簿がテーマの分野から外れています（一致 {frac_txt} < "
+        lines.append(
+            f"  ⚠ シード名簿がテーマの分野から外れています（分野一致 {frac_txt} < "
             f"{SEED_ALIGNMENT_WARN_BELOW:.0%}）。この run の下流（bridge 構築・交差候補・採点）は"
             "外れた名簿の上で正しく動くため、診断の他の数字が健全でも収穫は主題に当たりません。"
             "キーワードの語彙衝突（F-13）を疑ってください。"
         )
-    return line
+    if sub_frac is not None and sub_frac < SEED_SUBFIELD_WARN_BELOW:
+        lines.append(
+            f"  ⚠ 分野(Field)は一致していてもサブフィールドが外れています（{sub_frac:.0%} < "
+            f"{SEED_SUBFIELD_WARN_BELOW:.0%}）。宣言した主題"
+            f"（{subfield_label or 'scope'}）の論文が名簿にほとんど入っていません＝"
+            "同一 Field 内の主題ドリフト（2026-09-04 の様式）。上位トピックを読み、"
+            "キーワードが別の下位分野の主流語彙に吸われていないか確認してください。"
+        )
+    if sem == 0:
+        lines.append(
+            "  ⚠ semantic レッグの供給が 0 件です（取得失敗、または全件が field 選別で落ちた）。"
+            "名簿は純語彙シードのみで構成され、テーマ本文は検索に一度も入っていません＝"
+            "主題適合は『良好』でも『不良』でもなく未検証です。"
+        )
+    return "\n".join(lines)
 
 
 def _fmt_int(n: Optional[int]) -> str:

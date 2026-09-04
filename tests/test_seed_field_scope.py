@@ -22,6 +22,7 @@ from src.core.models import Keywords, Scope, ThemeInput, Work
 from src.openalex.client import OpenAlexError
 from src.pipeline.bridge_diagnostics import (
     SEED_ALIGNMENT_WARN_BELOW,
+    SEED_SUBFIELD_WARN_BELOW,
     render_seed_alignment,
     seed_domain_alignment,
 )
@@ -31,7 +32,14 @@ from src.pipeline.collect import (
     collect_seeds_semantic,
     merge_seed_pools,
 )
-from src.pipeline.query import ROUTE_FILTER, ROUTE_SEARCH, StructuredQuery
+from src.pipeline.query import (
+    ROUTE_FILTER,
+    ROUTE_SEARCH,
+    StructuredQuery,
+    resolve_subfield_ids,
+    subfield_labels,
+    subfield_vocabulary,
+)
 
 
 def _theme(keywords: List[str] = None) -> ThemeInput:
@@ -173,10 +181,17 @@ def test_merge_seed_pools_with_empty_semantic_leg_is_lexical_passthrough():
 
 # --- (A) alignment instrument -----------------------------------------------------------
 
-def _seed(fid: str, fname: str) -> Work:
-    w = _w(f"W_{fid}_{fname}")
+def _seed(fid: str, fname: str, sid: str = "", sname: str = "", topic: str = "") -> Work:
+    w = _w(f"W_{fid}_{fname}_{sid}_{topic}")
+    meta = {}
     if fid:
-        w.source_meta = {"primary_topic_field_id": fid, "primary_topic_field_name": fname}
+        meta.update({"primary_topic_field_id": fid, "primary_topic_field_name": fname})
+    if sid:
+        meta.update({"primary_topic_subfield_id": sid, "primary_topic_subfield_name": sname})
+    if topic:
+        meta["primary_topic_name"] = topic
+    if meta:
+        w.source_meta = meta
     return w
 
 
@@ -204,14 +219,124 @@ def test_alignment_render_is_calm_on_home_roster():
     assert "100%" in line and "⚠" not in line
 
 
-def test_alignment_within_field_drift_is_not_flagged_but_names_are_shown():
-    # The 2026-08-24 'trade' -> trade-policy case stays inside Economics: the fraction cannot
-    # catch it, so the instrument's value there is the printed field names (and the caller's
-    # reading of the seed titles). Pin that the line stays calm — this is a documented limit.
-    seeds = [_seed("20", "Economics")] * 5
-    stats = seed_domain_alignment(seeds, ["20"])
-    assert stats["fraction"] == 1.0
-    assert "⚠" not in render_seed_alignment(stats)
+def test_within_field_drift_is_caught_at_the_subfield_level():
+    """The 2026-09-04 failure OF THE INSTRUMENT: a roster that is 100% home Field and 0%
+    home subject. Field alignment cannot see it (trade policy, labour economics and asset
+    pricing are one Field), so the headline is now the Subfield level, where the live
+    measurement separates the drifted roster (5%) from on-topic controls (65%, 71%)."""
+    drifted = (
+        [_seed("20", "Economics, Econometrics and Finance", "2002", "Economics and Econometrics",
+               "Labor market dynamics and wage inequality")] * 16
+        + [_seed("20", "Economics, Econometrics and Finance", "2001",
+                 "General Economics, Econometrics and Finance", "Global trade and economics")] * 3
+        + [_seed("20", "Economics, Econometrics and Finance", "2003", "Finance",
+                 "Financial Markets and Investment Strategies")]
+    )
+    stats = seed_domain_alignment(drifted, ["20"], home_subfield_ids=["2003"])
+    assert stats["fraction"] == 1.0                      # Field level still says "all home"
+    assert stats["sub_fraction"] == 0.05 < SEED_SUBFIELD_WARN_BELOW
+    line = render_seed_alignment(stats, home_label="finance", subfield_label="Finance")
+    assert "⚠" in line and "サブフィールド" in line
+    # and the roster's actual subject is named, which is the only level drift is readable at
+    assert "Labor market dynamics and wage inequality 16" in line
+
+
+def test_field_hundred_percent_never_renders_as_a_lone_verdict():
+    """Why 2026-09-04 went undetected: '100%' read as 'checked, fine' and the caller stopped
+    reading. Any run that prints a Field percentage must also print what that number does NOT
+    measure, plus the roster's topics."""
+    seeds = [_seed("20", "Economics, Econometrics and Finance", "2002",
+                   "Economics and Econometrics", "Economic Growth and Productivity")] * 5
+    line = render_seed_alignment(seed_domain_alignment(seeds, ["20"]))
+    assert "100%" in line
+    assert "主題適合ではない" in line
+    assert "上位トピック" in line and "Economic Growth and Productivity 5" in line
+
+
+def test_subfield_unresolved_reports_not_a_zero():
+    # Same S-68 doctrine as the Field level: a scope that names no OpenAlex subfield is
+    # "not measured", never "0% aligned".
+    seeds = [_seed("20", "Economics", "2003", "Finance", "T")] * 4
+    stats = seed_domain_alignment(seeds, ["20"], home_subfield_ids=[])
+    assert stats["sub_fraction"] is None
+    line = render_seed_alignment(stats)
+    assert "判定不能" in line and "⚠" not in line
+
+
+def test_two_kinds_of_subfield_not_measured_are_distinguished():
+    # "scope names no subfield" is the caller's to fix; "the roster carries no classification"
+    # is the data's. Both print 判定不能, never 0%, but they name different causes.
+    classified = [_seed("20", "Economics", "2003", "Finance", "T")] * 3
+    unresolved = render_seed_alignment(seed_domain_alignment(classified, ["20"]))
+    assert "scope が OpenAlex のサブフィールド名に解決しない" in unresolved
+    bare = [_seed("20", "Economics")] * 3
+    unclassified = render_seed_alignment(
+        seed_domain_alignment(bare, ["20"], home_subfield_ids=["2003"])
+    )
+    assert "名簿側に Subfield 分類が無い" in unclassified
+    # neither renders the missing measurement as a zero ("100%" legitimately contains "0%",
+    # so the check is on the subfield line's own value)
+    assert "サブフィールド(Subfield) 一致 0" not in unresolved
+    assert "サブフィールド(Subfield) 一致 0" not in unclassified
+
+
+def test_empty_semantic_leg_is_reported_as_unverified():
+    """2026-08-31: the run reported '100% aligned' while the semantic leg — the only leg that
+    puts the theme's own prose into the query — supplied zero seeds. A roster built purely from
+    keyword collisions has not had its subject fit tested at all."""
+    seeds = [_seed("20", "Economics", "2003", "Finance", "T")] * 4
+    stats = seed_domain_alignment(seeds, ["20"], home_subfield_ids=["2003"], semantic_count=0)
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "未検証" in line and "⚠" in line
+    calm = render_seed_alignment(
+        seed_domain_alignment(seeds, ["20"], home_subfield_ids=["2003"], semantic_count=6),
+        subfield_label="Finance",
+    )
+    assert "未検証" not in calm and "⚠" not in calm
+    assert "semantic レッグ供給 6 件" in calm
+
+
+def test_resolve_subfield_ids_is_strict():
+    # Precision is the whole reason to descend below Field, so resolution is exact-name or
+    # whole-phrase-inside-the-scope only. A scope that names a FIELD ("medicine") must not
+    # resolve to the subfields whose names merely contain the word.
+    vocab = {"2003": "Finance", "2002": "Economics and Econometrics",
+             "2700": "General Medicine", "2739": "Public Health"}
+    assert resolve_subfield_ids("finance", vocab) == ["2003"]
+    assert subfield_labels(["2003"], vocab) == "Finance"
+    assert resolve_subfield_ids("quantitative finance and asset pricing", vocab) == ["2003"]
+    assert resolve_subfield_ids("medicine", vocab) == []
+    assert resolve_subfield_ids("", vocab) == []
+    assert resolve_subfield_ids("医用画像診断", vocab) == []
+    assert resolve_subfield_ids("finance", {}) == []
+
+
+def test_subfield_vocabulary_comes_from_the_run_metadata():
+    # No API call and no frozen taxonomy: the names are read off works the run already has.
+    works = [_seed("20", "Economics", "2003", "Finance", "T"),
+             _seed("20", "Economics", "2002", "Economics and Econometrics", "T"),
+             _seed("20", "Economics")]
+    vocab = subfield_vocabulary(works, include_taxonomy=False)
+    assert vocab == {"2003": "Finance", "2002": "Economics and Econometrics"}
+    assert resolve_subfield_ids("finance", vocab) == ["2003"]
+
+
+def test_parser_keeps_subfield_and_topic():
+    from src.openalex.parser import normalize_results
+    raw = {"results": [{"id": "W1", "display_name": "t", "publication_year": 2020,
+                        "abstract_inverted_index": {"a": [0]},
+                        "primary_topic": {
+                            "id": "https://openalex.org/T10047",
+                            "display_name": "Financial Markets and Investment Strategies",
+                            "subfield": {"id": "https://openalex.org/subfields/2003",
+                                         "display_name": "Finance"},
+                            "field": {"id": "https://openalex.org/fields/20",
+                                      "display_name": "Economics, Econometrics and Finance"}}}]}
+    meta = normalize_results(raw)[0].source_meta
+    assert meta["primary_topic_subfield_id"] == "2003"
+    assert meta["primary_topic_subfield_name"] == "Finance"
+    assert meta["primary_topic_id"] == "T10047"
+    assert meta["primary_topic_name"] == "Financial Markets and Investment Strategies"
 
 
 def test_alignment_unresolved_home_field_reports_not_a_zero():

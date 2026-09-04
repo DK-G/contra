@@ -7,6 +7,21 @@
 
 ---
 
+## 2026-09-04（CL-0097） F-13-I 対処: 計器が「粗い属性1つ」を緑のスカラで申告していた——Subfield/Topic まで降ろし、緑の単一数値を廃止
+
+### 概要
+* **直したのは名簿ではなく計器。** seihai 9/04 の r05: 診断が `シード主題整合 (F-13): home分野一致 20/20 = 100%` と申告した名簿の実体は NAFTA・ブロードバンド・COVID 政策トラッカー・Fox News。8/28 の field 限定は設計どおり効いており（全件 `Economics, Econometrics and Finance`）、破れていたのは「Field が一致すれば主題も近い」という前提。**contra 自身が S-68 で書いた「情報の無さを正常値で表す」と同型**で、しかも 100% は緑なので呼び手が名簿を見に行かなくなる。
+* **再現（実 API）**: 9/04 と同じキーワード（`strategy selection`/`complementarity`/`distance`/`correlation`・`scope.field=finance`）でシード段を再実行し、当日の名簿をほぼ再現（首位が同じ *The Skill Complementarity of Broadband Internet*）。この run でも **semantic レッグは HTTP 504 で 0 件**＝8/31 の条件が再現。
+* **実装（加算的・可逆・シグネチャ非変更）**: (1) パーサが `primary_topic` の Subfield/Topic を `source_meta` に保持（API 呼び出し増なし）。(2) `seed_domain_alignment` が Field/Subfield/Topic の3層＋`semantic_count` を返す。(3) `subfield_vocabulary`＋`resolve_subfield_ids` で `scope.field` を Subfield 名に**厳格照合**（完全一致か語境界での包含のみ。`medicine` は解決させない＝緩い照合は粗い属性に戻る）。**照合語彙は run が既に取得した metadata から集める**＝API 呼び出し増ゼロ・陳腐化なし。任意で `scripts/fetch_openalex_subfields.py` が全 252 件を `data/openalex_subfields.json` にキャッシュして語彙を広げられる（**本日は F-11 の持続 429 で取得できず未同梱**）。(4) 描画から**緑の単一スカラを廃止**——Field の % は「26 分類の最粗レベルで主題適合ではない」注記と同じ行に置き、Subfield 一致・上位トピック・semantic レッグ供給数を必ず併記。(5) semantic レッグ 0 件は「未検証」と明言（8/31 の seihai の指摘の実装）。
+* **実測 before/after（同一名簿20件）**: before = `home分野一致 20/20 = 100%` の1行。after = 分野 100%（＋注記）／**サブフィールド 1/20 = 5%**／上位トピック `Economic Growth and Productivity 5 / Healthcare Policy and Management 3 / COVID-19 Pandemic Impacts 2`／semantic 供給 0 件／⚠2本。
+* **閾値の較正**: home サブフィールド=Finance で実測3本——ドリフト **5%**・対照（pairs trading 系）**65%**・対照（backtest overfitting 系）**71%**。0.35 を採用（0.5 は健全帯に食い込む）。
+* **試して外れた処方も記録**（`docs/field_observations_seihai.md` F-13-I）: トピック分散は健全/失敗の範囲が重なるため却下。`/text/topics` は日本語で 500・キーワード列で不安定・**衝突語に対して捕まえたいドリフトそのものを承認する**ため却下。
+* 新規回帰7件。旧コード（`9618d2c`）には `resolve_subfield_ids` も Subfield メタも存在しないので、新テストは import 段で落ちる＝新契約は HEAD に無い。**挙動の before/after は同一名簿に対する描画比較で実測した**（上記）。旧契約「同一 Field 内のドリフトは検出できない（documented limit）」を固定していたテスト1件を新契約に置換。**413 → 420 tests: 420 pass**。
+* **副産物（F-11 の再現・2回目）**: 本日の作業中に OpenAlex が**40 分以上 429 を返し続けた**（`works?per-page=1` すら）。8/25 の「持続的レート制限は mailto では解けない」を覆す材料は無い。**実務則を1段強めた**＝remediation では実 API を1回だけ叩いて名簿をファイルに落とし、before/after はそのファイルで回す（本日それで完遂）。また、この制約を設計に織り込んで**計器が API に依存しない形**（run 由来語彙）に倒した。
+* **seihai 側への申し送り**: 診断のラベルが `シード主題整合` → **`シード名簿の素性 (F-13)`** に変わる。insights には**サブフィールド一致率・上位トピック・semantic レッグ供給数**を記録してほしい。`scope.field` に OpenAlex の Subfield 名（`finance` 等）を含めると計器が働く。**S-67 の裁定前に、この診断付きの run を1回取ると材料が揃う**（判断は人間）。
+
+---
+
 ## 2026-09-01（CL-0096） F-17 対処: byrepo `関係度` ラベルの正体は Reliability の帯だった——theme 関連度の帯に差し替え、係数を同じ行に描画
 
 ### 概要

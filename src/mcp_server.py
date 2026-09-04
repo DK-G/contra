@@ -39,7 +39,12 @@ from src.pipeline.collect import (
     collect_track_b_from_spec,
     merge_seed_pools,
 )
-from src.pipeline.query import resolve_field_ids
+from src.pipeline.query import (
+    resolve_field_ids,
+    resolve_subfield_ids,
+    subfield_labels,
+    subfield_vocabulary,
+)
 from src.pipeline.concept_distance import build_theme_profile
 from src.pipeline.history import compute_theme_hash, load_history, save_history
 from src.pipeline.delegate import (
@@ -328,7 +333,7 @@ class StdinMcpServer:
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, cross-domain candidates already surfaced for this theme are excluded and adopted ones recorded (data/history/), so re-runs return NEW papers.", "default": False},
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."},
-                        "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's field-alignment line (F-13), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
+                        "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's provenance line (F-13: Field / Subfield / Topic distribution plus the semantic leg's supply), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
                         "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
                         "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). false restores lexical-only seeding.", "default": True}
                     },
@@ -824,12 +829,27 @@ class StdinMcpServer:
             # F-13 instrument: always reported, not only on warning — a roster that LOOKS fine
             # must still show where it landed (the drifted rosters were only ever caught by a
             # human reading the seed titles; this line makes the field distribution one glance).
-            align = seed_domain_alignment(seeds, home_ids)
+            # 2026-09-04: the Field-only version of this instrument reported "100%" on a
+            # roster that had nothing to do with the theme, so the caller never looked at the
+            # seeds. It now reads the Subfield and Topic levels too and reports the semantic
+            # leg's supply, and no line is a standalone green verdict.
+            # The Subfield vocabulary is harvested from the run's OWN metadata (both seed
+            # legs, before the roster was trimmed), so no extra API call is made; a cached
+            # taxonomy file enriches it when one exists.
+            sub_vocab = subfield_vocabulary(list(lex_seeds) + list(sem_seeds) + list(seeds))
+            sub_ids = resolve_subfield_ids(theme.scope.field, sub_vocab)
+            align = seed_domain_alignment(
+                seeds, home_ids, home_subfield_ids=sub_ids, semantic_count=len(sem_seeds),
+            )
             diag_line = (
-                render_seed_alignment(align, home_label=theme.scope.field)
-                + f"（語彙シード {len(lex_seeds)} 件・semantic シード {len(sem_seeds)} 件を統合"
+                render_seed_alignment(
+                    align, home_label=theme.scope.field,
+                    subfield_label=subfield_labels(sub_ids, sub_vocab),
+                )
+                + f"\n  ・取得構成: 語彙シード {len(lex_seeds)} 件・semantic シード "
+                + f"{len(sem_seeds)} 件を統合"
                 + ("・field 限定あり" if scope_ids else "・field 限定なし")
-                + "）\n" + diag_line
+                + "\n" + diag_line
             )
         if diagnostics and dead_seed_count:
             diag_line = (
