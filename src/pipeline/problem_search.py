@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
-from typing import Iterable, List, Sequence
+from typing import Any, Iterable, List, Sequence
 
 from src.core.models import ThemeInput
 
@@ -148,7 +149,7 @@ def _vocab_hits(text: str, vocab: Sequence[str], limit: int) -> List[str]:
     return _unique(hits, limit)
 
 
-def build_problem_search_plan(theme: ThemeInput) -> ProblemSearchPlan:
+def _build_heuristic_problem_search_plan(theme: ThemeInput) -> ProblemSearchPlan:
     joined = " ".join(
         [
             theme.theme_overview,
@@ -187,6 +188,128 @@ def build_problem_search_plan(theme: ThemeInput) -> ProblemSearchPlan:
         constraint_terms=constraint_terms,
         ecosystem_terms=ecosystem_terms,
     )
+
+
+def _plan_field(value: Any, limit: int) -> List[str]:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return _unique([str(item) for item in value if str(item).strip()], limit)
+
+
+def _merge_problem_search_plans(primary: ProblemSearchPlan, fallback: ProblemSearchPlan) -> ProblemSearchPlan:
+    return ProblemSearchPlan(
+        problem_terms=_unique(primary.problem_terms + fallback.problem_terms, 6),
+        capability_terms=_unique(primary.capability_terms + fallback.capability_terms, 5),
+        artifact_terms=_unique(primary.artifact_terms + fallback.artifact_terms, 5),
+        evidence_terms=_unique(primary.evidence_terms + fallback.evidence_terms, 5),
+        constraint_terms=_unique(primary.constraint_terms + fallback.constraint_terms, 5),
+        ecosystem_terms=_unique(primary.ecosystem_terms + fallback.ecosystem_terms, 5),
+    )
+
+
+def _json_object_from_text(text: str) -> dict[str, Any]:
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        data = json.loads(cleaned[start : end + 1])
+    if not isinstance(data, dict):
+        raise ValueError("LLM plan output must be a JSON object")
+    return data
+
+
+def _problem_search_plan_from_json(text: str, fallback: ProblemSearchPlan) -> ProblemSearchPlan:
+    data = _json_object_from_text(text)
+    candidate = ProblemSearchPlan(
+        problem_terms=_plan_field(data.get("problem_terms"), 6),
+        capability_terms=_plan_field(data.get("capability_terms"), 5),
+        artifact_terms=_plan_field(data.get("artifact_terms"), 5),
+        evidence_terms=_plan_field(data.get("evidence_terms"), 5),
+        constraint_terms=_plan_field(data.get("constraint_terms"), 5),
+        ecosystem_terms=_plan_field(data.get("ecosystem_terms"), 5),
+    )
+    return _merge_problem_search_plans(candidate, fallback)
+
+
+def _call_llm_problem_search_plan(theme: ThemeInput, fallback: ProblemSearchPlan, model: str) -> str:
+    from src.openai_client import extract_output_text, responses_create
+
+    theme_payload = {
+        "theme_overview": theme.theme_overview,
+        "goal": theme.goal,
+        "why_problem": theme.why_problem,
+        "approach_type": theme.approach_type,
+        "assumptions": theme.assumptions,
+        "scope": {
+            "field": theme.scope.field,
+            "scale": theme.scope.scale,
+            "time_range": theme.scope.time_range,
+        },
+        "keywords": {"include": theme.keywords.include, "exclude": theme.keywords.exclude},
+        "concern": theme.concern,
+        "heuristic_fallback": {
+            "problem_terms": fallback.problem_terms,
+            "capability_terms": fallback.capability_terms,
+            "artifact_terms": fallback.artifact_terms,
+            "evidence_terms": fallback.evidence_terms,
+            "constraint_terms": fallback.constraint_terms,
+            "ecosystem_terms": fallback.ecosystem_terms,
+        },
+    }
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "Extract a compact search plan for finding practical repositories, models, "
+                    "datasets, software, and research artifacts that directly help solve the "
+                    "user's problem. Return JSON only. Keep terms short and searchable. "
+                    "Use these exact keys: problem_terms, capability_terms, artifact_terms, "
+                    "evidence_terms, constraint_terms, ecosystem_terms. Limits: problem_terms "
+                    "up to 6; all other arrays up to 5. Do not include explanatory text."
+                ),
+            },
+            {"role": "user", "content": json.dumps(theme_payload, ensure_ascii=False)},
+        ],
+        "temperature": 0.0,
+    }
+    return extract_output_text(responses_create(payload))
+
+
+def build_llm_problem_search_plan(
+    theme: ThemeInput,
+    *,
+    model: str = "gpt-4o-mini",
+    fallback_plan: ProblemSearchPlan | None = None,
+) -> ProblemSearchPlan:
+    fallback = fallback_plan or _build_heuristic_problem_search_plan(theme)
+    try:
+        text = _call_llm_problem_search_plan(theme, fallback, model)
+        return _problem_search_plan_from_json(text, fallback)
+    except Exception:
+        return fallback
+
+
+def build_problem_search_plan(
+    theme: ThemeInput,
+    *,
+    use_llm: bool = False,
+    model: str = "gpt-4o-mini",
+) -> ProblemSearchPlan:
+    fallback = _build_heuristic_problem_search_plan(theme)
+    if not use_llm:
+        return fallback
+    return build_llm_problem_search_plan(theme, model=model, fallback_plan=fallback)
 
 
 def _quote_if_needed(term: str) -> str:

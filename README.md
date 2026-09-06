@@ -54,6 +54,7 @@ python -m src.cli.main \
 | `--single` | MVP モード: Track B 最良1本のみ | off |
 | `--track-b-count` | Track B 最大本数（上限。質ゲートで減る） | 10 |
 | `--track-a-count` | Track A アンカー本数（0=省略） | 0 |
+| `--track-a-llm-plan` | Track A の `ProblemSearchPlan` を LLM 支援で抽出（既定はAPI呼び出しなし） | off |
 | `--gen-mode` | 生成モード（llm / structured / simple） | llm |
 | `--llm-model` | 選別・生成に使うモデル（OpenAI / Claude 切替） | gpt-4o-mini |
 | `--no-history` | 履歴除外をスキップ | off |

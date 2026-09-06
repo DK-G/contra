@@ -9,6 +9,7 @@ from typing import List, Optional
 from src.core.models import ThemeInput, Work
 from src.pipeline.artifact_collect import ArtifactCollectConfig, collect_track_a_artifact_works
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
+from src.pipeline.problem_search import ProblemSearchPlan, build_problem_search_plan
 
 
 @dataclass
@@ -42,9 +43,22 @@ def collect_track_a_practical_works(
     theme: ThemeInput,
     config: PracticalCollectConfig,
 ) -> List[Work]:
+    shared_plan: Optional[ProblemSearchPlan] = None
+    if (
+        config.git.use_problem_search
+        and config.artifacts.use_problem_search
+        and config.git.use_llm_problem_plan == config.artifacts.use_llm_problem_plan
+        and config.git.llm_problem_plan_model == config.artifacts.llm_problem_plan_model
+    ):
+        shared_plan = build_problem_search_plan(
+            theme,
+            use_llm=config.git.use_llm_problem_plan,
+            model=config.git.llm_problem_plan_model,
+        )
+
     works: List[Work] = []
-    works.extend(collect_track_a_git_works(theme, config.git))
-    works.extend(collect_track_a_artifact_works(theme, config.artifacts))
+    works.extend(collect_track_a_git_works(theme, config.git, problem_plan=shared_plan))
+    works.extend(collect_track_a_artifact_works(theme, config.artifacts, problem_plan=shared_plan))
 
     deduped: List[Work] = []
     seen_ids: set[str] = set()

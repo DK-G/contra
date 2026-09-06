@@ -235,6 +235,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--single", action="store_true", help="MVP mode: output the single best Track B serendipity unit")
     parser.add_argument("--track-b-count", type=int, default=10, help="Max Track B entries (quality-gated)")
     parser.add_argument("--track-a-count", type=int, default=0, help="Track A anchor entries (0 = omit)")
+    parser.add_argument("--track-a-llm-plan", action="store_true", help="Use LLM-assisted ProblemSearchPlan extraction for Track A practical-anchor search")
     parser.add_argument("--serendipity-gate", type=float, default=0.25, help="Track B quality gate on structure x distance")
     parser.add_argument("--struct-depth-gate", type=float, default=_STRUCT_DEPTH_GATE, help="Track B hollow gate: min judge structural_depth (0-1); candidates below it are rejected as hollow (shared-category/lacks-systematicity). Default tracks the calibrated _STRUCT_DEPTH_GATE")
     parser.add_argument("--output-floor", type=float, default=0.35, help="Track B output-quality floor on serendipity; --track-b-count is a MAX cap and only units above this bar are emitted (thin themes return fewer strong units instead of padding)")
@@ -314,8 +315,21 @@ def main(argv: list[str]) -> int:
     config = CollectConfig(per_page=args.per_page, max_pages=args.max_pages, mailto=args.mailto)
     anchor_pool = max(args.track_a_count * 2, 10)
     practical_config = PracticalCollectConfig(
-        git=GitCollectConfig(per_page=anchor_pool, max_repos=anchor_pool, include_gitlab=True, use_problem_search=True),
-        artifacts=ArtifactCollectConfig(per_page=anchor_pool, max_items=anchor_pool, use_problem_search=True),
+        git=GitCollectConfig(
+            per_page=anchor_pool,
+            max_repos=anchor_pool,
+            include_gitlab=True,
+            use_problem_search=True,
+            use_llm_problem_plan=args.track_a_llm_plan,
+            llm_problem_plan_model=args.llm_model,
+        ),
+        artifacts=ArtifactCollectConfig(
+            per_page=anchor_pool,
+            max_items=anchor_pool,
+            use_problem_search=True,
+            use_llm_problem_plan=args.track_a_llm_plan,
+            llm_problem_plan_model=args.llm_model,
+        ),
         max_items=anchor_pool,
     )
 

@@ -21,6 +21,8 @@
     - [x] GitHub / GitLab / Hugging Face / Zenodo / DataCite を source 別に比較し、問題一致ゼロ候補の除外とハイフン表記一致を反映する
     - [x] CLI Track A と MCP `byrepo_search` で新検索方式が有効化されることをテストで固定する
     - [x] 同一テーマの旧新比較を行い、intent-balanced collection と `problem_match_score` 優先 rank を反映する
+    - [x] byrepo 名称は当面維持し、名称変更は後回しにする判断を記録する
+    - [x] byrepo の `ProblemSearchPlan` 抽出を、既定 off の LLM 支援 opt-in として追加する
 - [/] Phase 1 Done 判断: Track B 品質評価
     - [ ] 複数テーマでサンプル生成し、「遠いが構造一致」の1本が安定して出るか確認する
     - [ ] Anomaly（無意味接続）と近接（マイオピア）が混入していないか確認する
@@ -32,8 +34,6 @@
 
 ## 未着手 (To Do)
 
-- [ ] byrepo 名称変更の再検討（`byrepo` のまま継続するか、`byanchor` 等へ変更するかを判断する）
-- [ ] byrepo の `ProblemSearchPlan` 抽出を、現行ヒューリスティックに加えて LLM 支援でも生成できるようにする
 - [x] byrepo の GitHub recall 改善として、repository relaxed fallback と認証時 code search repository recovery を追加する
 - [ ] byrepo に GitHub code search の実ファイル内容・snippet 取得を追加し、`path:examples` / `filename:pyproject.toml` / `Dockerfile` / package metadata などの実装証拠を直接拾う
 - [ ] byrepo に issue / discussion 検索を追加し、問題症状・制約・失敗パターンを `visible_constraint` に反映する

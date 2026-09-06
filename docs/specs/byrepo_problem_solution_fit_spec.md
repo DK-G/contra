@@ -44,7 +44,9 @@ ThemeInput
 | `constraint_terms` | 制約や失敗条件 | `concern`, `keywords.exclude` |
 | `ecosystem_terms` | 技術環境との一致 | `theme_overview`, `scope`, `keywords` |
 
-現行実装はヒューリスティック抽出であり、LLM 生成は使わない。これは、外部 API 検索の前段で低コスト・再現可能に動かすためである。
+既定実装はヒューリスティック抽出であり、LLM 生成は使わない。これは、外部 API 検索の前段で低コスト・再現可能に動かすためである。
+
+任意で LLM 支援抽出を使える。ただし API 呼び出しは基本 off とし、CLI の `--track-a-llm-plan` または MCP `byrepo_search` の `use_llm_problem_plan=true` が明示された場合だけ実行する。LLM の出力は JSON の `ProblemSearchPlan` として受け取り、ヒューリスティック plan と merge する。API キー未設定、JSON 破損、通信失敗などが起きた場合はエラーで検索を止めず、ヒューリスティック plan に fallback する。
 
 ## 4. QuerySpec
 
@@ -198,11 +200,24 @@ source type × intent でクエリを増やすと、API 呼び出しが増える
 - 非 Git source の focused query は上位3つの `problem_terms` を anchor にし、`problem_only` は上位2語の fallback として最後に回す。
 - 失敗した source は全体を落とさず、他 source の候補を返す。
 
+### 7.7 LLM 支援 plan の扱い
+
+LLM 支援 `ProblemSearchPlan` は recall / facet 分解の改善補助であり、既定の検索方式ではない。
+
+運用ルール:
+
+- API 呼び出しは opt-in。CLI は `--track-a-llm-plan`、MCP は `use_llm_problem_plan=true` のときだけ有効化する。
+- LLM plan は `ThemeInput` 1件につき1つ作る。repository 単位や source 単位で個別生成しない。
+- LLM が返した facet はヒューリスティック facet より前に置き、空欄や不足はヒューリスティックで補完する。
+- LLM 失敗時はヒューリスティックへ fallback し、外部 API 検索自体は継続する。
+- API コストと再現性を優先する定期運用では off のまま使い、problem_terms が薄いテーマや検索結果が広すぎるテーマでだけ明示的に使う。
+
 ## 8. 現行実装範囲
 
 実装済み:
 
 - `ProblemSearchPlan`
+- opt-in の LLM 支援 `ProblemSearchPlan` 抽出とヒューリスティック fallback
 - `QuerySpec`
 - GitHub / GitLab / Hugging Face / Zenodo / DataCite の query bundle 対応
 - GitHub repository search の relaxed fallback query
@@ -216,7 +231,6 @@ source type × intent でクエリを増やすと、API 呼び出しが増える
 
 未実装:
 
-- LLM による `ProblemSearchPlan` 抽出
 - GitHub code search API の実ファイル内容・snippet 抽出
 - issue 本文検索による problem symptom evidence
 - maintainer diversity / release recency の詳細 LMA
@@ -225,7 +239,6 @@ source type × intent でクエリを増やすと、API 呼び出しが増える
 
 ## 9. 次の改善候補
 
-1. `ProblemSearchPlan` を LLM なしヒューリスティックと LLM 支援の2段にする。
-2. GitHub code search を別 collector として追加し、`path:examples`, `filename:pyproject.toml`, `Dockerfile` などを evidence にする。
-3. issue / discussion 検索を追加し、`visible_constraint` を実運用の詰まりに寄せる。
-4. 複数テーマで smoke test し、`Problem-Solution Fit` の閾値を決める。
+1. GitHub code search を別 collector として追加し、`path:examples`, `filename:pyproject.toml`, `Dockerfile` などを evidence にする。
+2. issue / discussion 検索を追加し、`visible_constraint` を実運用の詰まりに寄せる。
+3. 複数テーマで smoke test し、`Problem-Solution Fit` の閾値を決める。

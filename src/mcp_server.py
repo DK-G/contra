@@ -120,7 +120,9 @@ class StdinMcpServer:
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "description": "Include keywords."},
                         "keywords_exclude": {"type": "array", "items": {"type": "string"}, "description": "Exclude keywords."},
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
-                        "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3}
+                        "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
+                        "use_llm_problem_plan": {"type": "boolean", "description": "If true, use LLM-assisted ProblemSearchPlan extraction before source searches. Defaults to false to avoid an extra API call.", "default": False},
+                        "llm_model": {"type": "string", "description": "LLM model for optional ProblemSearchPlan extraction and output generation.", "default": "gpt-4o-mini"}
                     },
                     "required": ["theme_overview", "goal", "why_problem"]
                 }
@@ -260,11 +262,26 @@ class StdinMcpServer:
 
     def _execute_byrepo(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
+        model = args.get("llm_model") or "gpt-4o-mini"
         target_count = args.get("track_a_count") or 3
         pool = max(target_count * 2, 10)
+        use_llm_problem_plan = bool(args.get("use_llm_problem_plan"))
         practical_config = PracticalCollectConfig(
-            git=GitCollectConfig(per_page=pool, max_repos=pool, include_gitlab=True, use_problem_search=True),
-            artifacts=ArtifactCollectConfig(per_page=pool, max_items=pool, use_problem_search=True),
+            git=GitCollectConfig(
+                per_page=pool,
+                max_repos=pool,
+                include_gitlab=True,
+                use_problem_search=True,
+                use_llm_problem_plan=use_llm_problem_plan,
+                llm_problem_plan_model=model,
+            ),
+            artifacts=ArtifactCollectConfig(
+                per_page=pool,
+                max_items=pool,
+                use_problem_search=True,
+                use_llm_problem_plan=use_llm_problem_plan,
+                llm_problem_plan_model=model,
+            ),
             max_items=pool,
         )
 
@@ -293,8 +310,8 @@ class StdinMcpServer:
         
         # Convert to entries / fill text
         from src.pipeline.classify import classify_track_a
-        entries = classify_track_a(works, theme, model="gpt-4o-mini", count=target_count, use_llm=True)
-        entries = fill_track_entries(entries, GenerationConfig(llm_model="gpt-4o-mini"), theme=theme, mode="llm")
+        entries = classify_track_a(works, theme, model=model, count=target_count, use_llm=True)
+        entries = fill_track_entries(entries, GenerationConfig(llm_model=model), theme=theme, mode="llm")
         
         # Render markdown response
         lines = []

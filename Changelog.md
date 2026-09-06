@@ -7,6 +7,46 @@
 
 ---
 
+## 2026-06-17（CL-0082） byrepo LLM ProblemSearchPlan opt-in
+
+### 概要
+* byrepo の `ProblemSearchPlan` 抽出に LLM 支援を追加した。API 呼び出しは基本 off とし、CLI の `--track-a-llm-plan` または MCP `byrepo_search` の `use_llm_problem_plan=true` が指定された場合だけ有効化する。
+
+### 関連タスク
+* Task: Track A Git実用アンカー設計
+
+### Diffスナップショット（要約）
+```text
+# 1. 変更目的 (必須)
+byrepo の ProblemSearchPlan 抽出を、現行ヒューリスティックを既定のまま維持しつつ、必要時だけ LLM 支援で補強できるようにする。
+API 呼び出しは基本 off とし、運用時のコスト・再現性・API キー依存を増やさない。
+
+# 2. 変更概要 (必須)
+build_problem_search_plan(theme, use_llm=False, model=...) を追加し、既定では従来のヒューリスティック plan を返すようにした。
+use_llm=True の場合だけ LLM から JSON facet を受け取り、ヒューリスティック plan と merge するようにした。
+LLM 呼び出し失敗・JSON 破損・API キー未設定時は検索を止めず、ヒューリスティック plan へ fallback する。
+CLI は --track-a-llm-plan、MCP byrepo_search は use_llm_problem_plan=true の明示時だけ LLM plan 抽出を有効化する。
+unified collector 経路では Git / artifact collector が同じ ProblemSearchPlan を共有し、同一テーマで余分な LLM plan 呼び出しを増やさないようにした。
+byrepo 名称は当面維持し、名称変更は後回しにする判断を task.md に反映した。
+
+# 3. 確認方法 (必須)
+compileall 成功。
+対象モックテスト直接実行成功（40件）。
+git diff --check 成功。
+
+# 4. 既知の課題・リスク (必須)
+LLM plan は opt-in のため、既定運用の検索精度はヒューリスティックの範囲に留まる。
+LLM facet は query recall を広げる補助であり、source 別の API rank 偏りや code snippet 未取得の課題は残る。
+```
+
+### レビュー結果（レビュー後に追記）
+> `review.md`でのレビュー完了後、その内容をここに要約して記録する。
+*   **結果**: [PASS / PASS WITH NOTES / BLOCK]
+*   **コメント**:
+    *   [レビューコメントをここに記述]
+
+---
+
 ## 2026-06-16（CL-0081） byrepo DOI threshold 複数テーマ較正
 
 ### 概要

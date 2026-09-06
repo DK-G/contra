@@ -51,6 +51,8 @@ class GitCollectConfig:
     issue_sample_size: int = 5
     include_gitlab: bool = False
     use_problem_search: bool = False
+    use_llm_problem_plan: bool = False
+    llm_problem_plan_model: str = "gpt-4o-mini"
     include_code_search: bool = True
 
 
@@ -678,9 +680,19 @@ def collect_track_a_git_repos(
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
     gitlab_client: Optional[GitLabClient] = None,
+    *,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[GitRepository]:
     cfg = config or GitCollectConfig()
-    plan = build_problem_search_plan(theme) if cfg.use_problem_search else None
+    plan = problem_plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     gh = client or GitHubClient()
     query_specs = build_github_query_specs(theme, plan) if plan else [
         QuerySpec("github_repository", "default", build_track_a_git_query(theme))
@@ -747,7 +759,15 @@ def collect_track_a_gitlab_repos(
     plan: Optional[ProblemSearchPlan] = None,
 ) -> List[GitRepository]:
     cfg = config or GitCollectConfig()
-    plan = plan or (build_problem_search_plan(theme) if cfg.use_problem_search else None)
+    plan = plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     gl = client or GitLabClient()
     query_specs = build_plain_query_specs("gitlab_repository", theme, plan) if plan else [
         QuerySpec("gitlab_repository", "default", build_track_a_gitlab_query(theme))
@@ -811,6 +831,14 @@ def collect_track_a_git_works(
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
     gitlab_client: Optional[GitLabClient] = None,
+    *,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[Work]:
-    repos = collect_track_a_git_repos(theme, config=config, client=client, gitlab_client=gitlab_client)
+    repos = collect_track_a_git_repos(
+        theme,
+        config=config,
+        client=client,
+        gitlab_client=gitlab_client,
+        problem_plan=problem_plan,
+    )
     return [repository_to_work(repo) for repo in repos]

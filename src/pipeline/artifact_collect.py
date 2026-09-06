@@ -34,6 +34,8 @@ class ArtifactCollectConfig:
     include_zenodo: bool = True
     include_datacite: bool = True
     use_problem_search: bool = False
+    use_llm_problem_plan: bool = False
+    llm_problem_plan_model: str = "gpt-4o-mini"
 
 
 @dataclass
@@ -474,9 +476,19 @@ def collect_huggingface_artifacts(
     theme: ThemeInput,
     config: Optional[ArtifactCollectConfig] = None,
     client: Optional[JsonApiClient] = None,
+    *,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[PracticalArtifact]:
     cfg = config or ArtifactCollectConfig()
-    plan = build_problem_search_plan(theme) if cfg.use_problem_search else None
+    plan = problem_plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     hf = client or JsonApiClient("https://huggingface.co")
     queries = build_plain_query_specs("huggingface", theme, plan) if plan else [
         QuerySpec("huggingface", "default", build_artifact_query(theme))
@@ -559,9 +571,19 @@ def collect_zenodo_artifacts(
     theme: ThemeInput,
     config: Optional[ArtifactCollectConfig] = None,
     client: Optional[JsonApiClient] = None,
+    *,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[PracticalArtifact]:
     cfg = config or ArtifactCollectConfig()
-    plan = build_problem_search_plan(theme) if cfg.use_problem_search else None
+    plan = problem_plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     zenodo = client or JsonApiClient("https://zenodo.org/api")
     queries = build_plain_query_specs("zenodo_record", theme, plan) if plan else [
         QuerySpec("zenodo_record", "default", build_artifact_query(theme))
@@ -630,9 +652,19 @@ def collect_datacite_artifacts(
     theme: ThemeInput,
     config: Optional[ArtifactCollectConfig] = None,
     client: Optional[JsonApiClient] = None,
+    *,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[PracticalArtifact]:
     cfg = config or ArtifactCollectConfig()
-    plan = build_problem_search_plan(theme) if cfg.use_problem_search else None
+    plan = problem_plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     datacite = client or JsonApiClient("https://api.datacite.org")
     queries = build_plain_query_specs("datacite_doi", theme, plan) if plan else [
         QuerySpec("datacite_doi", "default", build_artifact_query(theme))
@@ -672,22 +704,32 @@ def collect_track_a_artifact_works(
     hf_client: Optional[JsonApiClient] = None,
     zenodo_client: Optional[JsonApiClient] = None,
     datacite_client: Optional[JsonApiClient] = None,
+    problem_plan: Optional[ProblemSearchPlan] = None,
 ) -> List[Work]:
     cfg = config or ArtifactCollectConfig()
+    plan = problem_plan or (
+        build_problem_search_plan(
+            theme,
+            use_llm=cfg.use_llm_problem_plan,
+            model=cfg.llm_problem_plan_model,
+        )
+        if cfg.use_problem_search
+        else None
+    )
     artifacts: List[PracticalArtifact] = []
     if cfg.include_huggingface:
         try:
-            artifacts.extend(collect_huggingface_artifacts(theme, cfg, client=hf_client))
+            artifacts.extend(collect_huggingface_artifacts(theme, cfg, client=hf_client, problem_plan=plan))
         except ArtifactApiError:
             pass
     if cfg.include_zenodo:
         try:
-            artifacts.extend(collect_zenodo_artifacts(theme, cfg, client=zenodo_client))
+            artifacts.extend(collect_zenodo_artifacts(theme, cfg, client=zenodo_client, problem_plan=plan))
         except ArtifactApiError:
             pass
     if cfg.include_datacite:
         try:
-            artifacts.extend(collect_datacite_artifacts(theme, cfg, client=datacite_client))
+            artifacts.extend(collect_datacite_artifacts(theme, cfg, client=datacite_client, problem_plan=plan))
         except ArtifactApiError:
             pass
 
