@@ -48,6 +48,14 @@
 
 ## 完了 (Done)
 
+### 2026-07-14 byシリーズ共通ルーチン化
+
+- [x] `byrepo` / `bybridge` / `byserendipity` / `bynote` の4種を `D:\dev\docs\skills` のPortfolio Shared Flowsへ登録
+- [x] Codexユーザースキルを4種用意し、共通定義を単一の正本として参照する構成へ統一
+- [x] `bynote` は既存Phase 0とContra概念リンクを別ルーチンにせず、Purpose/Mechanism分解を調査前工程として統合
+- [x] 欠けていた `docs/agent_rules/bynote.md` を追加し、MCPの従量条件とキー無しフォールバックを明文化
+- [x] Contra stdio MCPをCodexユーザースコープへ登録
+
 ### 2026-06-23 横断重複回避（履歴 dedup）を MCP/委譲経路へ配線
 *   「同じレポートを繰り返さない」履歴 dedup（history.py）は **CLI 専用**で MCP/委譲経路に未配線だった（再実行で同じ論文が再出＝ユーザー指摘で発覚）。`mcp_server` に `compute_theme_hash(theme_overview)` キーで配線。
 *   ヘルパ `_history_exclusions`（file history∪agent供給 used_ids/titles/dois・`no_history`で無効）／`_history_adopt`（post-gate通過分の id/正規化title/DOI を save_history）。収集時に除外（`_byserendipity_raw`/自己完結byserendipity/bybridge）、採用時に記録（自己完結＋`delegate_finalize`）。委譲は収集と finalize が別呼び出しでも同一ハッシュで自動整合。3ツールに `no_history`＋任意 `used_*` パラメータ追加。
