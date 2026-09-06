@@ -165,6 +165,10 @@ semantic レッグ単独は 14件・全件 referenced_works 保持（13〜24本�
 
 **呼び手側の帰結**: seihai は S-62（byrepo を毎日から条件付きへ）に本実測を追記する。**7週連続で使える収穫ゼロ**。
 
+
+**再現（2026-09-07・5回目）＋「関連度係数がほぼ効いていない」の定量**: テーマ＝「best-of-N のバックテスト統計に対する選抜補正済み推定量の実装」（`structured:true`・track_a_count 5・pool 40）。**5/5 が同一定型文**（「関係軸『実装アンカー』で関係度『低』の関連性がある」「この論文の知見をテーマの具体的局面に転用できるか要検討」）。ヘッダの関連度警告（最大 0.33）は正しく出た。
+**新しい定量**: 順位スコアは 36.7 / **32.9** / **32.2** / 31.5 / 31.1。**2位＝唯一の主題直撃実装 `mnemox-ai/deflated-sharpe`（関連度 0.33）**、**3位＝`atilaahmettaner/tradingview-mcp`（関連度 0.0・TradingView の MCP サーバ）**。**その差は 0.7 点。** 4位 `investing-algorithm-framework`（0.0）、5位 `jesse`（0.0・仮想通貨bot）も同様。⇒ **`Reliability × 関連度係数` という式で、関連度係数が順位を実質的に決めていない**（stars と README の充実で決まる Reliability が支配する）。F-20（略語が部分一致を拾う）とは別の層の問題で、**そちらは係数の値の誤り、本件は係数の重みの不足**。なお1位 `eslazarev/purged-cross-validation`（関連度 0.13・CPCV + deflated Sharpe の scikit-learn 互換実装）は**主題直撃なのに関連度が 0.13**＝係数の値自体も当たっていない。
+
 ### F-15. delegate_finalize — **percentile_gate の閾値が提出バッチ内の分位なので、採点に正直な分散を付けるほど落選する**（2026-08-24 初観測・様式の記録であって欠陥断定ではない）
 
 **実測（2026-08-24）**: 6件を採点して提出（serendipity 実測 0.359 / 0.378 / 0.511 / 0.531 / 0.577 と通過1件）。落選5件はすべて `percentile_gate(serendipity)` — **閾値 0.598**。ツール側の指示は「2桁小数・格子値回避・同点になりそうなら purpose_pct で差を付ける」＝**分散を付けることを要求している**のに、分位ゲートは**分散を付けた側を落とす**。
@@ -213,6 +217,9 @@ semantic レッグ単独は 14件・全件 referenced_works 保持（13〜24本�
 **seihai 側の運用（本日から適用）**: raw 材料は**プログラムで抜き出してそのまま echo する**（手で書き写さない・採点欄だけを足す）。⇒ 台帳 **S-90**。
 
 ---
+
+
+**4点目の実測（2026-09-07・同一バッチを2回投げて閾値が動いた）**: 同じ7候補を、1回目は材料欄の echo 漏れつきで、2回目は全欄 echo で投げた。**通過本数は両回とも 2 = int(7 × 0.30)**（バッチ内分位説の3点目→4点目）。**しかし閾値は 0.669 → 0.678 に動き、`Uniformly minimum variance conditionally unbiased estimation …`（Biometrika 2018）の採否が反転した**（1回目 通過 / 2回目 **0.676 対 0.678 で落選**）。呼び手の採点は2回目にわずかに変えているので閾値の変化はそれで説明できるが、**要点は「0.002 差で本命が落ちる」という感度の高さと、採否を決めているのが候補ではなくバッチであること**。**この日のテーマが「極値だから選ばれた項目の推定値をどう補正するか」だったので、選抜器が主題を自演した形になった。**
 
 ### F-16. byserendipity — **raw_only の facet を日本語で書くと、候補が「日本語で書かれた文献」で埋まる**（2026-08-25 初観測・言語崩壊）
 
@@ -584,6 +591,22 @@ S-26 が記録を指示している2項目:
 - **F-19（材料欄 echo 忘れ）＝再演し、処方で即復旧した。** 材料欄（title/abstract/year/venue/cited_by_count）を落として投げたところ **7/7 が「照合不能」**。**全欄 echo して同じ引用のまま再投したら全件成立。** F-19-R の診断文（「引用の誤りではなく材料欄の欠落が原因」と明記する）は**呼び手を正しい修正に一発で導いた**＝**対処済みの評価は妥当**。ただし**再演したという事実自体が、呼び手側の手順として定着していないことを示す**ので、seihai 側の運用手順に明記した。
 - **F-13 ＝ 逆向きの乖離を初観測。** bybridge のシード名簿診断は `分野(Field) 一致 20/20 = 100%`・上位トピック `Sports Analytics and Performance 4` と出て、**一見「主題外のスポーツ分析で埋まっている」ように読める**。しかし実体を読むと、その4件は *Parameter Estimation in Large Dynamic Paired Comparison Experiments*（JRSS-C 1999）／*Urnings: A New Method for Tracking Dynamically Changing Parameters in Paired Comparison Systems*（JRSS-C 2021）／*Receiver operating characteristic analysis for paired comparison data*（JRSS-A 2024）等で、**呼び手のテーマ（対比較）の方法論的正典そのもの**だった——OpenAlex が Bradley–Terry 系の文献を Sports Analytics に分類しているだけである。⇒ **9/04 の事例（診断が 100% と申告し実体は NAFTA・Fox News）とは*逆向き***。**トピックラベルは主題適合を過大にも過小にも誤る**ので、**診断ブロックの数値だけで名簿の質を判定しない**（呼び手はシード表の実タイトルを読むこと）。
 - **bybridge の S-26 観測プロトコル ＝ 6回目で初の明確な成功。** 最頻 bridge の上位10件占有率は 20 / 20 / 20 / 70 / 20 / **0**％（本日が最良・全体では 25%・使われた bridge 19本・候補あたり平均 1.33本）。最頻 bridge は **Heckman "Sample Selection Bias as a Specification Error"（被引用 29,158）**＝巨大ハブだが**呼び手の主題（勝者選抜のバイアス）に正面から当たる**。**実収穫あり**＝[Comparing Predictive Accuracy](https://doi.org/10.1080/07350015.1995.10524599)（Diebold–Mariano 1995・**2つの競合予測の精度差を、予測誤差が同時点で相関していてよい前提で検定する**＝呼び手が手作りしている対比較統計の正典）、[Rank-Order Tournaments as Optimum Labor Contracts](https://doi.org/10.1086/261010)（Lazear–Rosen 1981）、[A Practitioner's Guide to Cluster-Robust Inference](https://doi.org/10.3368/jhr.50.2.317)（Cameron–Miller 2015）。⇒ **「3回とも旧様式なら恒久除外」の条件は満たされていない。除外しない。**
+
+### F-23. bybridge — **シードが主題直撃でも、最頻 bridge が「ソフトウェア引用」になって交差候補を丸ごと持っていく**（2026-09-07 初観測・F-13 とは別段の故障）
+
+**観測（2026-09-07・seihai r01 担当日）**: テーマ＝「極値だから選ばれた候補の真値推定／選抜補正」（`materials:true`・seed_count 20・bridge_count 20）。
+
+**シード段は今回きわめて良好**——F-13 は**起きていない**。Field 一致 20/20、Subfield 一致 7/20、semantic レッグ供給 11件、そして名簿に **[Inference on Winners](https://doi.org/10.1093/qje/qjad043)（QJE 2019）**・**[Data-Snooping, Technical Trading Rule Performance, and the Bootstrap](https://doi.org/10.1111/0022-1082.00163)（J Finance 1999・被引用 1,057）**・**How "Backtest Overfitting" in Finance Leads to False Discoveries**（Significance 2021）が入った。**主題に正面から当たるシードが揃った初めての回。**
+
+**それでも交差候補30件は主題と無関係だった**: lme4 / limma / phyloseq / pROC / brms / ape / phytools / GSVA / REFMAC5 / WEKA / bibliometrix / dropout / LASSO / elastic net / LARS / compressive sampling / implicit association test …。実質的に主題に触るのは **[Trim and Fill](https://openalex.org/W2033585778)**（出版バイアス補正＝選抜で消えたものを残った標本の形だけから復元する）**1件のみ**。
+
+**診断値**: 最頻 bridge が交差候補の **62%**（上位10件では **40%**）／候補あたり平均 bridge 1.02本／共有 bridge 1本のみの候補 **59/60**／実際に使われた bridge **3本**。**最頻 bridge = `R: A Language and Environment for Statistical Computing`（被引用 353,393）。**
+
+**★これが F-01（phantom bridge）とも F-13（シードが外れる）とも違う点**: bridge は実在し、シードも主題に合っている。**外れているのは「共有参照＝知的祖先」という前提**である。**方法論寄りの論文どうしが最も高頻度で共有する参照は、思想ではなく道具（統計ソフトウェア）**であり、道具を共有する集合は分野を横断するが**主題は横断しない**。F-01 の処置（実在しない id の除去）は「参照が本物か」を見るが、**「参照が思想か道具か」は見ていない**。
+
+**contra 側で見るとよい点（seihai は処方を決めない）**: (a) bridge プールを作るとき、**ソフトウェア／データセット／汎用手法パッケージの記述子を持つ works を bridge 候補から外せるか**（OpenAlex の `type` や `primary_topic` で識別できる可能性）。(b) より一般に、**bridge の被引用数が桁外れ（例: 10万超）のものは「共有された祖先」ではなく「全員が使う道具」である**という仮説が、この1例で立つ。ただし **2026-08-18 に「中心性ペナルティ」は実測で棄却済み**なので、**被引用数そのものではなく種別で切る**方が前回の反証と整合する。(c) 判断材料として: 8/29 の成功回（Diebold–Mariano / Heckman が通った回）の最頻 bridge は**巨大ハブだが文献**だった。**本件は文献ですらない**という点が新しい。
+
+**S-26 / S-67（観測プロトコル）への記録**: 上位10件占有率 **40%**（旧様式の 100% からは改善が持続）／最頻 bridge は**主題ドメイン外かつ道具**。**「上位は多様化したが収穫はゼロ」の新しい下位様式**として、field_observations に区別して記録する（S-26 の裁定文が求めた区別）。
 
 ## 対処済み
 
