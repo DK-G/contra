@@ -608,6 +608,44 @@ S-26 が記録を指示している2項目:
 
 **S-26 / S-67（観測プロトコル）への記録**: 上位10件占有率 **40%**（旧様式の 100% からは改善が持続）／最頻 bridge は**主題ドメイン外かつ道具**。**「上位は多様化したが収穫はゼロ」の新しい下位様式**として、field_observations に区別して記録する（S-26 の裁定文が求めた区別）。
 
+---
+
+#### 再現（2026-09-08・**504 の単独再投で距離段が完全復旧**／seihai r02 担当日）— F-16
+
+**症状**: A2 の3距離 facet（(1) 制御工学のチャタリング／(2) 行動生態学のパッチ離脱／(3) 細胞神経生理学の順応・不応期）を渡した `raw_only` 実行で、**facet [3] のみ `取得失敗 (request failed after 3 attempts: HTTP Error 504: Gateway Timeout)`**。他2枚は 50/49 件を返し、合計 60 件が材料になった。診断は 8/31 の改善どおり「⚠ 収穫0の facet: cellular neurophysiology。…A2 の3距離が実質的に潰れている状態」と自分から名指しした。
+
+**★9/04 と違う点＝今回は長さ仮説では説明できない**（504 であって 400 ではない）。**にもかかわらず処方は同じで効いた**: facet [3] を**同じドメイン語・ほぼ同じ pseudo_abstract のまま単独で投げ直す**と **返却 50 / ホーム除外後 39 / 提出 39 件**で成功し、中身も主題ど真ん中（"Refractory Sampling Links Efficiency and Costs of Sensory Encoding to Stimulus Statistics" / "Optimal information gain at the onset of habituation to repeated stimuli"）。**この距離段は当日の bynote（A3 実文献接地）の Very Far を単独で成立させた**＝失われかけた知見の量は小さくない。
+
+**⇒ 呼び手側の一般化（seihai は当日 S-112 として起票）**: **ゼロ件の facet を「その距離は不毛」と読んではいけない。** 意味的な収束（`home_converged`）と上流の一過性障害（400/504）は、**出力の見た目が同じ「0件」**なので、**必ず単独再投で切り分けてから解釈する。** 9/04 は診断文の推測（飽和/近すぎ）が呼び手を誤結論の寸前まで連れて行ったが、本日は**呼び手が先に単独再投を規約化していたので実害が出なかった**——**F-16 の処方が呼び手側の手順として定着した初めての回**として記録する。
+
+**contra 側で見るとよい点**: 504 は3回リトライでも抜けなかったが**単独呼びでは1回で通った**。⇒ 失敗が**リトライ回数ではなく同時実行のペイロード総量**に依存している可能性（F-11 の polite pool 据え置きと合わせて読む）。
+
+---
+
+### F-24. bybridge — **旧様式（分野外の巨大ハブ1本が交差候補を独占）が、シード名簿の劣化を伴って明確に再現した**（2026-09-08 観測・S-26 観測プロトコル 5回目）
+
+**観測（2026-09-08・seihai r02 担当日）**: テーマ＝「トリガが持続する水準なので失敗直後に同じ行動が再点火し、評価器はそれを1回分としか課金しない」（`materials:true`・seed_count 20・bridge_count 4）。
+
+**診断値**: 最頻 bridge が交差候補の **85%**（上位10件では **40%**）／候補あたり平均 bridge **1.00** 本／共有 bridge 1本のみの候補 **60/60**／実際に使われた bridge **5本**。**最頻 bridge = `Theory of the firm: Managerial behavior, agency costs and ownership structure`（Jensen & Meckling・被引用 71,804）。**
+
+**交差候補30件の中身**: Separation of Ownership and Control / Law and Finance / The Capital Structure Puzzle / Agency Theory: An Assessment and Review / Corporate Ownership Around the World …＝**全30件がコーポレートガバナンスと資本構成のメガハブ**。主題（水準トリガの反復発火・sim↔live 乖離）に触るものは**ゼロ**。
+
+**シード名簿（F-13）**: Field 一致 20/20＝100% だが **Subfield 一致 7/20＝35%**。名簿に "Informal Cross-Border Trade and Trade Facilitation Reform in Sub-Saharan Africa"・"India's Trade Integration"・"Jobs for the Heartland"・"Climate Change Policy and Economics" が入り、主題直撃は "Data-Snooping, Technical Trading Rule Performance, and the Bootstrap"・"A Bayesian Approach to Measurement of Backtest Overfitting"・"Backtesting and Profitability Analysis of Algorithmic Trading Strategies" の3件程度。**⇒ 9/07（F-23）はシード段が良好だったのに交差が外れた回、本日はシード段も交差段も外れた回**であり、**2つの故障は独立に起きる**ことが2日で示された。
+
+**★F-23 との違い（区別して記録する＝S-26 の裁定文が求めた区別）**: 9/07 の最頻 bridge は **`R` の引用＝道具**だった。**本日の最頻 bridge は文献であり、しかも経済学の正典**である。⇒ F-23 で立てた仮説（「被引用が桁外れの bridge は道具である」）は**本件を説明しない**。本日の様式は**F-01 対処前の「旧様式」そのもの**（分野外の巨大ハブ文献1本が候補集合を決める）で、**上位10件占有率 40% は 100% より低いものの、プール全体では 85% 集中**している。⇒ **上位窓の多様化は「上位の見た目」を直したが、プールの成り立ちは直していない**、というのが5回分の観測の要約。
+
+**S-26 / S-67 への記録（seihai 側の裁定意見）**: S-26 の事前登録は「3回とも旧様式なら本テーマ族への不適合が確定＝恒久除外」。**5回目の本日は旧様式の両条件（1本のbridgeへの集中・分野外ハブ）を満たす**ため、**観測者としての結論は「不適合が確定した」**。ただし**裁定はユーザーの判断項目（保留 D）なので seihai 側では除外を実行しない。**
+
+---
+
+#### 再現（2026-09-08・byrepo）— F-03 / F-05 系の様式が2週連続
+
+**観測**: テーマは上記と同じ（`structured:true`・`track_a_count:4`・`keywords_include` を `backtest / live-trading / signal / execution / reconciliation` と主題語で具体化）。返った4件は **HKUDS/Vibe-Trading（★32,977）/ OpenByteInc/QuantDinger / coding-kitties/investing-algorithm-framework / agutinbaigo28/trading-backtest-kit**＝**いずれも「トレーディング一般で星の多い repo」で、主題（水準トリガの反復発火・sim↔live 乖離の検出）に触るものはゼロ**。
+
+**数値**: 4件中3件が **theme関連度 1.0** で並び、順位は実質 Reliability だけで決まった（92.8 / 90.0 / 90.0 / 80.0）。RELATIONSHIP と HYPOTHESIS は全件定型文（「関係軸『実装アンカー』で関係度『高』の関連性がある」「この論文の知見をテーマの具体的局面に転用できるか要検討」）。**9/01 と同一の様式で、2週連続の再現。**
+
+**⇒ 呼び手の読み**: `keywords_include` を**分野語ではなく主題語**にしても様式が変わらなかったので、**関連度の分母が「分野に属するか」で飽和している**疑い（F-20 の略語問題とは別で、本件のキーワードは略語ではない）。**F-03 は 2026-08-21 に対処済みとされているが、`structured:true` 経路で関連度が全件 1.0 に張り付くと、対処後のランキング式でも関連度項が定数になり実質 Reliability 単独に戻る。**
+
 ## 対処済み
 
 ### F-13-I. bybridge — **計器そのものの故障＝粗い属性1つを緑のスカラで申告していた** — **対処済み 2026-09-04**
