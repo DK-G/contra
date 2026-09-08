@@ -115,7 +115,8 @@ def test_collect_citation_candidates_builds_cites_filter(monkeypatch):
     _patch_collector(monkeypatch, client)
     seeds = [_seed("WA", ["W100", "W101"], ["C1", "C2"])]
 
-    out = collect_citation_candidates(seeds, CollectConfig(max_pages=3), max_count=10)
+    out = collect_citation_candidates(
+        seeds, CollectConfig(max_pages=3, bridge_fair_share=False), max_count=10)
 
     flt = client.calls[0]["filter"]
     assert "cites:" in flt
@@ -253,3 +254,115 @@ def test_distinct_papers_sharing_a_few_refs_are_not_folded():
     b = _seed_doi("B", [f"B{i}" for i in range(20)] + ["S1", "S2"], doi="10.3/b", title="Beta")
     pool = _bridge_pool_from_seeds([a, b], cap=10)
     assert pool[0] in ("S1", "S2")     # genuinely shared refs still rank first
+
+
+# --- F-23 / F-24: per-bridge fair share at RETRIEVAL -------------------------
+
+
+class _HubClient:
+    """A pool of one mega-hub plus small bridges.
+
+    The hub's citers are effectively unlimited, so the legacy single OR query — which
+    samples the union in proportion to its members' sizes — fills the whole result set with
+    them. Each small bridge has exactly 2 citers of its own.
+    """
+
+    def __init__(self) -> None:
+        self.calls: List[Dict] = []
+
+    @staticmethod
+    def _work(wid: str, refs: List[str]) -> Dict:
+        return {"id": wid, "display_name": wid, "publication_year": 2021,
+                "abstract_inverted_index": {"x": [0]}, "referenced_works": refs}
+
+    def get(self, params: Dict) -> Dict:
+        self.calls.append(params)
+        flt = params.get("filter", "")
+        cites = flt.split("cites:", 1)[1].split(",", 1)[0]
+        asked = cites.split("|")
+        per_page = int(params.get("per-page", 50))
+        page = int(params.get("page", 1))
+        if asked == ["HUB"] or len(asked) > 1:     # the hub answers for the whole-pool query too
+            start = (page - 1) * per_page
+            return {"results": [self._work(f"H{start + i}", ["HUB"]) for i in range(per_page)]}
+        b = asked[0]
+        return {"results": [self._work(f"{b}c{i}", [b]) for i in range(2)]}
+
+
+def _hub_pool() -> List[str]:
+    return ["HUB"] + [f"B{i}" for i in range(20)]
+
+
+def test_fair_share_breaks_the_single_hub_monopoly(monkeypatch):
+    """F-24: 85% of the pool arrived through one 71k-citation bridge. The quota caps it."""
+    client = _HubClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed("WA", ["HUB"], ["C1"])]
+
+    out = collect_citation_candidates(
+        seeds, CollectConfig(), max_count=40, bridges=_hub_pool())
+
+    assert len(out) == 40
+    via_hub = sum(1 for w in out if "HUB" in (w.referenced_works or []))
+    assert via_hub == 40 // 10          # max_count // _BRIDGE_QUOTA_DIVISOR
+    assert len({(w.referenced_works or [None])[0] for w in out}) >= 10
+
+
+def test_fair_share_off_reproduces_the_monopoly(monkeypatch):
+    """The A/B control: the old path still collapses onto the hub."""
+    client = _HubClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed("WA", ["HUB"], ["C1"])]
+
+    out = collect_citation_candidates(
+        seeds, CollectConfig(bridge_fair_share=False), max_count=40, bridges=_hub_pool())
+
+    assert all("HUB" in (w.referenced_works or []) for w in out)
+
+
+def test_fair_share_walks_bridges_in_pool_order(monkeypatch):
+    """Pool order IS the diversity ranking (most-seed-shared first), so it must be honoured."""
+    client = _HubClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed("WA", ["HUB"], ["C1"])]
+
+    collect_citation_candidates(seeds, CollectConfig(), max_count=40, bridges=_hub_pool())
+
+    single = [c["filter"].split("cites:", 1)[1].split(",", 1)[0]
+              for c in client.calls if "|" not in c["filter"].split("cites:", 1)[1].split(",", 1)[0]]
+    assert single[:4] == ["HUB", "B0", "B1", "B2"]
+
+
+def test_fair_share_backfills_from_the_legacy_scan(monkeypatch):
+    """Recall floor: when the round-robin cannot fill the cap, the OR scan finishes the job."""
+    client = _HubClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed("WA", ["HUB"], ["C1"])]
+
+    out = collect_citation_candidates(
+        seeds, CollectConfig(), max_count=60, bridges=["HUB", "B0", "B1"])
+
+    assert len(out) == 60               # 6 (hub quota) + 2 + 2 from the round-robin, rest backfilled
+    assert any("|" in c["filter"] for c in client.calls)
+
+
+def test_fair_share_survives_one_failing_bridge(monkeypatch):
+    """One bridge 500ing must not cost the caller the other 49."""
+    import src.pipeline.collect as collect_mod
+
+    class _FlakyClient(_HubClient):
+        def get(self, params: Dict) -> Dict:
+            flt = params.get("filter", "")
+            if "cites:B0," in flt:
+                raise collect_mod.OpenAlexError("boom")
+            return super().get(params)
+
+    client = _FlakyClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed("WA", ["HUB"], ["C1"])]
+
+    out = collect_citation_candidates(
+        seeds, CollectConfig(), max_count=40, bridges=_hub_pool())
+
+    assert len(out) == 40
+    assert not any(w.id.startswith("B0c") for w in out)

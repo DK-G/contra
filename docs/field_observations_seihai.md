@@ -543,6 +543,18 @@ S-26 が記録を指示している2項目:
 
 ---
 
+### F-25. bybridge — **`diversify_head_by_bridge` の「1 bridge あたり上位10件中2件まで」枠は、候補が複数の bridge を引用すると効かない**（2026-09-08 起票・contra 側で発見。F-23/24-R の対処中に可視化された）
+
+**機序（コード読解で確定・実測で裏付け）**: `src/pipeline/bridges.py` の枠は、候補が引用する bridge の**すべてが満杯のときだけ**その候補を後回しにする（`all(counts[b] >= cap for b in cited)`）。したがって候補が {最頻 bridge, 小さい bridge X} の2本を引用していれば、**最頻 bridge の枠が満杯でも X に空きがあるかぎり着席し、しかも着席時に最頻 bridge のカウントも増える**。⇒ 枠は「最も混んでいる bridge」を抑えない。
+
+**なぜ今まで見えなかったか**: 枠を入れた 2026-08-22 当時、候補あたり平均共有 bridge は **1.00 本**だった（＝どの候補も bridge 1本しか引用していないので、枠は意図どおり効く）。F-23/24-R で取得段を per-bridge 配分にしたところ平均が **1.85〜2.08 本**に上がり、**枠の前提が崩れた**。実測: F-24 フィクスチャで最頻 bridge の上位10件占有率が **20% → 30%**、strategy_generation フィクスチャで **0% → 50%** と、プール集中度が下がったのに**上位窓の集中は上がった**。
+
+**⇒ これは F-23/24-R の副作用ではなく、元からあった枠の欠陥が新しい条件下で表面化したもの。** 上位窓の中身自体は改善している（後述の対処済み節の head-10 比較を見ること）ので、**「上位窓占有率」という指標が、平均共有 bridge が 1 を超えた条件では以前と同じ意味を持たない**点に注意。**S-26 の観測記録で上位10件占有率を経時比較するときは、同じ行の「候補あたり平均 bridge」も併せて読むこと。**
+
+**contra 側の処方候補（今日は実装していない＝1日1件の規約）**: 枠の判定を「引用する bridge のうち**最も混んでいる**1本」で行う（`any` ではなく最頻 bridge 基準）か、着席時のカウント加算を「その候補を通した bridge」1本に限る。**どちらも上位窓の見た目を変えるので、head-10 の中身の before/after を必ず並べて判断すること。**
+
+---
+
 ### F-20. byrepo — **略語のキーワードが無関係語の部分一致を拾い、関連度 0.0 のまま Reliability だけで上位に載る**（2026-09-05 初観測・seihai 週次指針）
 
 **症状**: `keywords_include: ["cuped", "variance-reduction", "confidence-sequence", "e-value", "ab-testing"]` で実行したところ、**5位に `OpenPrinting/cups-filters`（印刷サブシステムのフィルタ群・関連度 0.0・Reliability 91/100・順位スコア 31.8）** が入った。**`cuped` が `cups` に部分一致した**もの。6位は `huggingface/transformers`（関連度 0.0・stars 164,793）。
@@ -592,7 +604,7 @@ S-26 が記録を指示している2項目:
 - **F-13 ＝ 逆向きの乖離を初観測。** bybridge のシード名簿診断は `分野(Field) 一致 20/20 = 100%`・上位トピック `Sports Analytics and Performance 4` と出て、**一見「主題外のスポーツ分析で埋まっている」ように読める**。しかし実体を読むと、その4件は *Parameter Estimation in Large Dynamic Paired Comparison Experiments*（JRSS-C 1999）／*Urnings: A New Method for Tracking Dynamically Changing Parameters in Paired Comparison Systems*（JRSS-C 2021）／*Receiver operating characteristic analysis for paired comparison data*（JRSS-A 2024）等で、**呼び手のテーマ（対比較）の方法論的正典そのもの**だった——OpenAlex が Bradley–Terry 系の文献を Sports Analytics に分類しているだけである。⇒ **9/04 の事例（診断が 100% と申告し実体は NAFTA・Fox News）とは*逆向き***。**トピックラベルは主題適合を過大にも過小にも誤る**ので、**診断ブロックの数値だけで名簿の質を判定しない**（呼び手はシード表の実タイトルを読むこと）。
 - **bybridge の S-26 観測プロトコル ＝ 6回目で初の明確な成功。** 最頻 bridge の上位10件占有率は 20 / 20 / 20 / 70 / 20 / **0**％（本日が最良・全体では 25%・使われた bridge 19本・候補あたり平均 1.33本）。最頻 bridge は **Heckman "Sample Selection Bias as a Specification Error"（被引用 29,158）**＝巨大ハブだが**呼び手の主題（勝者選抜のバイアス）に正面から当たる**。**実収穫あり**＝[Comparing Predictive Accuracy](https://doi.org/10.1080/07350015.1995.10524599)（Diebold–Mariano 1995・**2つの競合予測の精度差を、予測誤差が同時点で相関していてよい前提で検定する**＝呼び手が手作りしている対比較統計の正典）、[Rank-Order Tournaments as Optimum Labor Contracts](https://doi.org/10.1086/261010)（Lazear–Rosen 1981）、[A Practitioner's Guide to Cluster-Robust Inference](https://doi.org/10.3368/jhr.50.2.317)（Cameron–Miller 2015）。⇒ **「3回とも旧様式なら恒久除外」の条件は満たされていない。除外しない。**
 
-### F-23. bybridge — **シードが主題直撃でも、最頻 bridge が「ソフトウェア引用」になって交差候補を丸ごと持っていく**（2026-09-07 初観測・F-13 とは別段の故障）
+### F-23. bybridge — **シードが主題直撃でも、最頻 bridge が「ソフトウェア引用」になって交差候補を丸ごと持っていく**（2026-09-07 初観測・F-13 とは別段の故障） → **プール段の機序を特定し対処済み（2026-09-08）。下記「対処済み」節 F-23/24-R へ**
 
 **観測（2026-09-07・seihai r01 担当日）**: テーマ＝「極値だから選ばれた候補の真値推定／選抜補正」（`materials:true`・seed_count 20・bridge_count 20）。
 
@@ -622,7 +634,7 @@ S-26 が記録を指示している2項目:
 
 ---
 
-### F-24. bybridge — **旧様式（分野外の巨大ハブ1本が交差候補を独占）が、シード名簿の劣化を伴って明確に再現した**（2026-09-08 観測・S-26 観測プロトコル 5回目）
+### F-24. bybridge — **旧様式（分野外の巨大ハブ1本が交差候補を独占）が、シード名簿の劣化を伴って明確に再現した**（2026-09-08 観測・S-26 観測プロトコル 5回目） → **対処済み（2026-09-08）。下記「対処済み」節 F-23/24-R へ**
 
 **観測（2026-09-08・seihai r02 担当日）**: テーマ＝「トリガが持続する水準なので失敗直後に同じ行動が再点火し、評価器はそれを1回分としか課金しない」（`materials:true`・seed_count 20・bridge_count 4）。
 
@@ -647,6 +659,50 @@ S-26 が記録を指示している2項目:
 **⇒ 呼び手の読み**: `keywords_include` を**分野語ではなく主題語**にしても様式が変わらなかったので、**関連度の分母が「分野に属するか」で飽和している**疑い（F-20 の略語問題とは別で、本件のキーワードは略語ではない）。**F-03 は 2026-08-21 に対処済みとされているが、`structured:true` 経路で関連度が全件 1.0 に張り付くと、対処後のランキング式でも関連度項が定数になり実質 Reliability 単独に戻る。**
 
 ## 対処済み
+
+### F-23/24-R. bybridge — プール集中の機序＝**プール全体を1本の `cites:` フィルタに OR で流していたので、取得が bridge の大きさに比例していた** — **対処済み 2026-09-08**
+
+**F-01-R が「プールに偽物が居た」を直したのに対し、これは「プールは正しいのに取得の仕方が偏っていた」。**
+
+**機序**: 2-hop スキャンは `cites:B1|B2|...|B50` という1本のクエリを投げてページ送りする。**OR 集合からの抽出は、集合の各要素の大きさに比例する。** 被引用 71,804 の `Theory of the firm` と被引用 200 の bridge を OR で並べれば、返るページはほぼ前者の被引用側で埋まる——**候補の 85%（F-24）／62%（F-23）が1本を通り、50本プールのうち実際に通行があったのは 3〜5 本だけ**という観測は、これで過不足なく説明できる。**F-23 で立てた「巨大 bridge は道具（R の引用）である」という仮説は不要**（F-24 の最頻 bridge は経済学の正典＝文献だった）。**共通するのは種別ではなく、単に大きさが取得量に直結していたこと。** そして 2026-08-22 に入れた上位窓の多様化は、**この段が集め終えた後の並べ替え**なので、プールの成り立ちには一切触れていなかった（seihai の 9/08 の要約「上位窓の多様化は上位の見た目を直したが、プールの成り立ちは直していない」は正確）。
+
+**何を変えたか**（加算的・可逆・MCP シグネチャ非変更）:
+
+1. **bridge ごとの取得配分**（`src/pipeline/collect.py` の `collect_citation_candidates`）: プールを OR で1回投げるのをやめ、**bridge を1本ずつ問い合わせ、1本あたり最大 `max_count // 10` 件（既定 60 件なら 6 件）しか供給できない**ようにした。走査順は**プール順**（＝`_bridge_pool_from_seeds` が「複数シードが共有する bridge を先頭に、その後シード間ラウンドロビン」で作った順序＝多様性の保証そのもの）。**F-18 の facet 公平配分（`facet_fair_share`）と同じ思想を bridge 段に適用したもの。**
+2. **不足分は従来の一括 OR 走査で補充**（recall の床）。1本の bridge が失敗（HTTP エラー）しても**その bridge を飛ばすだけ**で残りは走る。`CollectConfig(bridge_fair_share=False)` または `per_bridge_cap=0` で旧挙動。
+3. **プール順が捨てられていたのを修正**（`src/mcp_server.py`）: 収集段には `bridges=sorted(bridges)`＝**id のアルファベット順**が渡っていた。集合に落として並べ直していたので、上記の多様性順序は取得段に届いていなかった。順序付きリストを渡すよう変更（生存確認で落ちた bridge は順序を保ったまま除去）。**旧実装では実害が出にくかった（どうせ OR で1本にまとめていた）が、配分走査では走査順が結果を決める。**
+4. **診断行を1本追加**: 配分の存在と1本あたりの上限を出力に明記（`- bridge 取得配分 (F-23/F-24): …`）。**「集中度 25%」が「OR 1回の結果としての 25%」なのか「6件枠を掛けた上での 25%」なのかは、数値だけでは区別できない**ため。
+
+**before / after 実測**（同一セッション・**同一シード名簿と同一 bridge プール**に対して `bridge_fair_share` だけを切り替えて交互実行。計器は既存の `bridge_concentration`。probe: `scripts/` には入れず scratchpad で実行）:
+
+| 指標 | 新フィクスチャ `theme_seihai_retrigger_hysteresis.json`（F-24 のテーマ族） | 既存フィクスチャ `theme_seihai_strategy_generation.json`（F-01 のテーマ族） |
+|---|---|---|
+| **最頻 bridge が全候補に占める割合** | 35% → **25%** | 27% → **25%** |
+| **実際に通行のあった bridge** | 17 本 → **27 本** | 21 本 → 18 本 |
+| **候補あたり平均共有 bridge** | 1.55 → **2.08 本** | **1.00 → 1.85 本** |
+| **共有 bridge 1本のみの候補** | 44/60 → **32/60** | **60/60 → 42/60** |
+| 上位10件の占有率 | 20% → 30%（**悪化。F-25 として起票**） | 0% → 50%（同上） |
+| 2-hop 段の OpenAlex 呼び出し | 2 回 → **11 回** |  |
+| after 候補のうち before にも居た件数 | 17/60 | 10/60 |
+
+**中身の before / after（上位10件・こちらが本題）**:
+
+- **F-24 テーマ族**: before の上位10件は `The Pricing of Options` / `Does corporate social responsibility affect the cost of capital?` / `Costs of Equity and Earnings Attributes` / **`Dermatologist-level classification of skin cancer`** / **`Mastering the game of Go without human knowledge`** ＝コーポレートファイナンスの正典と、無関係な深層学習の巨大ハブ。after の首位は **[The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality](https://doi.org/10.3905/jpm.2014.40.5.094)**（Bailey & López de Prado 2014）＝**呼び手のテーマ（選抜バイアスと反復試行の過小課金）に正面から当たる1本**で、`Building Diversified Portfolios that Outperform Out of Sample` も入った。
+- **F-01 テーマ族（品質多様性・新規性探索）**: before の上位は `Four concepts for resilience` / `Brain Intelligence` / `ICLabel（脳波の独立成分分類器）` / `Autonomous chemical research with LLM` ＝**主題と無関係**。after は `Bayesian Optimization for Quality Diversity Search` / `Automatic modular design of robot swarms based on repertoires of behaviors generated via novelty search` / `Evolutionary Statistical System Based on Novelty Search` / `Efficient Quality Diversity Optimization` ＝**テーマのキーワードそのもの**。⇒ **集中度の数値の動きは小さいが、返る中身は別物になった。**
+
+**効かなかった／注意すべきこと（黙って消さない）**:
+
+- **F-24 の 85% は再現していない。** 本日のフィクスチャは 9/08 の seihai run と同じ*テーマ族*だが同じ*名簿*ではなく、before 値は 35% / 27% だった。⇒ **「85% → 25%」と読んではいけない。実測されたのは「同一名簿・同一プールに対する before/after の差」だけ**である。85% の条件そのものは次回の実運用 run で再測される。
+- **上位窓の占有率は悪化した**（20%→30% / 0%→50%）。これは新しい欠陥ではなく、**元からあった `diversify_head_by_bridge` の枠の穴が、平均共有 bridge が 1 を超えたことで表面化した**もの（**F-25** として起票）。上位窓の中身自体は上記のとおり改善しているので、**この数値だけを見て退行と判定しない。**
+- **「遠さ」は今回も改善していない。** after の上位は依然としてホームドメイン近傍（ファイナンス／進化計算）が中心である。F-01-R が残した「ホームドメイン除外がこのテーマで効いていない疑い」は**そのまま残っている**——本日の変更は集中の是正であって、異分野性の是正ではない。
+- **コストは 2-hop 段で 2 回 → 11 回**の OpenAlex 呼び出し（1本あたり1ページのみ・上限は プール本数）。F-11 の polite pool 据え置きと合わせると、**429 が出やすくなる方向の変更**である。ここは次の担当が実運用の取得診断行で監視すること。
+
+**検証**: 新規回帰5件（巨大ハブ1本＋小 bridge 20本の合成プールで **配分あり＝ハブは 40 件中 4 件しか供給できない／配分なし＝全件ハブ経由**という A/B を固定、走査がプール順であること、round-robin で埋まらないときの OR 補充、1本の bridge が例外を投げても他が走ること）。既存の「プール全体が1本の `cites:` に入る」ことを固定していたテストは `bridge_fair_share=False` の契約として維持。**420 → 425 tests: 425 pass。** 実 API は probe 2 テーマ（各 before/after）＋ `scripts/run_bybridge.py` で end-to-end 2 回。
+
+**seihai 側への申し送り（人間判断事項）**: **S-26 / S-67 の裁定（bybridge の恒久除外）は、この変更の後で測り直してから下してほしい。** 9/08 の「観測者としての結論＝不適合が確定」は**変更前の実装に対する結論**であり、取得段の偏りという単一の機序が是正された。**再開するなら、insights に「候補あたり平均 bridge」「通行のあった bridge 本数」を記録してほしい**（上位10件占有率は F-25 のため単独では読めなくなった）。**contra 側から seihai のコード・SKILL・ドキュメントは一切触っていない。**
+
+---
+
 
 ### F-13-I. bybridge — **計器そのものの故障＝粗い属性1つを緑のスカラで申告していた** — **対処済み 2026-09-04**
 

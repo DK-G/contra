@@ -29,6 +29,7 @@ from src.openalex.client import reset_run_stats, run_stats_caveat
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
     CollectConfig,
+    _BRIDGE_QUOTA_DIVISOR,
     _bridge_pool_from_seeds,
     _norm_doi,
     _norm_title,
@@ -795,7 +796,13 @@ class StdinMcpServer:
                 "isError": False
             }
 
-        bridges = set(_bridge_pool_from_seeds(seeds, cap=50))
+        # Pool ORDER carries the diversity guarantee (_bridge_pool_from_seeds ranks
+        # multi-seed-shared bridges first, then round-robins across seeds), and the
+        # per-bridge fair-share scan walks the pool in that order — so keep the list,
+        # not just the set. Passing `sorted(bridges)` used to hand the collector an
+        # alphabetical id order, which is no order at all.
+        bridge_pool = _bridge_pool_from_seeds(seeds, cap=50)
+        bridges = set(bridge_pool)
 
         # F-01 root cause (2026-08-25): OpenAlex merges/deletes work records but leaves the old
         # ids behind in every citing paper's referenced_works. Such a dangling id is a
@@ -810,12 +817,13 @@ class StdinMcpServer:
             live_bridges, dead_bridges = filter_live_bridges(bridges)
             if live_bridges:
                 bridges = live_bridges
+                bridge_pool = [b for b in bridge_pool if b in bridges]
 
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
         cands = collect_citation_candidates(
-            seeds, CollectConfig(), max_count=60, used_ids=used_ids, bridges=sorted(bridges)
+            seeds, CollectConfig(), max_count=60, used_ids=used_ids, bridges=bridge_pool
         )
         # C(ii): theme relevance leads the ranking, citations demoted to a tie-breaker;
         # C(i): no single bridge may fill the display window (2026-08-22 ruling).
@@ -850,6 +858,17 @@ class StdinMcpServer:
                 + f"{len(sem_seeds)} 件を統合"
                 + ("・field 限定あり" if scope_ids else "・field 限定なし")
                 + "\n" + diag_line
+            )
+        if diagnostics:
+            # F-23/F-24 instrument: the concentration meter above cannot tell the caller
+            # WHY the pool is spread the way it is. Naming the retrieval quota makes the
+            # next observation readable ("25% with a 6-per-bridge quota" is a different
+            # fact from "25% out of one OR query").
+            diag_line = (
+                f"- bridge 取得配分 (F-23/F-24): 各 bridge を個別に問い合わせ、1本あたり最大 "
+                f"{max(1, 60 // _BRIDGE_QUOTA_DIVISOR)} 件までしか交差候補を供給できない"
+                f"（プール順＝複数シードが共有する bridge から先に走査。不足分は従来の一括 "
+                f"OR 走査で補充）\n" + diag_line
             )
         if diagnostics and dead_seed_count:
             diag_line = (

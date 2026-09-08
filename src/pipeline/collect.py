@@ -42,6 +42,11 @@ class CollectConfig:
     # False restores the pre-2026-08-28 behaviour (facets queried in order, loop breaks as soon as
     # the cap is reached — which structurally starved the LAST facet, i.e. the most distant one).
     facet_fair_share: bool = True
+    # F-23/F-24: give every BRIDGE a share of ``max_count`` instead of ORing the whole pool into
+    # one `cites:` filter (where the bridge with the most citers supplies most of the page — a
+    # 71,804-citation hub swamped 85% of the pool on 2026-09-08). False restores the pre-2026-09-08
+    # behaviour (one OR query, paged).
+    bridge_fair_share: bool = True
 
 
 class Collector:
@@ -683,6 +688,31 @@ def _seed_l0_concept_ids(seeds: List[Work]) -> List[str]:
     return out
 
 
+_BRIDGE_QUOTA_DIVISOR = 10      # a single bridge may supply at most max_count // 10 candidates
+
+
+def _citation_query(
+    bridges: Sequence[str],
+    seeds: List[Work],
+    home_field_ids: List[str],
+    max_refs: int,
+) -> StructuredQuery:
+    """The 2-hop candidate query for one bridge (or the whole pool), with home-domain exclusion.
+
+    Home-domain exclusion (Phase 2): prefer the seeds' dominant primary_topic Field — OpenAlex's
+    active taxonomy and *less* aggressive than L0 concepts (it only drops papers whose PRIMARY
+    field is home, keeping cross-listed cross-domain work). Fall back to L0 concepts when the
+    seeds carry no primary_topic (older data) so exclusion is never silently lost.
+    """
+    return StructuredQuery(
+        cites=list(bridges),
+        exclude_field_ids=home_field_ids,
+        exclude_concept_ids=[] if home_field_ids else _seed_l0_concept_ids(seeds),
+        work_type="article",
+        max_referenced_works=max_refs,
+    )
+
+
 def collect_citation_candidates(
     seeds: List[Work],
     config: Optional[CollectConfig] = None,
@@ -692,6 +722,7 @@ def collect_citation_candidates(
     bridge_cap: int = 50,
     max_refs: int = 100,
     bridges: Optional[Iterable[str]] = None,
+    per_bridge_cap: Optional[int] = None,
 ) -> List[Work]:
     """Citation 2-hop scan: papers citing the seeds' references but OUTSIDE the seeds' domain.
 
@@ -700,6 +731,18 @@ def collect_citation_candidates(
     concepts, are structurally linked yet cross-domain — exactly what surface keyword search
     misses. `type:article` and `referenced_works_count:<max_refs` drop reviews / intro-citation
     dumps (the false-bridge traps). Seeds and `used_ids` are never returned.
+
+    **Per-bridge fair share (F-23/F-24, 2026-09-08).** The pool used to be ORed into a single
+    ``cites:`` filter and paged. An OR set is sampled in proportion to its members' sizes, so the
+    bridge with the most citers supplies most of the page: measured 62% of the pool on one
+    bridge (``R: A Language and Environment for Statistical Computing``, 353k cites) and 85% on
+    another (``Theory of the firm``, 72k cites), with the remaining candidates split among 3-5
+    bridges out of a 50-bridge pool. The 2026-08-22 head-window diversification only re-ordered
+    what this stage had already collected, so it fixed the *display* and left the *pool* built by
+    one hub. Here each bridge is queried on its own and may claim at most ``per_bridge_cap``
+    candidates, walked in pool order (most-seed-shared bridges first). The legacy OR scan then
+    backfills whatever the round-robin could not supply, so recall never drops below the old
+    behaviour. ``CollectConfig(bridge_fair_share=False)`` (or ``per_bridge_cap=0``) restores it.
     """
     cfg = config or CollectConfig()
     # `bridges` lets the caller hand in a pool it has already built AND vetted (the MCP path
@@ -710,36 +753,53 @@ def collect_citation_candidates(
         return []
 
     exclude: Set[str] = {s.id for s in seeds} | set(used_ids or set())
-    # Home-domain exclusion (Phase 2): prefer the seeds' dominant primary_topic Field — OpenAlex's
-    # active taxonomy and *less* aggressive than L0 concepts (it only drops papers whose PRIMARY
-    # field is home, keeping cross-listed cross-domain work). Fall back to L0 concepts when the
-    # seeds carry no primary_topic (older data) so exclusion is never silently lost.
     home_field_ids = dominant_field_ids(seeds)
-    sq = StructuredQuery(
-        cites=bridges,
-        exclude_field_ids=home_field_ids,
-        exclude_concept_ids=[] if home_field_ids else _seed_l0_concept_ids(seeds),
-        work_type="article",
-        max_referenced_works=max_refs,
-    )
-
     collector = Collector(cfg)
     out: List[Work] = []
     seen: Set[str] = set()
-    for page in range(1, cfg.max_pages + 1):
-        payload = collector.client.get(sq.to_params(per_page=cfg.per_page, page=page))
-        new = 0
+
+    def absorb(payload: Dict[str, Any], limit: int) -> int:
+        """Append up to `limit` fresh, non-excluded works from one response. Returns how many."""
+        taken = 0
         for w in filter_retracted(normalize_results(payload)):
             if w.id in exclude or w.id in seen:
                 continue
             seen.add(w.id)
             out.append(w)
-            new += 1
+            taken += 1
+            if taken >= limit or len(out) >= max_count:
+                break
+        return taken
+
+    quota = per_bridge_cap
+    if quota is None:
+        quota = max(1, max_count // _BRIDGE_QUOTA_DIVISOR) if cfg.bridge_fair_share else 0
+
+    if quota > 0 and len(bridges) > 1:
+        # One page per bridge is enough: the quota is far below OpenAlex's 50-per-page cap, and a
+        # bridge whose first page cannot fill its quota (after exclusions) is not the bridge the
+        # pool is collapsing onto. Ask for headroom so exclusions do not silently under-fill.
+        per_page = max(quota, min(cfg.per_page, quota * 2))
+        for bridge in bridges:
             if len(out) >= max_count:
-                annotate_bridge_signals(out, bridges)
-                return out
-        if new == 0:
-            break
+                break
+            sq = _citation_query([bridge], seeds, home_field_ids, max_refs)
+            try:
+                payload = collector.client.get(sq.to_params(per_page=per_page, page=1))
+            except OpenAlexError:
+                continue        # one bridge failing must not cost the caller the other 49
+            absorb(payload, quota)
+
+    # Legacy OR scan — the backfill. It is also the whole scan when the fair share is disabled.
+    if len(out) < max_count:
+        sq = _citation_query(bridges, seeds, home_field_ids, max_refs)
+        for page in range(1, cfg.max_pages + 1):
+            payload = collector.client.get(sq.to_params(per_page=cfg.per_page, page=page))
+            if absorb(payload, max_count) == 0:
+                break
+            if len(out) >= max_count:
+                break
+
     # Stamp co-citation strength + cross-community betweenness (Phase 2) so every consumer
     # ranks bridge candidates off one signal (src/pipeline/bridges.py). Zero extra API cost.
     annotate_bridge_signals(out, bridges)

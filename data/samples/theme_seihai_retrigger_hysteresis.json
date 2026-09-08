@@ -1,0 +1,28 @@
+{
+  "_comment": "Reproduction fixture for F-24 (2026-09-08): bybridge collapsed onto ONE off-field mega-hub bridge (Jensen & Meckling, 71,804 cites) which accounted for 85% of the 60 intersection candidates. Wording follows the seihai r02 run recorded in docs/field_observations_seihai.md so remediation days can re-measure the bridge-concentration numbers against a fixed input.",
+  "theme_overview": "水準トリガ(level-triggered)の発注条件を使っているため、トリガ条件が満たされ続けている間は失敗直後に同じ行動が再点火する。評価器は同一バーの連続発火を1回分としか課金しないので、シミュレーション上のコストが実運用のコストを構造的に過小評価する。結果として sim と live の損益が乖離し、その乖離は個々の約定を突き合わせるまで見えない。エッジ検出(edge-triggered)への切り替え、ヒステリシス幅や不応期(refractory period)の導入、そして再点火をコスト側で正しく課金する会計のどれが本筋かを決めたい。制御工学のチャタリング抑制、神経生理の不応期、待ち行列の再試行嵐など、同じ構造を扱っている分野の知見を手掛かりにしたい。",
+  "goal": "水準トリガの反復発火を、コスト会計と sim/live 突合の両面から扱う設計指針を得る。",
+  "why_problem": "評価器の課金単位が『行動の発生回数』ではなく『バー単位の状態』なので、再点火が無料になる。生成・検証段は再点火を観測できず、実運用でしか差が出ない。",
+  "approach_type": "application",
+  "assumptions": [
+    "再点火はトリガ設計に由来し、執行段のスリッページ調整では回復できない",
+    "sim と live の乖離は約定単位で突き合わせない限り総和では相殺されて見えなくなる",
+    "ヒステリシス幅の導入は反応遅れとトレードオフになる"
+  ],
+  "scope": {
+    "field": "economics",
+    "scale": "small",
+    "time_range": "last_10_years"
+  },
+  "keywords": {
+    "include": [
+      "backtest overfitting",
+      "live trading",
+      "execution cost",
+      "trade reconciliation",
+      "hysteresis"
+    ],
+    "exclude": []
+  },
+  "concern": "同一トリガの再点火がシミュレーションでは無料になり、live との損益乖離として遅れて表面化する"
+}
