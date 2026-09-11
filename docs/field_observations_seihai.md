@@ -85,6 +85,10 @@
 | **2026-09-11** | **byrepo** | `off-policy evaluation` / `trade filter` / `backtest` / `counterfactual` / `ablation` | **8週連続の使える収穫ゼロ（F-20/F-14 系）。** 1位は `amazon/music-off-policy-evaluation-benchmark`（HF dataset・関連度 0.70）＝**repo 名に `off-policy-evaluation` が一致しただけの音楽推薦ログ**。2〜4位は `freqtrade` / `ai-hedge-fund` / `backtesting.py`（関連度 0.33 同点を Reliability が並べる）。問い（取引フィルタの効果を記録済み約定で遡及評価する実装）に答えたものは 0。 |
 | **2026-09-11** | **delegate_finalize** | — | **F-21（道具の自己記述と検証器の食い違い）の2例目。** MCP スキーマ上 `assumptions` は `required` に含まれないが、検証器は `assumptions must be 2-5 items` で拒否する（`src/core/input_schema.py` の `validate_and_normalize`）。byserendipity 経路では assumptions を渡していたので踏まず、bybridge の後段で省略して踏んだ。 |
 | **2026-09-11** | **byserendipity**（raw_only） | 3 facet（OPE・臨床試験の適格基準・突然変異テスト） | **(a) 応答サイズ**: raw 結果が **26 万字**でツール応答上限を超えファイル退避。材料の全欄 echo（F-19-R の処方）を要求する一方、全欄を含む材料は呼び手のコンテキストに収まらず、**`venue` 等を落として送るしかない**＝本日 8 件全てで「材料欄が欠けたまま送信」の警告。**処方の要求と出力サイズが両立していない。** (b) **percentile_gate が接地済み 8 件中 5 件を落とし、Near/Far facet の候補が全滅・出力は Very Far の 2 件のみ**（S-81 の既知様式。距離の多様性が出力段で失われる）。接地照合は 8/8 成立。 |
+| **2026-09-12** | **bybridge** | futility stopping / conditional power / sequential testing / optimal stopping（home=`Economics, Econometrics and Finance`） | **未実行（収穫ゼロではない）。** 3回とも `OpenAlexError: HTTP 429`。★**contra を介さず直接 `api.openalex.org` を叩いても 429**＝contra の不具合ではなく OpenAlex 側のレート制限。直前に byserendipity が 3 facet × 約50件を回している。⇒ **F-28 として起票**（by\* が1つの外部クォータを共有し、先に回したツールが後続を枯らす）。 |
+| **2026-09-12** | **byserendipity**（raw_only・委譲経路） | 3 facet（臨床生物統計の群逐次試験／行動生態学の採餌パッチ離脱／逐次決定理論の best-arm 同定） | **成功。3 facet とも返却あり（50/49/48 → 候補 60）・接地検証失敗ゼロ。** post-gate は **6件提出→通過1件**（閾値 0.611）で、**落選5件のうち3件が当方の判断では今週いちばん実務的**＝**F-22 の 7〜12点目**。落選のまま採用。 |
+| **2026-09-12** | **byrepo** | futility / group-sequential / conditional-power / best-arm-identification / sequential-testing（`structured:true`） | **主題直撃3本（`keaven/gsDesign`・`Merck/gsDesign2`・`rpact-com/rpact`）＝2週連続で収穫あり。** ただし**関連度 0.0 の `samugit83/redamon`（AI レッドチーム）と `microsoft/agent-framework` が4位・6位に入り、主題直撃の `rpact`（5位）を上回った**。F-17-R の「残る限界」（係数が語の一致であって問いへの適合でない）の再現。 |
+| **2026-09-12** | **delegate_finalize** | — | **F-21 の3例目**（`assumptions` がスキーマ上 optional なのに検証器は 2〜5件必須）。★**前日 9/11 に同じ観測が「2例目」としてこの表に記録済みだったのを読まずに追記した**＝**追記先の直近行を読まない**という呼び手側の手順の穴。seihai 台帳 S-117 として起票。 |
 
 ★**2026-08-26 の重要な副産物＝失敗の所在が初めて特定できた。** S-11／F-02 の対処（使ったシードを出力に含める）が入っているため、bybridge の**シード20件が可視化**され、それが本テーマと1件も接点が無いことを直接読めた。⇒ 本日の収穫ゼロは**「橋が汎用ハブに吸われた」(F-01/S-38) ではなく「シード検索そのものの失敗」**。**S-11 の起票文が「シードが見えない限り両者を区別できない」と書いたその区別が、S-11 の実装によって初めて可能になり、今日答えが出た。**★併せて S-26 の観測項目も記録: **(i) 最頻 bridge の上位10件占有率 20%**（実際に使われた bridge 13本＝**bridge 段の多様化は効いている**）／**(ii) 最頻 bridge = Optimization by Simulated Annealing（被引用 44,995）＝分野外の巨大ハブ**。**「上位は多様化したが収穫はゼロ」は旧様式の再現ではなく新しい観測**であり、**bridge 段の処置がすべて効いていても、シードが主題から外れている限り下流は正しく動いて収穫ゼロを返す**。
 
@@ -1193,6 +1197,65 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **残（束3・人間判断）**: polite pool／Kaggle 資格情報／bysearch 復活。**各改修の結果（seihai の実運用 run）を見て判断**（ユーザー裁定）。全 **373 tests: 373 pass**。
 
+---
+
+## 2026-09-12（土・seihai 週次指針レーン）
+
+### F-28. 全 by\* 共通 — **OpenAlex のレート制限を by\* が共有しており、先に回したツールが後続のツールを枯らす**（2026-09-12 初観測）
+
+**症状**: 2026-09-12 の seihai 週次指針レーンで、`byserendipity_discover`（`raw_only` / facet 3枚）が正常完了（3 facet × 返却 50/49/48 → 候補 60）した直後から、**`bybridge_collect` が3回連続で `OpenAlexError: request failed after 3 attempts: HTTP Error 429`** で失敗した。`seed_count` を 20→12→10、`bridge_count` を 6→5 に落としても同じ。
+
+**切り分け（重要）**: **contra を介さず、seihai 側から `api.openalex.org/works?search=...&per-page=2` を直接1回叩いても 429 が返った。** ⇒ **contra の実装・リトライ設計の問題ではなく、OpenAlex 側がこの IP に対して掛けているレート制限である。**
+
+**含意（呼び手側の運用規約）**:
+
+1. **by\* は1つの外部クォータを共有している。** 同一セッションで byserendipity を先に回すと、そのセッションの bybridge は枯れうる。byserendipity の `raw_only` は facet ごとに `search.semantic` をページ送りするので、**1回の呼び出しで最も多くクォータを消費する**。
+2. ⇒ **規約案: bybridge を先に回す。** bybridge は 2-hop で `cites:` クエリを bridge ごとに投げるため（F-23/24-R 以降）、遅いが1本あたりの件数は小さい。順序を逆にすれば両方が完走する可能性が高い。
+3. **「収穫ゼロ」ではなく「未実行」として記録する。** F-16（HTTP 400）・F-18（504）・S-112（0 件の facet を「その距離は不毛」と読まない）と同じ族で、**上流の一過性障害を候補側の性質として読まない**という既存規約の、**セッション内の資源競合バージョン**である。
+
+**contra 側で検討の余地があるもの（seihai は被験体側のコードを直さない）**: (a) 429 を他のエラーと区別して「クォータ枯渇・時間をおいて再実行」と明示的に名指しする、(b) `mailto` 付きの polite pool を使っているかの確認、(c) by\* 横断のトークンバケットを1つ持ち、byserendipity の facet 数に応じて後続へ残量を申告する。
+
+---
+
+### F-21. 再現（2026-09-12・**3例目**）— `delegate_finalize` の `assumptions`
+
+`delegate_finalize` の MCP スキーマでは `assumptions` は **required に入っていない**（`required: ["theme_overview","goal","why_problem","candidates"]`）。しかし `assumptions` を省いて呼ぶと **`InputValidationError: assumptions must be 2-5 items`** で拒否される。**同じ引数を省いた `byserendipity_discover` は通る**ので、**同一サーバ内で同じ引数の必須性が食い違っている**。
+
+**F-21 の一般形（道具の自己記述が検証器と食い違う）の3例目**で、1例目（`approach_type: "system-building"`・9/05）と違い、2例目以降は**スキーマの `required` 配列そのもの**が実体と食い違っている＝**説明文でなく機械可読部分の乖離**。呼び手のコストは1往復（再送）で済んだが、**材料 JSON が 12KB あるため再送が高い**。
+
+★**正直な記録**: 当方は本日これを「2例目」として書いた。**実際には 2026-09-11（前日）の seihai r05 レーンが、この同じファイルの日次表に「2例目」として既に記録していた**（`859c571`）。⇒ **今日の週次指針が指針10 として書いた「既に調べたことを思い出す仕組みが無い」に、その指針を書いた当人が同じ日に掛かった**。**追記先のファイルの直近行を読まずに追記した**のが直接原因で、**処方は F-28 や F-21 の側ではなく呼び手の手順にある**（seihai 台帳 S-117）。
+
+---
+
+### F-22. 再現（2026-09-12・seihai 週次指針）— 6件提出→5件が `percentile_gate` で落選
+
+| 候補 | 実測 | 閾値 | 当方の評価 |
+|---|---|---|---|
+| Futility stopping in clinical trials (2012) | 0.419 | 0.611 | **今週の中心的な収穫**（欠けていた片側＝決着しない側の発火規則の正典） |
+| Quantifying the bias ... early stopping for futility (Stat Med 2017) | 0.445 | 0.611 | **自分の処方への反証装置**（完走側の推定も歪む・解析式付き） |
+| Informing the selection of futility stopping thresholds (2008) | 0.382 | 0.611 | 閾値較正の実例 |
+| Optimal Giving-Up Times and the MVT (1982) | 0.546 | 0.611 | 一律の諦め時間は最適でない |
+| Foraging as an evidence accumulation process (2019) | 0.564 | 0.611 | 採餌と逐次検定の合流点 |
+| **Overharvesting in human patch foraging (PNAS 2023)** | **0.61** | 0.611 | **通過**（距離 0.86 × 構造 0.71） |
+
+**落選5件のうち3件が「今週いちばん実務的」と当方が判断したもの。** `距離 × 構造` である以上これは仕様どおりの挙動で、F-22 の既存の記述（近い分野の当たりは構造的に通れない）に**7〜12点目の実測**を足すもの。**当方は落選のまま採用する。以後この様式の記録は1行に留める**（毎回同じことが起きるため、再現の情報量が飽和した）。
+
+---
+
+### F-17-R の「残る限界」の再現（2026-09-12・byrepo）— 関連度 0.0 が上位に載り、主題直撃が「低」になる
+
+テーマ＝futility 打ち切り／conditional power／群逐次境界の実装アンカー。返った6件:
+
+| 順位 | repo | 関連度 | 順位スコア | 実体 |
+|---|---|---|---|---|
+| 1 | `keaven/gsDesign` | **0.33「低」** | 43.6 | **群逐次設計の正典**（主題直撃） |
+| 2 | `Merck/gsDesign2` | 0.33「低」 | 43.1 | 同上 |
+| 3 | `jasp-stats/jaspPower` | **0.67「高」** | 42.3 | 検出力計算 GUI（star 1・Impl/Doc 9/30） |
+| 4 | `samugit83/redamon` | **0.0** | 35.0 | **AI レッドチーム攻撃フレームワーク**（完全に無関係・Reliability 100） |
+| 5 | `rpact-com/rpact` | 0.33「低」 | 32.9 | **確認的適応デザイン**（主題直撃） |
+| 6 | `microsoft/agent-framework` | **0.0** | 30.1 | エージェント基盤（無関係・star 13,480） |
+
+**関連度 0.0 の2件が、主題直撃の `rpact` を上回った。** F-17-R の修正で `関係度` ラベルは係数を正しく映すようになったが、**「係数が語の一致であって問いへの適合ではない」という残る限界**がそのまま観測されている。**加えて、関連度 0.0 を順位から排除しない**ため、Reliability の高い無関係リポジトリが枠を2つ消費する。**呼び手側の運用**: 関連度 0.0 の行は読まずに飛ばす（順位を信用しない）。
 
 ---
 
