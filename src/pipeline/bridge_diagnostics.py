@@ -499,11 +499,62 @@ def render_seed_alignment(
         )
     if sem == 0:
         lines.append(
-            "  ⚠ semantic レッグの供給が 0 件です（取得失敗、または全件が field 選別で落ちた）。"
+            "  ⚠ semantic レッグの供給が 0 件です（どの段で落ちたかは下の『semantic レッグ内訳』行。"
+            "その行が無ければ seed_semantic:false で無効化されている）。"
             "名簿は純語彙シードのみで構成され、テーマ本文は検索に一度も入っていません＝"
             "主題適合は『良好』でも『不良』でもなく未検証です。"
         )
     return "\n".join(lines)
+
+
+_SEMANTIC_SOURCE_LABELS = {
+    "seed_semantic_text": "呼び手の seed_semantic_text",
+    "theme_prose": "テーマ本文（overview+goal+why）",
+    "keywords": "英語 keywords_include（テーマ本文が非英語のため差し替え）",
+}
+
+
+def render_semantic_leg(report: Optional[Dict[str, Any]]) -> str:
+    """One line accounting for the semantic seed leg's supply, stage by stage (F-13, 2026-09-11).
+
+    "semantic レッグ供給 0 件" recurred five times (8/31–9/11) without a cause: the endpoint
+    failing, a Japanese query retrieving Japanese-language records, and the home-Field cut all
+    render as the same zero. This line names the query that was sent and where the results went.
+    """
+    if not report:
+        return ""
+    src = _SEMANTIC_SOURCE_LABELS.get(report.get("source"), str(report.get("source")))
+    share = report.get("prose_non_latin_share") or 0.0
+    head = (
+        f"  ・semantic レッグ内訳: 検索文={src}・{report.get('chars', 0)} 字"
+        + ("（上限で切詰め）" if report.get("truncated") else "")
+        + (f"・テーマ本文の非ラテン文字率 {share:.0%}" if share > 0 else "")
+    )
+    if report.get("error"):
+        return (
+            head + f" → 取得失敗（{report['error']}）＝検索文の良否は未判定。"
+            "504 は一過性のことが多い（同じ呼び出しの再投で通る例あり・F-16）。"
+        )
+    langs = report.get("languages") or {}
+    lang_txt = " / ".join(f"{k} {v}" for k, v in langs.items()) or "—"
+    line = (
+        head + f" → 返却 {report.get('raw', 0)}（言語 {lang_txt}）"
+        f" → abstract 無し −{report.get('dropped_no_abstract', 0)}"
+        f" → home Field 外 −{report.get('dropped_home_field', 0)}"
+        f" → 供給 {report.get('supplied', 0)}"
+    )
+    if report.get("source") == "theme_prose" and share > 0.3:
+        line += (
+            "\n  ⚠ テーマ本文が非英語のまま semantic 検索に入りました（英語 keywords も無い）。"
+            "埋め込み検索は意味より先に言語で近傍を取るため、返るのは同言語の文献です。"
+            "英語の擬似アブストラクト（約80語）を seed_semantic_text に渡してください。"
+        )
+    elif report.get("source") == "keywords":
+        line += (
+            "\n  ・注: テーマ本文が非英語のため英語 keywords で代用しました。"
+            "主題の文章で引きたいときは英語の擬似アブストラクト（約80語）を seed_semantic_text に渡してください。"
+        )
+    return line
 
 
 def _fmt_int(n: Optional[int]) -> str:

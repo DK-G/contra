@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-11（CL-0099） F-13-S 対処: bybridge の semantic シードレッグは日本語本文を埋め込み検索に入れていた——英語の検索文へ差し替え、「0 件」に段ごとの内訳を付ける
+
+### 概要
+* **5回観測された「semantic レッグ供給 0 件」の真因を特定。** seihai のテーマ本文（日本語）をそのまま `search.semantic` に投げていたため、近傍が日本語文献で埋まり（返却 50 件中 ja 24/46/45）、abstract 選別と home Field 選別で全滅していた。旧経路の関数で **4/4 回 0 件**を再現。504 も重なるが一過性（短い英語でも出る）。英語 1,575 字で HTTP 400・1,437 字は成功という長さ上限も実測。
+* **実装（加算的・可逆）**: (1) `semantic_seed_query_text`＝検索文の選択順を `seed_semantic_text` ＞ ラテン文字の本文 ＞ 英語 keywords（本文が非英語のとき）＞ 本文、1,200 字で文末切り詰め。(2) `collect_seeds_semantic_report`＝段ごとの内訳（出所・字数・返却・言語構成・abstract 無し・home Field 外・供給・失敗理由）。旧 `collect_seeds_semantic` は包みとして維持。(3) MCP `bybridge_collect` に任意引数 `seed_semantic_text`（英語擬似アブストラクト約 80 語）。`seed_semantic` の説明文も実挙動に合わせた。(4) 診断に `semantic レッグ内訳` 行（`render_semantic_leg`）。
+* **実測 before/after（semantic レッグ単体・home=Economics）**: 供給 **0/0/0 → 6/0/14**（英語 keywords）・7/1/0（英語擬似アブストラクト）。返却の言語は ja 主体 → en 49〜50/50。**エンドツーエンド（retrigger_hysteresis）**: 名簿から carbon price 予測・サウジ原油・インド証券業が抜け、Bayesian backtest overfitting / Hysteresis in Price Efficiency / Correctness of backtest engines が入った。Subfield 一致 65% → 70%。
+* **正直に残す**: (a) **交差候補の上位はほぼ不変**（首位 Deflated Sharpe のまま・ファイナンス内）＝9/11 の「交差しない」は未改善。(b) 英語化しても **home Field 選別で 24〜42 件が落ちる**。落ちていたのは GP 売買ルール・Behavioural GP diversity など**主題直撃の CS / Decision Sciences 分類論文**＝**F-27 として起票**（Field 一致率計器・L0 外判定と相互作用するため本日は未実装）。(c) 擬似アブストラクトが keywords より良いとは限らなかった（律速が (b) にあるため）。
+* 新規回帰 8 件＋既存 MCP テストのスタブ名更新。**425 → 433 tests: 433 pass。** 実 API は probe 5 本（scratchpad）＋ MCP ハンドラ経由 end-to-end 3 回。
+* **seihai 側への申し送り**: `semantic レッグ内訳` 行が 0 件のときの落ちた段を insights に記録してほしい。`seed_semantic_text` に英語擬似アブストラクトを渡す手順の追加は**人間の判断**（seihai 側は一切触っていない）。
+
+---
+
 ## 2026-09-08（CL-0098） F-23/F-24 対処: bridge プールを OR で1本のクエリに流していたので、取得量が bridge の大きさに比例していた——bridge ごとの取得配分へ
 
 ### 概要

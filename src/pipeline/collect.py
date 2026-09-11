@@ -243,12 +243,109 @@ def collect_and_filter(
     return limit_count(collected, max_count)
 
 
+# F-13 semantic leg, 2026-09-11 probe (real API): a 1,575-char English query returns HTTP 400
+# while 1,437 chars succeeds, so the query is cut at a sentence end below this many characters.
+_SEMANTIC_SEED_MAX_CHARS = 1200
+# Share of non-ASCII letters above which the theme prose is treated as non-English. The
+# embedding endpoint matches LANGUAGE before meaning: Japanese seihai themes came back 48-92%
+# Japanese-language records (2026-09-11 probe), which the abstract / home-Field / seed_language
+# gates then remove — the leg supplied 0 seeds in 4/4 runs under the Economics home Field.
+_SEMANTIC_NON_LATIN_SHARE = 0.3
+
+SEMANTIC_SOURCE_OVERRIDE = "seed_semantic_text"
+SEMANTIC_SOURCE_PROSE = "theme_prose"
+SEMANTIC_SOURCE_KEYWORDS = "keywords"
+
+
+def _non_latin_share(text: str) -> float:
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return 0.0
+    return sum(1 for c in letters if ord(c) > 0x24F) / len(letters)
+
+
+def _cap_query_chars(text: str, limit: int = _SEMANTIC_SEED_MAX_CHARS) -> str:
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = max(head.rfind(". "), head.rfind("。"))
+    return head[: cut + 1] if cut > limit // 2 else head
+
+
+def semantic_seed_query_text(theme: ThemeInput, override: Optional[str] = None) -> Dict[str, Any]:
+    """Choose what the semantic seed leg sends to ``search.semantic``, and say why.
+
+    Order: a caller-written English pseudo-abstract (``seed_semantic_text``) > the theme prose
+    when it is Latin-script > the English ``keywords.include`` when the prose is not (a
+    Japanese query retrieves Japanese-language records, not the subject) > the prose anyway
+    when there are no keywords. The returned ``source`` is shown in the diagnostics so a
+    zero-supply leg can be traced to its query instead of read as "the theme is saturated".
+    """
+    prose = " ".join(t for t in (theme.theme_overview, theme.goal, theme.why_problem) if t).strip()
+    share = _non_latin_share(prose)
+    if override and override.strip():
+        text, source = override, SEMANTIC_SOURCE_OVERRIDE
+    elif share <= _SEMANTIC_NON_LATIN_SHARE:
+        text, source = prose, SEMANTIC_SOURCE_PROSE
+    else:
+        kws = [k for k in theme.keywords.include if k and _non_latin_share(k) <= _SEMANTIC_NON_LATIN_SHARE]
+        text, source = (" ".join(kws), SEMANTIC_SOURCE_KEYWORDS) if kws else (prose, SEMANTIC_SOURCE_PROSE)
+    capped = _cap_query_chars(text)
+    return {"text": capped, "source": source, "prose_non_latin_share": share,
+            "truncated": len(capped) < len(" ".join(text.split()))}
+
+
+def collect_seeds_semantic_report(
+    theme: ThemeInput,
+    config: Optional[CollectConfig] = None,
+    *,
+    max_count: int = 60,
+    home_field_ids: Optional[List[str]] = None,
+    text_override: Optional[str] = None,
+) -> tuple:
+    """:func:`collect_seeds_semantic` plus a per-stage account of where the leg's supply went.
+
+    The report (``source``/``chars``/``raw``/``languages``/``dropped_no_abstract``/
+    ``dropped_home_field``/``supplied``/``error``) exists because "semantic レッグ供給 0 件" was
+    observed five times (8/31–9/11) with no way to tell an endpoint failure from a language
+    mismatch from a Field cut — the old path only ``print``-ed failures to the server's stdout.
+    """
+    cfg = config or CollectConfig()
+    q = semantic_seed_query_text(theme, text_override)
+    report: Dict[str, Any] = {
+        "source": q["source"], "chars": len(q["text"]), "truncated": q["truncated"],
+        "prose_non_latin_share": q["prose_non_latin_share"], "raw": 0, "languages": {},
+        "dropped_no_abstract": 0, "dropped_home_field": 0, "supplied": 0, "error": None,
+    }
+    if not q["text"]:
+        return [], report
+    collector = Collector(cfg)
+    sq = StructuredQuery(anchor_terms=[q["text"]], route=ROUTE_SEMANTIC, work_type="article")
+    try:
+        payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
+    except OpenAlexError as exc:
+        report["error"] = str(exc)
+        return [], report
+    raw = filter_retracted(normalize_results(payload))
+    report["raw"] = len(raw)
+    report["languages"] = dict(Counter(w.language or "?" for w in raw).most_common(4))
+    with_abstract = filter_has_abstract(raw)
+    report["dropped_no_abstract"] = len(raw) - len(with_abstract)
+    kept = keep_home_field(with_abstract, home_field_ids or [])
+    report["dropped_home_field"] = len(with_abstract) - len(kept)
+    out = kept[:max_count]
+    report["supplied"] = len(out)
+    return out, report
+
+
 def collect_seeds_semantic(
     theme: ThemeInput,
     config: Optional[CollectConfig] = None,
     *,
     max_count: int = 60,
     home_field_ids: Optional[List[str]] = None,
+    text_override: Optional[str] = None,
 ) -> List[Work]:
     """Semantic near-field seed retrieval: the theme's own prose -> ``search.semantic`` (F-13).
 
@@ -259,21 +356,14 @@ def collect_seeds_semantic(
     same route whose 80-word facet queries land on-topic for the SAME themes where the lexical
     seed roster drifts (F-16/F-18 evidence). Home-Field keeping runs client-side (the endpoint
     400s on field filters); works without a field id are kept, and failures return [] so the
-    lexical path always remains the floor (fail-open).
+    lexical path always remains the floor (fail-open). Non-English prose is replaced by the
+    English keywords (or a caller-supplied ``text_override``) — see
+    :func:`semantic_seed_query_text`.
     """
-    cfg = config or CollectConfig()
-    collector = Collector(cfg)
-    text = " ".join(t for t in (theme.theme_overview, theme.goal, theme.why_problem) if t).strip()
-    if not text:
-        return []
-    sq = StructuredQuery(anchor_terms=[text], route=ROUTE_SEMANTIC, work_type="article")
-    try:
-        payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
-    except OpenAlexError as exc:
-        print(f"[info] semantic シード取得失敗 ({exc}) — 語彙シードのみで続行")
-        return []
-    works = filter_has_abstract(filter_retracted(normalize_results(payload)))
-    return keep_home_field(works, home_field_ids or [])[:max_count]
+    return collect_seeds_semantic_report(
+        theme, config, max_count=max_count, home_field_ids=home_field_ids,
+        text_override=text_override,
+    )[0]
 
 
 def merge_seed_pools(lexical: List[Work], semantic: List[Work], max_count: int) -> List[Work]:

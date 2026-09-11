@@ -24,6 +24,7 @@ from src.pipeline.bridge_diagnostics import (
     SEED_ALIGNMENT_WARN_BELOW,
     SEED_SUBFIELD_WARN_BELOW,
     render_seed_alignment,
+    render_semantic_leg,
     seed_domain_alignment,
 )
 from src.pipeline.collect import (
@@ -337,6 +338,99 @@ def test_parser_keeps_subfield_and_topic():
     assert meta["primary_topic_subfield_name"] == "Finance"
     assert meta["primary_topic_id"] == "T10047"
     assert meta["primary_topic_name"] == "Financial Markets and Investment Strategies"
+
+
+# --- semantic leg: query language, length cap, per-stage report (2026-09-11) -------------
+
+def _ja_theme(keywords: List[str] = None) -> ThemeInput:
+    return ThemeInput(
+        theme_overview="水準トリガの発注条件を使っているため、失敗直後に同じ行動が再点火する。" * 3,
+        goal="乖離を約定単位で検出する", why_problem="評価器が連続発火を1回分としか課金しない",
+        approach_type="application", assumptions=[],
+        scope=Scope(field="economics", scale="small", time_range="no_limit"),
+        keywords=Keywords(include=keywords if keywords is not None else
+                          ["backtest overfitting", "hysteresis"], exclude=[]),
+    )
+
+
+def test_non_english_prose_is_replaced_by_english_keywords(monkeypatch):
+    """2026-09-11 probe: Japanese prose retrieved 45/50 Japanese-language records and the leg
+    supplied 0 seeds in 4/4 runs; the English keywords of the same theme supplied 14."""
+    client = _CaptureClient([_raw("W1")])
+    _patch_collector(monkeypatch, client)
+    out, rep = collect_mod.collect_seeds_semantic_report(_ja_theme(), CollectConfig(),
+                                                         home_field_ids=["20"])
+    q = client.calls[0]["search.semantic"]
+    assert q == "backtest overfitting hysteresis"
+    assert rep["source"] == "keywords" and rep["prose_non_latin_share"] > 0.8
+    assert [w.id for w in out] == ["W1"]
+
+
+def test_caller_pseudo_abstract_overrides_the_prose(monkeypatch):
+    client = _CaptureClient([_raw("W1")])
+    _patch_collector(monkeypatch, client)
+    _, rep = collect_mod.collect_seeds_semantic_report(
+        _ja_theme(), CollectConfig(), text_override="Level-triggered orders re-fire after a failure.")
+    assert client.calls[0]["search.semantic"] == "Level-triggered orders re-fire after a failure."
+    assert rep["source"] == "seed_semantic_text"
+
+
+def test_english_prose_is_still_the_default_query():
+    q = collect_mod.semantic_seed_query_text(_theme())
+    assert q["source"] == "theme_prose" and "detect equivalence" in q["text"]
+
+
+def test_non_english_prose_without_keywords_falls_back_to_the_prose_and_warns():
+    q = collect_mod.semantic_seed_query_text(_ja_theme(keywords=[]))
+    assert q["source"] == "theme_prose"
+    rep = {"source": "theme_prose", "chars": len(q["text"]), "truncated": False,
+           "prose_non_latin_share": q["prose_non_latin_share"], "raw": 50,
+           "languages": {"ja": 45}, "dropped_no_abstract": 42, "dropped_home_field": 8,
+           "supplied": 0, "error": None}
+    line = render_semantic_leg(rep)
+    assert "⚠" in line and "seed_semantic_text" in line
+
+
+def test_query_is_capped_below_the_400_length_at_a_sentence_end():
+    """1,575 chars -> HTTP 400, 1,437 chars -> 200 (2026-09-11 probe)."""
+    long = "Level-triggered orders re-fire after a failure. " * 40
+    q = collect_mod.semantic_seed_query_text(_theme(), override=long)
+    assert len(q["text"]) <= 1200 and q["text"].endswith(".") and q["truncated"]
+
+
+def test_report_accounts_for_every_stage(monkeypatch):
+    no_abs = _raw("W_NOABS")
+    no_abs["abstract_inverted_index"] = None
+    ja = _raw("W_JA")
+    ja["language"] = "ja"
+    client = _CaptureClient([_raw("W_ECON"), _raw("W_CS", "17", "Computer Science"), no_abs, ja])
+    _patch_collector(monkeypatch, client)
+    out, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig(),
+                                                         home_field_ids=["20"])
+    assert rep["raw"] == 4 and rep["dropped_no_abstract"] == 1
+    assert rep["dropped_home_field"] == 1 and rep["supplied"] == len(out) == 2
+    assert rep["languages"].get("ja") == 1
+    line = render_semantic_leg(rep)
+    assert "返却 4" in line and "abstract 無し −1" in line and "home Field 外 −1" in line
+    assert "供給 2" in line
+
+
+def test_endpoint_failure_is_named_in_the_report(monkeypatch):
+    class _Down:
+        def get(self, params):
+            raise OpenAlexError("request failed after 3 attempts: HTTP Error 504: Gateway Timeout")
+    _patch_collector(monkeypatch, _Down())
+    out, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig())
+    assert out == [] and "504" in rep["error"]
+    assert "取得失敗" in render_semantic_leg(rep) and "504" in render_semantic_leg(rep)
+
+
+def test_bybridge_schema_exposes_seed_semantic_text():
+    from src.mcp_server import StdinMcpServer
+    tools = {t["name"]: t for t in StdinMcpServer().list_tools()}
+    props = tools["bybridge_collect"]["inputSchema"]["properties"]
+    assert "seed_semantic_text" in props and "seed_semantic_text" not in \
+        tools["bybridge_collect"]["inputSchema"]["required"]
 
 
 def test_alignment_unresolved_home_field_reports_not_a_zero():

@@ -56,7 +56,7 @@
 
 ---
 
-### F-13. 全 by\* 共通 — **シード／候補の取得段で語彙が衝突し、bridge 段や採点段に入る前に主題から外れる**（2026-08-24 初観測・S-62 と S-26 が同じ機序に落ちた） → **bybridge シード段は 2026-08-28 に三層対処（field 限定＋semantic レッグ＋整合計器）。同分野内ドリフトと byrepo は残**
+### F-13. 全 by\* 共通 — **シード／候補の取得段で語彙が衝突し、bridge 段や採点段に入る前に主題から外れる**（2026-08-24 初観測・S-62 と S-26 が同じ機序に落ちた） → **bybridge シード段は 2026-08-28 に三層対処（field 限定＋semantic レッグ＋整合計器）。同分野内ドリフトと byrepo は残**／**★「semantic レッグ供給 0 件」（5回観測）は 2026-09-11 に機序を特定し対処済み＝日本語のテーマ本文を埋め込み検索に入れていた。下記「対処済み」節 F-13-S へ**
 
 **症状**: 検索語がホームドメインとまったく別の分野で確立した術語と同綴りのとき、取得段の名簿がその別分野で埋まる。以降の段（bridge 構築・関連度採点・多様化）は**外れた名簿の上で正しく動く**ので、診断ブロックの数字は健全に見える。
 
@@ -568,6 +568,8 @@ S-26 が記録を指示している2項目:
 
 **contra 側の処方候補（実装していない）**: (i) 生存シードが閾値（例: 5件）を下回ったら**出力を返さずその旨を返す**（今の挙動は「2件から作った結果」を通常出力と同じ顔で返す）、(ii) semantic レッグ 0 件を**警告でなくエラー扱い**にする、(iii) `seed_language` の刈り取りが過半を超えたら自動で言語ゲートを緩めて再取得する。
 
+> ✅ **2026-09-11: 二重故障の片方（semantic レッグ 0 件）は機序を特定し対処済み**（下記「対処済み」節 **F-13-S**）。日本語テーマ本文をそのまま埋め込み検索に入れていたため、同言語の日本語文献が返り、選別段で全滅していた。非英語本文は英語 keywords（または呼び手の `seed_semantic_text`）に差し替えるようにした。**(i)(iii) の「生存シード 2 件でも通常出力の顔で返す」「言語ゲートの刈り取り」は未対処のまま。**
+
 ---
 
 ### F-16. 再現と規約の初成功（2026-09-09・seihai r03 日次）
@@ -697,7 +699,71 @@ S-26 が記録を指示している2項目:
 
 **⇒ 呼び手の読み**: `keywords_include` を**分野語ではなく主題語**にしても様式が変わらなかったので、**関連度の分母が「分野に属するか」で飽和している**疑い（F-20 の略語問題とは別で、本件のキーワードは略語ではない）。**F-03 は 2026-08-21 に対処済みとされているが、`structured:true` 経路で関連度が全件 1.0 に張り付くと、対処後のランキング式でも関連度項が定数になり実質 Reliability 単独に戻る。**
 
+---
+
+### F-27. bybridge — **semantic シードレッグの home Field 選別が、主題にいちばん近いシードを捨てる**（2026-09-11 起票・contra 側で発見。F-13-S の計器で初めて見えた）
+
+**機序（実測）**: F-13-S で semantic レッグの問い合わせを英語にしたところ、返る 50 件は全件英語・主題直撃になった。**それでも `home Field 外` の段で 24〜42 件が落ちる**。実測（home=`Economics, Econometrics and Finance`・実 API）:
+
+| フィクスチャ | 検索文 | 返却 | abstract 無し | **home Field 外** | 供給 |
+|---|---|---|---|---|---|
+| strategy_generation | keywords | 49 | −7 | **−42** | 0 |
+| strategy_generation | 英語擬似アブストラクト | 50 | −9 | **−40** | 1 |
+| retrigger_hysteresis | 英語擬似アブストラクト | 46 | −9 | **−37** | 0 |
+| trade_collision | 英語擬似アブストラクト | 50 | −12 | **−31** | 7 |
+
+**落ちたものの中身**: strategy_generation を Field 選別なしで引くと 41 件が残り、上位は *Is Technical Analysis in the Foreign Exchange Market Profitable? A Genetic Programming Approach*（Decision Sciences）/ *Comprehensibility & Overfitting Avoidance in Genetic Programming for Technical Trading*（Computer Science）/ **Behavioural GP diversity for dynamic environments**（Computer Science）/ *Cooperative Coevolution of Technical Trading Rules*（CS）…＝**テーマ（GP 売買ルール生成の候補相関と行動多様性）の正典そのもの**。OpenAlex はこれらを Economics ではなく CS / Decision Sciences に分類しているので、**Field 選別が主題直撃を落とし、Economics に分類された周辺文献だけを残す**。
+
+**なぜ放置されていたか**: 8/28 の設計は Field 選別を「語彙レッグの同綴異義語対策」として導入し、semantic レッグにも同じ選別を掛けた（「残す側でクライアント選別」）。**semantic レッグは埋め込みの近さで既に主題を絞っているので、粗い Field 選別を重ねる理由が語彙レッグほど無い**——F-13-I 自身が「Field は主題適合ではない」と書いた属性で、主題適合を測る側のレッグを刈っている。これまでは日本語問い合わせで**そもそも英語の主題文献が返っていなかった**（F-13-S）ので、この段で何が落ちているかは見えなかった。
+
+**処方候補（今日は実装していない＝1日1件の規約＋設計判断が絡む）**: (a) semantic レッグだけ Field 選別を外す（または「home Field ＋ 上位 N 件は Field 不問」）。(b) 選別を Field でなく **Subfield/Topic の近さ**で行う。**ただし下流2箇所と相互作用する**——(i) F-13 の Field 一致率計器が CS 分類のシードを「分野外」と数える、(ii) 交差候補の L0 外判定（ホーム除外）がシードの Field を基準にしているなら、除外の境界が動く。9/11 の seihai 観測「名簿も橋も主題側・しかし出力が交差しない」（F-13 の7回目）はこの (ii) の境界の粗さを疑っているので、**F-27 と一緒に設計するのが筋**。⇒ 次の担当か人間の判断で。
+
+---
+
 ## 対処済み
+
+### F-13-S. bybridge — semantic シードレッグの**供給 0 件の真因＝日本語のテーマ本文を埋め込み検索に入れていた** — **対処済み 2026-09-11**
+
+**経緯**: `semantic レッグ供給 0 件` は **8/31・9/04・9/09（F-26）・9/10・9/11 の5回**観測されていた。9/04 の計器改修（F-13-I）で「0 なら未検証」と明示はされたが、**なぜ 0 なのかは診断にも出ず**（失敗は MCP サーバの stdout に `print` されるだけ）、呼び手は「取得失敗、または全件が field 選別で落ちた」という2択の推測しか受け取れなかった。
+
+**機序（実 API・同梱フィクスチャ3本・home=`Economics, Econometrics and Finance`＝seihai 9/11 と同じ条件）**:
+
+1. **言語が意味より先に効く。** seihai のテーマ本文は日本語で、semantic レッグはそれをそのまま `search.semantic` に投げていた。返る 50 件は **ja 24/50・46/49・45/50**＝日本語文献が近傍を占める（F-16 の byserendipity 言語崩壊と同じ現象が bybridge 側でも起きていた）。日本語レコードは abstract 無し・Field 未分類/分野外が多く、**abstract 選別（−9/−42）と home Field 選別（−41/−8）で全滅→供給 0**。旧経路の関数を直接叩いて **4/4 回で 0** を再現した。
+2. **504 が重なる。** 日本語本文（327〜501 字＝URL で 3〜4KB）は `max_retries=0` で **3/3 が 504**、本番の3回リトライでも 6 回中 1 回は抜けられなかった。ただし 504 は短い英語 keywords（92 字）でも出たので**長さ依存ではなく一過性**と判定。
+3. **長さの硬い上限**: 英語 **1,575 字で HTTP 400、1,437 字は成功**。テーマ本文は最大 1,200 字＋goal＋why なので、英語テーマでも上限を越えうる。
+
+**何を変えたか**（加算的・可逆・MCP シグネチャは任意引数の追加のみ）:
+
+- `semantic_seed_query_text`（`src/pipeline/collect.py`）: 検索文の選択順を **呼び手の `seed_semantic_text` ＞ テーマ本文（ラテン文字が 7 割以上なら）＞ 英語の `keywords_include`（本文が非英語のとき）＞ 本文（キーワードも無いとき）**にした。1,200 字で文末切り詰め。
+- `collect_seeds_semantic_report`: 同じ取得に**段ごとの内訳**（検索文の出所・字数・返却件数・言語構成・abstract 無しで落ちた数・home Field 外で落ちた数・供給数・取得失敗の理由）を付けて返す。旧 `collect_seeds_semantic` はこれの薄い包みとして残した。
+- MCP `bybridge_collect` に任意引数 **`seed_semantic_text`**（英語の擬似アブストラクト約 80 語・byserendipity の `facets[].pseudo_abstract` と同種）を追加。`seed_semantic` の説明文に「非英語本文は英語 keywords に差し替える」を明記（F-21 の教訓＝説明文と挙動を一致させる）。
+- 診断に **`semantic レッグ内訳`** 行を追加（`render_semantic_leg`）。例: `検索文=英語 keywords_include（テーマ本文が非英語のため差し替え）・80 字・テーマ本文の非ラテン文字率 86% → 返却 50（言語 en 49 / de 1） → abstract 無し −22 → home Field 外 −14 → 供給 14`。取得失敗なら理由（504 等）を名指しする。0 件警告の文言も「内訳行を見よ」に変更。
+
+**before / after 実測（semantic レッグ単体・同一セッション・実 API）**:
+
+| フィクスチャ | before（日本語本文） | after 既定（英語 keywords） | after（`seed_semantic_text`） |
+|---|---|---|---|
+| trade_collision | **0**（ja 24・Field 外 −41） | **6**（en 50/50） | 7 |
+| strategy_generation | **0**（504×3） | **0**（en 49/49・**Field 外 −42**） | 1 |
+| retrigger_hysteresis | **0**（ja 45・abstract 無し −42） | **14**（en 49/50） | 0（Field 外 −37） |
+
+**エンドツーエンド（MCP ハンドラ経由・retrigger_hysteresis・同 Field）**: `seed_semantic:false`（＝旧状態の供給 0 と等価）→ 既定、で比較。
+- 名簿: before には *An optimal hybrid framework for carbon price prediction* / *Crude Oil Shocks and Saudi Stock Returns* / *monetary policy regime switches … term structure models* / *Role of Fintech in the growth of Indian stock broking* が入っていた。after は semantic 由来の **A Bayesian Approach to Measurement of Backtest Overfitting / Hysteresis in Price Efficiency and the Economics of Slow-Moving Capital / Correctness of backtest engines / Ultra-High-Frequency Algorithmic Arbitrage** が入り、**Subfield 一致 65% → 70%**。
+- bridge 集中度: 最頻 bridge 25% → 17%（上位10件 30% → 30%）・通行 bridge 27 → 19 本・平均共有 bridge 2.08 → 1.88。
+- **交差候補の上位はほぼ不変**（両方とも首位 *The Deflated Sharpe Ratio*、以下オプション価格・CSR・ESG などファイナンス内）。
+
+**効かなかった／注意すべきこと（黙って消さない）**:
+
+- **下流の「交差しない」問題（9/11 の F-13 7回目）は直っていない。** 本日の変更はシード段の供給の是正で、交差候補は依然ホームドメイン（ファイナンス）内に留まる。
+- **英語擬似アブストラクト（`seed_semantic_text`）は keywords より良いとは限らなかった**（7/1/0 対 6/0/14）。どちらも**2つ目の律速＝home Field 選別**で大半が落ちている（**F-27 として起票**）。英語化は必要条件であって十分条件ではない。
+- 英語 keywords で埋め込み検索すると、語彙レッグと同じ語を使うので**語彙衝突の対抗馬としての独立性は弱い**（本文の主語が入らない）。呼び手が英語の擬似アブストラクトを渡すのが本来の形で、keywords は床。
+- 504 は一過性で今回も出た。**リトライ回数を増やす処置はしていない**（F-11 の据え置き判断を尊重）。
+
+**検証**: 新規回帰 8 件（非英語本文→英語 keywords への差し替え、`seed_semantic_text` の優先、英語本文は従来どおり、キーワード無しの非英語本文で ⚠、1,200 字の文末切り詰め、段ごとの内訳の数え上げ、504 の名指し、MCP スキーマに任意引数として出ること）。既存の MCP 経路テストのスタブ名を新関数へ更新。**425 → 433 tests: 433 pass。** probe は `scripts/` に入れず scratchpad で実行。
+
+**seihai 側への申し送り（人間判断事項）**: (1) 次回の bybridge run から診断に **`semantic レッグ内訳`** 行が出る。**0 件のときはこの行の「どの段で何件落ちたか」を insights に記録してほしい**。(2) テーマ本文が日本語のままでも英語 keywords で自動代用されるが、**`seed_semantic_text` に英語の擬似アブストラクト（約80語）を渡すのが推奨**——byserendipity の facet で既にやっている作業と同じ。これは seihai 側 SKILL の呼び出し手順の変更なので**人間の判断**。(3) S-26/S-67 の裁定には影響するが決定打ではない（交差段は未改善）。**contra 側から seihai のコード・SKILL・ドキュメントは一切触っていない。**
+
+---
 
 ### F-23/24-R. bybridge — プール集中の機序＝**プール全体を1本の `cites:` フィルタに OR で流していたので、取得が bridge の大きさに比例していた** — **対処済み 2026-09-08**
 
