@@ -163,3 +163,40 @@ def test_no_relevance_channel_never_degenerates_to_citations_only():
     assert all((w.source_meta["bridge_hybrid_score"] == 0.0) for w in pool)
     ranked = sorted(pool, key=hybrid_bridge_rank_key, reverse=True)
     assert ranked[0].id == "A"
+
+
+# --- F-25: the head quota binds the busiest bridge only under the opt-in strict rule -----
+# Filed 2026-09-08 (the cap defers a candidate only when EVERY bridge it cites is full, so it
+# never bound the crowded one once candidates cited ~2 bridges). Measured 2026-09-12 on two
+# real pools: the strict rule improves the meter and degrades the head content, so it ships
+# OFF. These tests pin both contracts so the next observation can flip the flag and compare.
+
+def _f25_cand(wid, refs):
+    return Work(id=wid, title=wid, year=2020, venue="V", doi=None, cited_by_count=1,
+                abstract="a", referenced_works=list(refs))
+
+
+def test_legacy_cap_lets_a_candidate_ride_a_small_bridge_into_a_full_one():
+    """The F-25 mechanism itself, pinned as the current default behaviour."""
+    bridges = {"HUB", "S1", "S2", "S3"}
+    ranked = [_f25_cand(f"W{i}", ["HUB", f"S{i % 3 + 1}"]) for i in range(6)]
+    head = diversify_head_by_bridge(ranked, bridges, window=4, per_bridge_cap=2)
+    assert [w.id for w in head[:4]] == ["W0", "W1", "W2", "W3"]  # all four cite HUB
+
+
+def test_strict_cap_defers_once_the_busiest_cited_bridge_is_full():
+    bridges = {"HUB", "S1", "S2", "S3"}
+    ranked = [_f25_cand(f"W{i}", ["HUB", f"S{i % 3 + 1}"]) for i in range(6)] + \
+             [_f25_cand("CLEAN1", ["S1"]), _f25_cand("CLEAN2", ["S2"])]
+    head = diversify_head_by_bridge(ranked, bridges, window=4, per_bridge_cap=2, strict_cap=True)
+    ids = [w.id for w in head[:4]]
+    assert ids[:2] == ["W0", "W1"]                 # HUB fills its two slots
+    assert "CLEAN1" in ids and "CLEAN2" in ids     # then only non-HUB candidates are seated
+
+
+def test_strict_cap_backfills_so_the_window_is_never_truncated():
+    """The quota decides WHO gets the scarce slots, not how many slots exist."""
+    bridges = {"HUB"}
+    ranked = [_f25_cand(f"W{i}", ["HUB"]) for i in range(6)]
+    head = diversify_head_by_bridge(ranked, bridges, window=4, per_bridge_cap=2, strict_cap=True)
+    assert [w.id for w in head] == [f"W{i}" for i in range(6)]

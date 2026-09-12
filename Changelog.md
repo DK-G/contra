@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-09-12（CL-0102） F-25 は実装して**棄却**: 上位窓の枠を強めると数値は改善し中身が悪化する
+
+### 概要
+* **処方は書いてあったが、実測が否定した。** F-25（枠の判定が `all`（引用する全 bridge が満杯のときだけ後回し）なので最頻 bridge を抑えない）に対し、`diversify_head_by_bridge(strict_cap=True)`＝最頻 bridge 基準＋窓のバックフィルを実装。**同一候補プール**上で `strict_cap` と `per_bridge_cap` だけを切り替えて A/B（実 API・2テーマ）。
+* **結果**: 上位10件占有率は strategy_generation **100% → 20%**、retrigger **40% → 20% → 10% → 0%**（cap を上げるほど単調に改善）。**しかし中身は同じ方向に単調に悪化**——retrigger では *Detection of false investment strategies* / *FORMALIZED DATA SNOOPING BASED ON GENERALIZED ERROR RATES* / *Estimating Stock Market Betas*（主題直撃）が窓から落ち、ESG・企業文化・年次報告書の可読性が入った。strategy_generation では GP 他分野適用 10/10 の窓が GP 5 件＋イノベーション経営論になった。
+* **判断**: **既定は旧挙動のまま**（`strict_cap=False`）、opt-in として実装とテストだけ残す。**F-23/24-R でプールの偏りを直した後は、上位窓占有率は上位の質の代理指標ではない**——枠を強めるのは「bridge の身元で並べ替える」ことで、主題直撃を降格させる。
+* 新規回帰3件（F-25 の機序そのものを既定挙動として固定／strict で最頻 bridge が縛られる／strict でも窓が短縮されない）。**441 → 444 tests: 444 pass。**
+* **seihai 側への申し送り**: S-26 の観測プロトコルで**上位10件占有率を主指標として読むのはやめてよい**（F-26 の結論と同じ向き＝主指標は生存シード数と semantic レッグ供給数）。
+
+---
+
 ## 2026-09-12（CL-0101） F-27 対処: semantic シードレッグの home Field 選別が、このレッグの最良シードを捨てていた——捨てずに後方へ回す
 
 ### 概要

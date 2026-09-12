@@ -230,6 +230,7 @@ def diversify_head_by_bridge(
     *,
     window: int = 10,
     per_bridge_cap: int = 2,
+    strict_cap: bool = False,
 ) -> List[Work]:
     """Greedy re-order: no single bridge may claim more than ``per_bridge_cap`` slots of
     the first ``window`` results.
@@ -239,22 +240,49 @@ def diversify_head_by_bridge(
     bridge, so the top-10 read as one bibliography again (measured 100% head-window share
     on 2026-08-22). Same quota philosophy as the seed-side cap, applied at the display
     layer. Candidates deferred out of the window keep their relative order after it.
+
+    **F-25 (2026-09-08 filed, 2026-09-12 MEASURED AND NOT ADOPTED AS DEFAULT).** The cap defers
+    a candidate only when
+    EVERY bridge it cites was full, so a candidate citing {crowded canon, small bridge} was
+    seated on the small bridge's room while still adding to the crowded one's count — the quota
+    never bound the busiest bridge. That was invisible while candidates cited 1.00 bridges on
+    average; once the per-bridge fair share (F-23/24-R) raised the mean to ~2, the head window
+    collapsed again (measured 80% -> 100% on 2026-09-12 after the F-27 roster change). The rule
+    ``strict_cap=True`` switches the rule to "defer when the MOST CROWDED cited bridge is full",
+    and backfills the window from the deferred list so the quota never truncates it.
+
+    **It is NOT the default, because the measurement refused it.** On two real pools the strict
+    rule improved the meter and degraded the content, monotonically in the same direction: for
+    the retrigger pool the head-10 share went 40% -> 20% -> 10% -> 0% as the cap was raised,
+    while "Detection of false investment strategies", "FORMALIZED DATA SNOOPING BASED ON
+    GENERALIZED ERROR RATES" and "Estimating Stock Market Betas" were pushed out of the window
+    in favour of ESG preferences, corporate culture and annual-report readability. For the
+    strategy_generation pool a head of 10/10 genetic-programming transfer papers became 5/10 GP
+    plus innovation-management classics. Once the POOL itself is built diversely (F-23/24-R),
+    re-shuffling the display by bridge identity mostly demotes on-topic candidates: the
+    head-window share stopped being a proxy for head quality. Kept as an opt-in so the next
+    observation can re-test it on a pathological pool.
     """
     bset = _as_set(bridges)
     counts: Dict[str, int] = {}
     head: List[Work] = []
     rest: List[Work] = []
+    full = any if strict_cap else all
     for cand in ranked:
         if len(head) >= window:
             rest.append(cand)
             continue
         cited = set(cand.referenced_works or []) & bset
-        if cited and all(counts.get(b, 0) >= per_bridge_cap for b in cited):
-            rest.append(cand)          # every bridge it hangs off is already full
+        if cited and full(counts.get(b, 0) >= per_bridge_cap for b in cited):
+            rest.append(cand)          # its most crowded bridge (strict) / every bridge (legacy)
             continue
         for b in cited:
             counts[b] = counts.get(b, 0) + 1
         head.append(cand)
+    if len(head) < window and rest:
+        # Backfill: the quota decides WHO gets the scarce head slots, never how many there are.
+        fill = window - len(head)
+        head, rest = head + rest[:fill], rest[fill:]
     return head + rest
 
 

@@ -596,7 +596,18 @@ S-26 が記録を指示している2項目:
 
 **⇒ これは F-23/24-R の副作用ではなく、元からあった枠の欠陥が新しい条件下で表面化したもの。** 上位窓の中身自体は改善している（後述の対処済み節の head-10 比較を見ること）ので、**「上位窓占有率」という指標が、平均共有 bridge が 1 を超えた条件では以前と同じ意味を持たない**点に注意。**S-26 の観測記録で上位10件占有率を経時比較するときは、同じ行の「候補あたり平均 bridge」も併せて読むこと。**
 
-**contra 側の処方候補（今日は実装していない＝1日1件の規約）**: 枠の判定を「引用する bridge のうち**最も混んでいる**1本」で行う（`any` ではなく最頻 bridge 基準）か、着席時のカウント加算を「その候補を通した bridge」1本に限る。**どちらも上位窓の見た目を変えるので、head-10 の中身の before/after を必ず並べて判断すること。**
+**contra 側の処方候補（2026-09-08 時点）**: 枠の判定を「引用する bridge のうち**最も混んでいる**1本」で行う（`any` ではなく最頻 bridge 基準）か、着席時のカウント加算を「その候補を通した bridge」1本に限る。**どちらも上位窓の見た目を変えるので、head-10 の中身の before/after を必ず並べて判断すること。**
+
+> ⚠ **2026-09-12: 実装して実測し、既定にはしなかった（＝試して外れた処方として残す）。** `diversify_head_by_bridge(strict_cap=True)` として最頻 bridge 基準の枠を実装し、同一候補プール上で `strict_cap` と `per_bridge_cap` だけを切り替えて比較した（実 API・2テーマ）。
+>
+> | プール | legacy cap2 | strict cap2 | strict cap3 | strict cap4 |
+> |---|---|---|---|---|
+> | strategy_generation の上位10件占有率 | **100%** | 20% | 30% | 40% |
+> | retrigger_hysteresis の上位10件占有率 | 40% | 20% | 10% | **0%** |
+>
+> **数値は意図どおり改善したが、中身は単調に悪化した。** retrigger では legacy の上位10件にあった **Detection of false investment strategies / FORMALIZED DATA SNOOPING BASED ON GENERALIZED ERROR RATES / Estimating Stock Market Betas**（いずれも主題直撃）が窓から押し出され、代わりに **ESG preferences / Corporate culture / Annual report readability / CSR と株主価値**が入った。strategy_generation では **GP の他分野適用 10/10** だった窓が **GP 5 件＋イノベーション経営論（Absorptive Capacity・Dynamic capabilities・Psychological Safety）**になった。
+>
+> ⇒ **F-23/24-R でプールの成り立ちを直した後は、上位窓占有率は上位の質の代理指標ではない。** 枠を強めることは「bridge の身元で並べ替える」ことであり、**主題直撃の候補を降格させる方向に働く**。⇒ **既定は旧挙動のまま（`strict_cap=False`）**、opt-in として実装だけ残した。**S-26 の観測プロトコルで上位10件占有率を主指標として読むのは、この日をもってやめてよい**（F-26 が既に「主指標は生存シード数と semantic レッグ供給数」と書いた結論と同じ向き）。
 
 ---
 
