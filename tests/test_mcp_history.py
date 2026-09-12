@@ -106,6 +106,9 @@ def _bybridge_args(**over):
         "approach_type": "application", "assumptions": ["a", "b"],
         "scope_field": "f", "scope_scale": "small", "scope_time_range": "last_10_years",
         "keywords_include": [], "keywords_exclude": [],
+        # F-26's seed floor refuses rosters below 5; these fixtures are deliberately tiny and
+        # test other contracts, so they opt out of the floor (the floor has its own tests).
+        "min_seeds": 0,
         "no_history": True, "raw_only": True, "seed_count": 2,
     }
     args.update(over)
@@ -182,3 +185,55 @@ def test_materials_mode_returns_scoreable_json_with_bridge_signals(monkeypatch):
     assert mats[0]["id"] == "W_CAND"
     assert "bridge_signals" in mats[0]
     assert mats[0]["bridge_signals"]["shared_bridge_count"] == 1
+
+
+# --- F-26: a roster below the floor must not answer like a healthy run -------------------
+# 2026-09-09: the language gate dropped 49 and the empty-references gate 9 of 60 lexical hits,
+# leaving TWO seeds — and the run returned 30 cross-domain candidates (clinical gait analysis)
+# with the same shape as a healthy answer. The caller spent the day reading it as a bridge-stage
+# failure.
+
+def test_roster_below_the_floor_refuses_and_names_every_gate(monkeypatch):
+    ja = [_lang_seed(f"W_JA{i}", ["R1"], "ja") for i in range(8)]
+    dead = [_lang_seed("W_DEAD", [], "en")]
+    keep = [_lang_seed("W_EN", ["R2"], "en")]
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: ja + dead + keep)
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [])
+    result = mcp_mod.StdinMcpServer().handle_tool_call(
+        "bybridge_collect", _bybridge_args(min_seeds=5, seed_count=20))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert "生存シードが 1 件（下限 5）" in text
+    assert "言語ゲート" in text and "8 件" in text          # what the gate removed
+    assert "referenced_works が空で除外 1 件" in text
+    assert "seed_language: null" in text                   # and what the caller can do
+    assert result["isError"] is False                      # a refusal, not a crash
+
+
+def test_floor_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(mcp_mod, "collect_and_filter",
+                        lambda *a, **k: [_seed_work("W1", ["R1"])])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [])
+    result = mcp_mod.StdinMcpServer().handle_tool_call(
+        "bybridge_collect", _bybridge_args(min_seeds=0))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert "生存シードが" not in text
+
+
+def test_short_roster_is_refetched_wider_once_before_refusing(monkeypatch):
+    """The gates are right; the supply was short. Fetch wider once before giving up."""
+    calls = []
+
+    def _collect(theme, config=None, **kw):
+        calls.append(kw.get("max_count"))
+        if len(calls) == 1:                       # first pass: one usable seed out of many
+            return [_lang_seed(f"W_JA{i}", ["R1"], "ja") for i in range(59)] + \
+                   [_lang_seed("W_EN", ["R2"], "en")]
+        return [_lang_seed(f"W_EN{i}", ["R2"], "en") for i in range(9)]
+
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", _collect)
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: [])
+    result = mcp_mod.StdinMcpServer().handle_tool_call(
+        "bybridge_collect", _bybridge_args(min_seeds=5, seed_count=20))
+    text = "\n".join(b.get("text", "") for b in result["content"])
+    assert len(calls) == 2 and calls[1] > calls[0]          # one wider re-fetch
+    assert "生存シードが" not in text                        # and it cleared the floor

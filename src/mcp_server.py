@@ -290,6 +290,13 @@ def _keywords_prop(label: str) -> Dict[str, Any]:
             "description": f"{label} (MAX {MAX_KEYWORDS} — more raises InputValidationError)."}
 
 
+# F-26: below this many surviving seeds, a bybridge run cannot be told apart from a healthy
+# one by its output shape, so it refuses instead. Calibrated on the observed failure (2 seeds
+# produced a full 30-candidate answer about clinical gait analysis) and on the healthy runs of
+# the same period, which seated 20/20.
+_MIN_SEEDS_DEFAULT = 5
+
+
 class StdinMcpServer:
     def __init__(self) -> None:
         self.initialized = False
@@ -395,6 +402,7 @@ class StdinMcpServer:
                         "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's provenance line (F-13: Field / Subfield / Topic distribution plus the semantic leg's supply), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
                         "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
                         "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). When the prose is not English it is replaced by the English keywords_include (a Japanese query retrieves Japanese-language records, not the subject). false restores lexical-only seeding.", "default": True},
+                        "min_seeds": {"type": "integer", "description": "Refuse to build an answer when fewer than this many seeds survive the gates (F-26: a 2-seed roster returned 30 cross-domain candidates that looked like a normal run). contra first re-fetches wider once; 0 disables both.", "default": 5},
                         "seed_semantic_keep_offfield": {"type": "boolean", "description": "Keep semantic-leg seeds whose OpenAlex Field is not the home Field, ranked behind the home ones (F-27). The hard keep dropped this leg's most on-topic seeds, because OpenAlex files method-side work under Computer Science / Decision Sciences / Mathematics. false restores the pre-2026-09-12 hard keep.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
@@ -860,6 +868,7 @@ class StdinMcpServer:
                 keep_offfield=bool(args.get("seed_semantic_keep_offfield", True)),
             )
         raw_seeds = merge_seed_pools(lex_seeds, sem_seeds, seed_count * 3)
+        _seed_fetch_rounds = 1
         # C(iii) 2026-08-22: a Japanese-language theme pulled 20/20 Japanese institutional-
         # repository records as seeds (F-12 run 1/3). The 2-hop mechanism needs seeds that
         # carry the citation graph, which is overwhelmingly English-language; off-language
@@ -873,6 +882,49 @@ class StdinMcpServer:
             raw_seeds = kept
         seeds = [w for w in raw_seeds if w.referenced_works][:seed_count]
         dead_seed_count = len(raw_seeds) - sum(1 for w in raw_seeds if w.referenced_works)
+
+        # F-26 (2026-09-09): every gate did its job and the roster still came out at TWO seeds
+        # (language gate 49, empty-references gate 9, out of 60 lexical hits), yet the run
+        # returned its 30 cross-domain candidates with the same face as a healthy one — the
+        # caller read "diverse and unrelated" as a bridge problem for a whole day. Two answers,
+        # in this order: fetch wider once (the gates are right; the supply was short), and if
+        # that still leaves the roster below the floor, REFUSE instead of returning a normal
+        # looking output built on it. `min_seeds:0` disables both.
+        min_seeds = args.get("min_seeds")
+        min_seeds = _MIN_SEEDS_DEFAULT if min_seeds is None else int(min_seeds)
+        if min_seeds and len(seeds) < min_seeds and len(lex_seeds) >= seed_count:
+            _log(f"Bybridge: only {len(seeds)} seeds survived the gates — re-fetching wider...")
+            lex_seeds = collect_and_filter(
+                theme, CollectConfig(), max_count=seed_count * 9, require_abstract=True,
+                home_field_ids=scope_ids,
+            )
+            raw_seeds = merge_seed_pools(lex_seeds, sem_seeds, seed_count * 9)
+            if seed_language:
+                kept = [w for w in raw_seeds if w.language in (None, seed_language)]
+                lang_dropped = len(raw_seeds) - len(kept)
+                raw_seeds = kept
+            seeds = [w for w in raw_seeds if w.referenced_works][:seed_count]
+            dead_seed_count = len(raw_seeds) - sum(1 for w in raw_seeds if w.referenced_works)
+            _seed_fetch_rounds = 2
+
+        if min_seeds and len(seeds) < min_seeds:
+            return {
+                "content": [{"type": "text", "text": (
+                    f"生存シードが {len(seeds)} 件（下限 {min_seeds}）しかないため、"
+                    f"bybridge は結果を返しません（F-26）。**この状態で返すと「多様な無関係」が"
+                    f"通常の出力と同じ顔で返り、bridge 段の失敗と区別できません。**\n"
+                    f"- 取得: 語彙シード {len(lex_seeds)} 件・semantic シード {len(sem_seeds)} 件"
+                    f"（取得ラウンド {_seed_fetch_rounds} 回）\n"
+                    f"- 言語ゲート（seed_language={seed_language!r}）で除外 {lang_dropped} 件\n"
+                    f"- referenced_works が空で除外 {dead_seed_count} 件\n"
+                    + (render_semantic_leg(sem_report) + "\n" if sem_report else "")
+                    + "- 打ち手: (a) 言語ゲートを外す（`seed_language: null`）——日本語テーマでは"
+                      "語彙シードの大半が日本語誌に落ちます。(b) 英語の擬似アブストラクトを "
+                      "`seed_semantic_text` に渡して semantic レッグを効かせる。(c) キーワードを"
+                      "英語の標準語彙へ寄せる。(d) 下限を承知で回すなら `min_seeds: 0`。"
+                )}],
+                "isError": False,
+            }
         if not seeds:
             detail = (
                 f"（候補 {len(raw_seeds)} 件はあったが、全件 referenced_works が空＝bridge を"
