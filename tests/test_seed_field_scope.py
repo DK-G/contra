@@ -122,11 +122,14 @@ def test_generic_search_fallback_keeps_the_field_scope(monkeypatch):
 
 # --- (C) semantic seed leg --------------------------------------------------------------
 
-def test_semantic_seeds_query_theme_prose_and_keep_home_field(monkeypatch):
+def test_semantic_seeds_query_theme_prose_and_rank_home_field_first(monkeypatch):
+    """F-27 (2026-09-12): off-Field results are DEMOTED, not dropped. The hard keep discarded
+    this leg's best seeds — rare-event simulation, GP diversity and covariance-penalty backtest
+    papers that OpenAlex files under Decision Sciences / CS / Mathematics."""
     client = _CaptureClient([
-        _raw("W_ECON", "20", "Economics"),
         _raw("W_MED", "27", "Medicine"),
-        _raw("W_NOFIELD", "", ""),   # unclassified: kept (fail-open)
+        _raw("W_ECON", "20", "Economics"),
+        _raw("W_NOFIELD", "", ""),   # unclassified: treated as home (fail-open)
     ])
     _patch_collector(monkeypatch, client)
     out = collect_seeds_semantic(_theme(), CollectConfig(), home_field_ids=["20"])
@@ -135,7 +138,16 @@ def test_semantic_seeds_query_theme_prose_and_keep_home_field(monkeypatch):
     assert "o" * 60 in params["search.semantic"]           # theme prose, not keywords
     assert "detect equivalence" in params["search.semantic"]
     ids = [w.id for w in out]
-    assert "W_ECON" in ids and "W_NOFIELD" in ids and "W_MED" not in ids
+    assert ids == ["W_ECON", "W_NOFIELD", "W_MED"]         # home first, off-Field behind
+
+
+def test_hard_home_field_keep_is_still_available(monkeypatch):
+    """The pre-F-27 contract, kept as an explicit opt-in rather than deleted."""
+    client = _CaptureClient([_raw("W_ECON", "20", "Economics"), _raw("W_MED", "27", "Medicine")])
+    _patch_collector(monkeypatch, client)
+    out = collect_seeds_semantic(_theme(), CollectConfig(), home_field_ids=["20"],
+                                 keep_offfield=False)
+    assert [w.id for w in out] == ["W_ECON"]
 
 
 def test_semantic_seeds_fail_open_on_endpoint_error(monkeypatch):
@@ -408,11 +420,14 @@ def test_report_accounts_for_every_stage(monkeypatch):
     out, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig(),
                                                          home_field_ids=["20"])
     assert rep["raw"] == 4 and rep["dropped_no_abstract"] == 1
-    assert rep["dropped_home_field"] == 1 and rep["supplied"] == len(out) == 2
+    # F-27: the off-Field work is demoted, not dropped, so it still reaches the roster.
+    assert rep["dropped_home_field"] == 1 and rep["offfield_demoted"] == 1
+    assert rep["supplied"] == len(out) == 3
     assert rep["languages"].get("ja") == 1
     line = render_semantic_leg(rep)
-    assert "返却 4" in line and "abstract 無し −1" in line and "home Field 外 −1" in line
-    assert "供給 2" in line
+    assert "返却 4" in line and "abstract 無し −1" in line
+    assert "home Field 外 1（捨てずに後方へ・F-27）" in line
+    assert "供給 3" in line
 
 
 def test_endpoint_failure_is_named_in_the_report(monkeypatch):

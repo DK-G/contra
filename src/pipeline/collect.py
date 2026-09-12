@@ -303,6 +303,7 @@ def collect_seeds_semantic_report(
     max_count: int = 60,
     home_field_ids: Optional[List[str]] = None,
     text_override: Optional[str] = None,
+    keep_offfield: bool = True,
 ) -> tuple:
     """:func:`collect_seeds_semantic` plus a per-stage account of where the leg's supply went.
 
@@ -316,7 +317,8 @@ def collect_seeds_semantic_report(
     report: Dict[str, Any] = {
         "source": q["source"], "chars": len(q["text"]), "truncated": q["truncated"],
         "prose_non_latin_share": q["prose_non_latin_share"], "raw": 0, "languages": {},
-        "dropped_no_abstract": 0, "dropped_home_field": 0, "supplied": 0, "error": None,
+        "dropped_no_abstract": 0, "dropped_home_field": 0, "offfield_demoted": 0,
+        "keep_offfield": keep_offfield, "supplied": 0, "error": None,
     }
     if not q["text"]:
         return [], report
@@ -332,8 +334,22 @@ def collect_seeds_semantic_report(
     report["languages"] = dict(Counter(w.language or "?" for w in raw).most_common(4))
     with_abstract = filter_has_abstract(raw)
     report["dropped_no_abstract"] = len(raw) - len(with_abstract)
+    # F-27 (2026-09-12): the hard home-Field keep threw away this leg's BEST seeds. Measured
+    # on three fixtures with home=Economics: rare-event simulation for heavy tails, GP bloat /
+    # behavioural-diversity work, and covariance-penalty backtest-overfitting papers were all
+    # dropped because OpenAlex files them under Decision Sciences / Computer Science /
+    # Mathematics. This leg is selected by embedding proximity to the theme text, so subject
+    # nearness is already enforced — a 26-way Field label is a coarser second filter that the
+    # F-13-I instrument itself says "is not subject fit". Home-Field works are now ranked
+    # FIRST and off-Field ones follow instead of being discarded; the fair-share merge still
+    # caps how many of them reach the roster. `keep_offfield=False` restores the hard keep.
     kept = keep_home_field(with_abstract, home_field_ids or [])
     report["dropped_home_field"] = len(with_abstract) - len(kept)
+    if keep_offfield and home_field_ids:
+        kept_ids = {w.id for w in kept}
+        offfield = [w for w in with_abstract if w.id not in kept_ids]
+        report["offfield_demoted"] = len(offfield)
+        kept = kept + offfield
     out = kept[:max_count]
     report["supplied"] = len(out)
     return out, report
@@ -346,6 +362,7 @@ def collect_seeds_semantic(
     max_count: int = 60,
     home_field_ids: Optional[List[str]] = None,
     text_override: Optional[str] = None,
+    keep_offfield: bool = True,
 ) -> List[Work]:
     """Semantic near-field seed retrieval: the theme's own prose -> ``search.semantic`` (F-13).
 
@@ -362,7 +379,7 @@ def collect_seeds_semantic(
     """
     return collect_seeds_semantic_report(
         theme, config, max_count=max_count, home_field_ids=home_field_ids,
-        text_override=text_override,
+        text_override=text_override, keep_offfield=keep_offfield,
     )[0]
 
 

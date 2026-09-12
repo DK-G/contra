@@ -707,7 +707,7 @@ S-26 が記録を指示している2項目:
 
 ---
 
-### F-27. bybridge — **semantic シードレッグの home Field 選別が、主題にいちばん近いシードを捨てる**（2026-09-11 起票・contra 側で発見。F-13-S の計器で初めて見えた）
+### F-27. bybridge — **semantic シードレッグの home Field 選別が、主題にいちばん近いシードを捨てる**（2026-09-11 起票・contra 側で発見。F-13-S の計器で初めて見えた） → **同日対処済み。下記「対処済み」節 F-27-R へ**
 
 **機序（実測）**: F-13-S で semantic レッグの問い合わせを英語にしたところ、返る 50 件は全件英語・主題直撃になった。**それでも `home Field 外` の段で 24〜42 件が落ちる**。実測（home=`Economics, Econometrics and Finance`・実 API）:
 
@@ -727,6 +727,46 @@ S-26 が記録を指示している2項目:
 ---
 
 ## 対処済み
+
+### F-27-R. bybridge — semantic レッグの off-Field 結果を**捨てずに後方へ回す** — **対処済み 2026-09-12**
+
+**起票の翌日に処置した**（F-13-S の計器で初めて見えた段なので、計器→処方が直接つながった例）。
+
+**捨てられていたものの実体（実 API・3フィクスチャ・home=`Economics, Econometrics and Finance`）**:
+
+| フィクスチャ | 選別なしの供給 | Field 選別が残す数 | **落ちていたものの中身** |
+|---|---|---|---|
+| trade_collision | 30 | 6 | **heavy-tail の rare-event simulation / importance sampling 群**（Decision Sciences 13・Mathematics 7）＝テーマ（稀な大勝ちの枝を刈ると期待値が落ちる）の方法論そのもの |
+| strategy_generation | 42 | **0** | **GP の bloat・過剰適合・behavioural diversity**（Computer Science 31）＝テーマ（GP 生成候補の相関と多様性）の正典 |
+| retrigger_hysteresis | 28 | 14 | 共分散ペナルティによる backtest overfitting 回避 / MCS とモデル選択 / 執行の RL |
+
+⇒ **「Field が外れている」と「主題から外れている」は無関係**であることが、3本とも同じ向きで出た。OpenAlex は手法寄りの仕事を CS / Decision Sciences / Mathematics に置く。
+
+**何を変えたか**（加算的・可逆）: `collect_seeds_semantic_report(..., keep_offfield=True)`＝**home Field の結果を先頭に、off-Field をその後ろに並べる**（ハード除外をやめる）。名簿に何件入るかは従来どおり公平配分マージが決める（semantic レッグは名簿の半分が上限）。MCP に `seed_semantic_keep_offfield`（既定 true・false で旧挙動）を追加。診断の内訳行は `home Field 外 42（捨てずに後方へ・F-27）` と書き分け、取得構成行に **「名簿に残った semantic 由来 N 件＝このレッグは分野ラベルではなく主題の近さで選ばれるので Field 一致率の分母に入れて読まないこと」** を併記した。
+
+**エンドツーエンド実測（MCP ハンドラ・同一テーマ・`seed_semantic_keep_offfield` だけ切替）**
+
+*strategy_generation（Field ラベルが主題とずれているケース）*
+
+| | before（ハード除外） | after（後方へ回す） |
+|---|---|---|
+| semantic 供給 | **0** | **42**（名簿に 11 件着席） |
+| 名簿の Field 分布 | Economics 20 | Computer Science 11 / Economics 9 |
+| 交差候補の除外根拠（`dominant_field_ids`） | `['20']` | **`['17','20']`＝CS も home として除外側に回る** |
+| 最頻 bridge | An Evolutionary Theory of Economic Change（21,727） | **Koza『Genetic Programming』（13,275）＝主題の正典** |
+| 交差候補の上位 | Absorptive Capacity / Dynamic capabilities / Toward a knowledge-based theory of the firm …＝**イノベーション経営論で全滅** | **GP を別領域で使った文献群**（ゲノム比較ベンチマーク Bowtie2 / 流量予測 / コンクリート強度 / 2-D strip packing / 高速道路の事故予測 / 降水ダウンスケーリング / 飽和透水係数 / 降雨流出モデルの同定） |
+
+⇒ **9週間で初めて、bybridge の交差候補が「同じ手法を別分野で回している集団」になった。** 呼び手のテーマ（GP 探索の過剰適合と多様性維持）に対して、水文学や材料が同じ手法で踏んだ問題は転用の素材になりうる。**ただしこれは「構造類推」ではなく「同一手法の他分野適用」なので、収穫として使えるかの判定は seihai 側の実運用に委ねる。**
+
+*retrigger_hysteresis（Field ラベルが元から主題と合っているケース）*: 名簿は Economics 18 / Mathematics 1 / Decision Sciences 1 と**ほぼ不変**、除外根拠も `['20']` のまま、交差候補の上位も首位から5件までほぼ同一（Deflated Sharpe / オプション価格 / CSR …）。⇒ **Field ラベルが既に正しいテーマでは、この変更はほとんど何もしない**（保守的）。
+
+**効かなかった／注意すべきこと（黙って消さない）**:
+
+- **bridge 集中度は悪化した**（strategy_generation: 最頻 bridge 全体 35% → 42%・**上位10件 80% → 100%**）。名簿が主題側に寄ると、主題の正典（Koza）を全員が引くので当然こうなる。**F-25 のとおり上位窓占有率は単独で読めない**指標であり、**中身は上記のとおり別物になっている**。とはいえ 100% は高いので、次の担当は F-25（`diversify_head_by_bridge` の枠が複数 bridge 引用で効かない）をこの条件で再測すること。
+- **Subfield 一致率の計器は下がる**（10% → 5% / 70% → 65%）。名簿に CS が入れば Finance 一致率は当然下がるので、**この数値だけで退行と読まない**ための注記を取得構成行に入れた。**計器そのものを「レッグ別の一致率」に作り直すのは未実施**＝残件。
+- **F-22 / F-15 / 交差候補の採点側は一切触っていない。**
+
+**seihai 側への申し送り**: (1) bybridge の名簿に**ホーム分野外のシードが混ざるようになった**——これは仕様変更であって故障ではない。(2) その結果 `dominant_field_ids` が変わるので、**交差候補の除外境界も動く**（strategy_generation 系では CS も除外側に回った）。(3) 診断の Subfield 一致率が下がって見えるが、semantic 由来の件数が併記されるのでそこを読んでほしい。(4) **S-26/S-67 の裁定材料としては、9/11 の「交差しない」に対する直接の反証が初めて出た**（同じテーマ族で交差候補が別分野になった）。裁定は人間の判断。
 
 ### F-21-R. 全 by\* 共通 — 自己記述を**検証器の定数から生成**し、拒否メッセージに許容値を載せる — **対処済み 2026-09-12**
 

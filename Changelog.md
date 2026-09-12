@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-12（CL-0101） F-27 対処: semantic シードレッグの home Field 選別が、このレッグの最良シードを捨てていた——捨てずに後方へ回す
+
+### 概要
+* **F-13-S（9/11）で入れた内訳計器が見せた2つ目の律速。** semantic レッグを英語化しても供給が伸びないテーマがあり、内訳行は `home Field 外 −42` と出していた。実 API で中身を読むと、落ちていたのは **heavy-tail の rare-event simulation（trade_collision）／GP の bloat・過剰適合・behavioural diversity（strategy_generation）／共分散ペナルティによる backtest overfitting 回避（retrigger）**＝**いずれもテーマの主題そのもの**。OpenAlex が手法寄りの仕事を CS / Decision Sciences / Mathematics に置くため、`Economics` を home とする Field 選別が主題直撃を落としていた。
+* **実装**: `collect_seeds_semantic_report(..., keep_offfield=True)`＝home Field を先頭、off-Field をその後ろに並べるだけでハード除外をやめた（名簿に入る件数は従来の公平配分マージが決める）。MCP に `seed_semantic_keep_offfield`（既定 true・false で旧挙動）。診断は `home Field 外 42（捨てずに後方へ・F-27）` と書き分け、**名簿に残った semantic 由来の件数**を取得構成行に併記（Field 一致率の分母に入れて読まないための注記つき）。
+* **エンドツーエンド実測（strategy_generation・`keep_offfield` だけ切替）**: semantic 供給 **0 → 42**（名簿に 11 件着席）／名簿 Field 分布 Economics 20 → **CS 11 + Economics 9**／除外根拠 `['20']` → **`['17','20']`**／最頻 bridge が *An Evolutionary Theory of Economic Change* → **Koza『Genetic Programming』**／**交差候補の上位がイノベーション経営論（Absorptive Capacity・Dynamic capabilities）から、GP を別領域で回した文献群（ゲノム比較・流量予測・コンクリート強度・strip packing・事故予測・降水ダウンスケーリング・降雨流出）へ全面的に入れ替わった**。
+* **保守性の確認**: retrigger_hysteresis（Field ラベルが元から正しいテーマ）では名簿 Economics 18/20・除外根拠不変・交差候補の上位もほぼ同一＝**ラベルが合っているときは何もしない**。
+* **正直に残す**: (a) bridge 集中度は悪化（最頻 35%→42%・**上位10件 80%→100%**）＝主題の正典を全員が引くため。F-25 の再測が必要。(b) Subfield 一致率の計器は下がる（注記で補ったが、レッグ別一致率への作り直しは未実施）。(c) 出てきたのは「構造類推」ではなく「**同一手法の他分野適用**」で、収穫として使えるかは seihai の実運用が判定する。
+* 新規回帰2件＋既存2件を新契約へ（旧ハード除外は `keep_offfield=False` の契約として保持）。**440 → 441 tests: 441 pass。** 実 API は probe 1 本＋MCP ハンドラ経由 end-to-end 4 回（2テーマ × before/after）。
+
+---
+
 ## 2026-09-12（CL-0100） F-21 対処＋F-22 に計器: 自己記述を検証器の定数から生成し、落選内訳に「律速の因子」を書く
 
 ### 概要

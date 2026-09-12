@@ -537,11 +537,17 @@ def render_semantic_leg(report: Optional[Dict[str, Any]]) -> str:
         )
     langs = report.get("languages") or {}
     lang_txt = " / ".join(f"{k} {v}" for k, v in langs.items()) or "—"
+    if report.get("keep_offfield") and report.get("offfield_demoted"):
+        # F-27: off-Field results are no longer discarded, so the line must not read as a cut.
+        field_txt = (f" → home Field 外 {report.get('offfield_demoted', 0)}"
+                     "（捨てずに後方へ・F-27）")
+    else:
+        field_txt = f" → home Field 外 −{report.get('dropped_home_field', 0)}"
     line = (
         head + f" → 返却 {report.get('raw', 0)}（言語 {lang_txt}）"
         f" → abstract 無し −{report.get('dropped_no_abstract', 0)}"
-        f" → home Field 外 −{report.get('dropped_home_field', 0)}"
-        f" → 供給 {report.get('supplied', 0)}"
+        + field_txt
+        + f" → 供給 {report.get('supplied', 0)}"
     )
     if report.get("source") == "theme_prose" and share > 0.3:
         line += (

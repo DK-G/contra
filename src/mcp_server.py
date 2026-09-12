@@ -394,6 +394,7 @@ class StdinMcpServer:
                         "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's provenance line (F-13: Field / Subfield / Topic distribution plus the semantic leg's supply), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
                         "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
                         "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). When the prose is not English it is replaced by the English keywords_include (a Japanese query retrieves Japanese-language records, not the subject). false restores lexical-only seeding.", "default": True},
+                        "seed_semantic_keep_offfield": {"type": "boolean", "description": "Keep semantic-leg seeds whose OpenAlex Field is not the home Field, ranked behind the home ones (F-27). The hard keep dropped this leg's most on-topic seeds, because OpenAlex files method-side work under Computer Science / Decision Sciences / Mathematics. false restores the pre-2026-09-12 hard keep.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
                     "required": ["theme_overview", "goal", "why_problem", "assumptions"]
@@ -830,9 +831,14 @@ class StdinMcpServer:
             # embedding endpoint returns same-language records, which the Field/abstract gates
             # drop). Non-English prose is now swapped for the English keywords, or for the
             # caller's own English pseudo-abstract, and the report says which stage lost what.
+            # F-27 (2026-09-12): the home-Field keep on THIS leg discarded its best seeds
+            # (measured: rare-event simulation, GP behavioural diversity, covariance-penalty
+            # backtest overfitting — all filed outside Economics by OpenAlex). Off-Field
+            # results are now ranked behind the home ones instead of dropped.
             sem_seeds, sem_report = collect_seeds_semantic_report(
                 theme, CollectConfig(), max_count=seed_count * 3, home_field_ids=scope_ids,
                 text_override=args.get("seed_semantic_text"),
+                keep_offfield=bool(args.get("seed_semantic_keep_offfield", True)),
             )
         raw_seeds = merge_seed_pools(lex_seeds, sem_seeds, seed_count * 3)
         # C(iii) 2026-08-22: a Japanese-language theme pulled 20/20 Japanese institutional-
@@ -920,6 +926,9 @@ class StdinMcpServer:
                 )
                 + f"\n  ・取得構成: 語彙シード {len(lex_seeds)} 件・semantic シード "
                 + f"{len(sem_seeds)} 件を統合"
+                + (f"（うち名簿に残った semantic 由来 {sum(1 for w in seeds if w.id in {x.id for x in sem_seeds})} 件"
+                   "＝このレッグは分野ラベルではなく主題の近さで選ばれるので、上の Field 一致率の"
+                   "分母に入れて読まないこと・F-27）" if sem_seeds else "")
                 + ("・field 限定あり" if scope_ids else "・field 限定なし")
                 + (("\n" + render_semantic_leg(sem_report)) if sem_report else "")
                 + "\n" + diag_line
