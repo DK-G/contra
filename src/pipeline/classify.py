@@ -1058,6 +1058,20 @@ def _quality_gate_and_build(
         f"-> 通過 {len(passed)}/{len(all_scored)} 件; "
         f"出力品質フロア{output_floor:.2f}超 {len(qualified)} 件 (上限{count})"
     )
+    # F-15 (docs/field_observations_seihai.md, 3 measurements): the threshold is a quantile OF
+    # THE SUBMITTED BATCH, so it moves with what else was sent — 7 submitted gave 0.474 and 4
+    # submitted gave 0.554 for the same kind of material, and scoring with honest variance can
+    # therefore lose a candidate that a thinner batch would have passed. The behaviour is by
+    # design (the gate is relative on purpose); what was missing is that the caller could not
+    # SEE the dependence. Record both bars and both pass counts.
+    _update_diag(
+        diag,
+        gate_percentile=round(effective_gate, 3),
+        gate_absolute_floor=round(gate, 3),
+        gate_is_batch_relative=effective_gate > gate,
+        passed_at_absolute_floor=sum(1 for s in ser_vals if s >= gate),
+        batch_size=len(all_scored),
+    )
 
     # Fallback when nothing clears the output-quality bar (M3 suppresses weak single-best).
     if not qualified:

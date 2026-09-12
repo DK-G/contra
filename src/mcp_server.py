@@ -1165,6 +1165,20 @@ class StdinMcpServer:
             f"anomaly {diag.get('anomaly', 0)} / hollow {diag.get('hollow', 0)} / "
             f"通過 {diag.get('passed', 0)} / 出力 {len(entries)}"
         )
+        # F-15: the percentile bar is a quantile of THIS batch, so the same candidate can pass
+        # in one submission and fail in another. Show the batch-relative bar next to the fixed
+        # floor and what each would have passed, so the caller can tell "not good enough" from
+        # "this batch happened to be strong" (measured 0.474 at 7 submitted vs 0.554 at 4).
+        if diag.get("gate_percentile") is not None:
+            diag_line += (
+                f"\n  ・閾値の内訳 (F-15): percentile_gate {diag['gate_percentile']}"
+                f"（提出 {diag.get('batch_size', 0)} 件の上位30%点＝**このバッチ次第で動く**）"
+                f" / 固定フロア {diag.get('gate_absolute_floor')} なら通過 "
+                f"{diag.get('passed_at_absolute_floor', 0)} 件"
+                + ("　← 本日の落選は閾値がバッチで上がったことによるものを含む"
+                   if diag.get("gate_is_batch_relative") and
+                   diag.get("passed_at_absolute_floor", 0) > diag.get("passed", 0) else "")
+            )
         # F-09 (2): name every rejected candidate, the floor it hit, and the measured value —
         # the caller does its own scoring, so this is what calibrates its next run (the same
         # observability principle as bybridge's F-02 diagnostics block).

@@ -156,3 +156,32 @@ def test_delegate_finalize_names_near_but_useful_rejects():
     text = res["content"][0]["text"]
     assert "近いが有用" in text and "W1" in text
     assert "律速は距離(mechanism_dist)" in text
+
+
+# --- F-15: the bar is a quantile of the submitted batch, and must say so ------------------
+# Measured three times: 7 submitted -> 0.474, 4 submitted -> 0.554 for the same kind of
+# material. The behaviour is deliberate; what was missing is that the caller could not see it.
+
+def test_diag_reports_both_bars_and_both_pass_counts():
+    works = {w: _work(w) for w in ("A", "B", "C", "D")}
+    scores = {"A": _row(0.9, 0.9), "B": _row(0.8, 0.8), "C": _row(0.7, 0.7), "D": _row(0.6, 0.6)}
+    diag = {}
+    apply_post_gates(scores, works, count=4, diag=diag, gate=0.2)
+    assert diag["gate_percentile"] > diag["gate_absolute_floor"] == 0.2
+    assert diag["gate_is_batch_relative"] is True
+    assert diag["batch_size"] == 4
+    # every candidate clears the fixed floor; the percentile bar admits only the strongest
+    assert diag["passed_at_absolute_floor"] == 4 and diag["passed"] < 4
+
+
+def test_same_candidate_passes_in_a_weak_batch_and_fails_in_a_strong_one():
+    """The F-15 shape itself, pinned: identical scoring, different company, different verdict."""
+    target = _row(0.7, 0.7)          # serendipity 0.49
+    weak = {"T": target, "W1": _row(0.4, 0.4), "W2": _row(0.3, 0.3), "W3": _row(0.3, 0.4)}
+    strong = {"T": target, "S1": _row(0.9, 0.9), "S2": _row(0.9, 0.8), "S3": _row(0.85, 0.9)}
+    ids = ("T", "W1", "W2", "W3", "S1", "S2", "S3")
+    works = {w: _work(w) for w in ids}
+    out_weak = apply_post_gates(weak, works, count=4, gate=0.2, output_floor=0.2)
+    out_strong = apply_post_gates(strong, works, count=4, gate=0.2, output_floor=0.2)
+    assert "T" in [e.work.id for e in out_weak]
+    assert "T" not in [e.work.id for e in out_strong]
