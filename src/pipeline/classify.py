@@ -882,7 +882,32 @@ def _update_diag(diag: Optional[dict], **kw) -> None:
         diag.update(kw)
 
 
-def _record_rejections(diag, before_ids, after_ids, *, floor, threshold, value_of) -> None:
+# F-22 (docs/field_observations_seihai.md, 6 observations): serendipity = purpose_sim x
+# mechanism_dist, so a candidate that is USEFUL BECAUSE IT IS CLOSE cannot clear a
+# percentile gate no matter how deep its structure. The caller could not read that from the
+# rejection row (it carried only the product and the threshold), so "near but useful" looked
+# the same as "shallow". A purpose_sim at or above this bar, with distance as the binding
+# factor, is the pattern the seihai runs kept losing (CUPED: purpose 0.89 x dist 0.43 = 0.38).
+_NEAR_USEFUL_PURPOSE = 0.70
+
+
+def _serendipity_cause(purpose_sim, mechanism_dist) -> Dict[str, Any]:
+    """Name the binding factor of a serendipity rejection (F-22). Never a verdict on value."""
+    if not isinstance(purpose_sim, (int, float)) or not isinstance(mechanism_dist, (int, float)):
+        return {}
+    binding = "mechanism_dist" if mechanism_dist <= purpose_sim else "purpose_sim"
+    out: Dict[str, Any] = {
+        "purpose_sim": round(float(purpose_sim), 3),
+        "mechanism_dist": round(float(mechanism_dist), 3),
+        "binding": binding,
+    }
+    if binding == "mechanism_dist" and purpose_sim >= _NEAR_USEFUL_PURPOSE:
+        out["near_but_useful"] = True
+    return out
+
+
+def _record_rejections(diag, before_ids, after_ids, *, floor, threshold, value_of,
+                       detail_of=None) -> None:
     """F-09: append one (id, floor, value, threshold) row per candidate dropped at a stage.
 
     The post-gate used to report only pass COUNTS ("採点 4 / 通過 1") — the caller could
@@ -896,12 +921,15 @@ def _record_rejections(diag, before_ids, after_ids, *, floor, threshold, value_o
     for wid in before_ids:
         if wid not in after_ids:
             value = value_of(wid)
-            rejections.append({
+            row = {
                 "id": wid,
                 "floor": floor,
                 "value": round(value, 3) if isinstance(value, (int, float)) else value,
                 "threshold": round(threshold, 3) if isinstance(threshold, (int, float)) else threshold,
-            })
+            }
+            if detail_of is not None:
+                row.update(detail_of(wid) or {})
+            rejections.append(row)
 
 
 # --- Deterministic post-gates (no LLM) -------------------------------------
@@ -1009,15 +1037,21 @@ def _quality_gate_and_build(
     qualified = [(ser, wid, s) for ser, wid, s in passed if ser >= output_floor]
     # F-09: per-candidate rejection rows for the two serendipity floors.
     ser_by_id = {wid: ser for ser, wid, _s in all_scored}
+    score_by_id = {wid: s for _ser, wid, s in all_scored}
+    # F-22: the product alone cannot say WHY a candidate fell short. Carry both factors and
+    # the binding one, so "useful but close" is distinguishable from "far but shallow".
+    def _detail(wid):
+        s = score_by_id.get(wid) or {}
+        return _serendipity_cause(s.get("purpose_sim"), s.get("mechanism_dist"))
     _record_rejections(
         diag, ser_by_id.keys(), {wid for _s, wid, _d in passed},
         floor="percentile_gate(serendipity)", threshold=effective_gate,
-        value_of=ser_by_id.get,
+        value_of=ser_by_id.get, detail_of=_detail,
     )
     _record_rejections(
         diag, {wid for _s, wid, _d in passed}, {wid for _s, wid, _d in qualified},
         floor="output_floor(serendipity)", threshold=output_floor,
-        value_of=ser_by_id.get,
+        value_of=ser_by_id.get, detail_of=_detail,
     )
     print(
         f"[info] gate: percentile-top30%={effective_gate:.3f} (floor={gate:.2f}) "
@@ -1077,7 +1111,7 @@ def _quality_gate_and_build(
     _record_rejections(
         diag, {wid for _s, wid, _d in qualified}, {wid for _s, wid, _d in final},
         floor=f"not_selected(count={count})", threshold=count,
-        value_of=ser_by_id.get,
+        value_of=ser_by_id.get, detail_of=_detail,
     )
 
     # Step 6: Build OutputEntry list

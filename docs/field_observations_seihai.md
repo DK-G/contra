@@ -614,7 +614,7 @@ S-26 が記録を指示している2項目:
 
 ---
 
-### F-21. 全 by\* 共通 — **道具の自己記述（MCP スキーマの説明文）が、その道具の検証器と食い違う**（2026-09-05 初観測）
+### F-21. 全 by\* 共通 — **道具の自己記述（MCP スキーマの説明文）が、その道具の検証器と食い違う**（2026-09-05 初観測・9/11 と 9/12 に再現＝3例） → **対処済み（2026-09-12）。下記「対処済み」節 F-21-R へ**
 
 **症状**: `byrepo_search` の `approach_type` の説明文は **"Type of approach (e.g., theory, experiment, system-building, application)"** と書いてあるが、`system-building` を渡すと **`InputValidationError: approach_type is invalid`** で拒否される。検証器は `APPROACH_TYPES = {"theory", "experiment", "application"}`（`src/core/input_schema.py:38`）＝**スキーマ自身が例示した4値のうち1つが集合に無い。**
 
@@ -637,6 +637,8 @@ S-26 が記録を指示している2項目:
 **⇒ これは F-15（percentile 閾値が提出数で動く）と別物**: F-15 は**相対性**の問題、本件は**スコアの定義**の問題。**閾値をどう動かしても近い当たりは通らない。**
 
 **contra 側で見るとよい点**: (a) セレンディピティ・スコアとは別に **`utility` 系の順序**（purpose_sim 主導）を併記し、post-gate の落選候補にも「近いが有用」ラベルを残す。(b) 少なくとも**落選内訳に purpose_sim を併記**する（現在は serendipity 実測値と閾値だけなので、落選理由が「遠くない」なのか「浅い」なのか読めない）。
+
+> ✅ **2026-09-12: 計器を実装した（スコアの定義は変えていない）。** 落選内訳の各行に `purpose_sim × mechanism_dist` と**律速がどちらか**を併記し、`purpose_sim ≥ 0.70` かつ距離が律速の落選を **『近いが有用』として名指し**、「距離 × 構造である以上どの閾値でも通らない／採否の最終判断は呼び手にある」と出力に明記するようにした（詳細は「対処済み」節 F-22-I）。**スコアの定義（距離 × 構造）は設計上の帰結として維持**しているので、F-22 の本体（近い当たりが通過できない）は未対処のまま残す。
 
 **呼び手側の対処（本日実施）**: **CUPED を落選のまま採用した。** 本ルーティンでは LLM 役は呼び手エージェントであり、**contra の post-gate は決定論的検証であって採否の最終権限ではない**（案X の分担）。**落選を理由に有用な文献を捨てない。**
 
@@ -725,6 +727,50 @@ S-26 が記録を指示している2項目:
 ---
 
 ## 対処済み
+
+### F-21-R. 全 by\* 共通 — 自己記述を**検証器の定数から生成**し、拒否メッセージに許容値を載せる — **対処済み 2026-09-12**
+
+**3例の内訳**: (1) 9/05 `approach_type` の説明文が例示した `system-building` を検証器が拒否、(2) 9/11・(3) 9/12 `assumptions` がスキーマ上 optional なのに検証器は 2〜5 件必須。**いずれも呼び手は説明文どおりに書いて落ちており、1回ぶんの往復が失われている。**
+
+**本日さらに2件の同型を発見（実装中に露見）**: (4) `theme_overview` の説明文は「3-6 sentences」だが検証器は **200〜1200 字**を強制する（本日の検証中に実際に踏んだ）、(5) `scope_scale` は説明文が「Scale of study.」だけで、許容値 `small/large/theoretical` がどこにも書かれていない。
+
+**何を変えたか**（加算的・シグネチャ非変更）:
+
+1. **スキーマを検証器の定数から生成**（`src/mcp_server.py` の `_approach_type_prop` / `_scale_prop` / `_time_range_prop` / `_assumptions_prop` / `_overview_prop` / `_keywords_prop`）。`APPROACH_TYPES` 等を import して `enum` / `minItems` / `maxItems` / `minLength` / `maxLength` を出すので、**MCP クライアント側が呼び出し前に弾ける**し、両者が二度と乖離しない。`_enum_prop` は既定値が許容集合に入っていることを assert する。
+2. **`assumptions` を4ツールすべての `required` に入れた**（検証器が必須なので、スキーマがそう名乗る）。
+3. **拒否メッセージが許容集合と拒否された値を載せる**（`src/core/input_schema.py` の `_reject`）。`approach_type is invalid` → `approach_type is invalid: 'system-building' (allowed: application, experiment, theory)`。`assumptions` は `(got 0)`、`theme_overview` は `(got N)` を併記。
+4. `bynote_link_concepts` の `theme_overview` は**任意の背景テーマ**なので長さ制約を付けていない（検証器も通さない）。**同じ名前でも契約が違う箇所を巻き込まない。**
+
+**乖離防止のテスト（これが本体）**: `tests/test_input_schema.py` に4件——(a) 各ツールの `enum` が検証器の集合と**厳密一致**、(b) **スキーマが提示する全値の直積が実際に検証を通る**（＝「提示したのに拒否される」を構造的に不可能にする）、(c) `assumptions` が全スキーマで required かつ境界が定数と一致、(d) 拒否メッセージが許容集合と値を含む。**433 → 437 tests: 437 pass。**
+
+**seihai 側への申し送り**: `approach_type` / `scope_scale` / `scope_time_range` が `enum` になったので、MCP クライアントが不正値を送れなくなる。`assumptions` は**必須として明示**された（従来も実質必須だった）。**呼び出し側の書き換えは不要**——今まで通っていた呼び出しはすべてそのまま通る。
+
+---
+
+### F-22-I. delegate_finalize — 落選内訳に**律速の因子**を書き、「近いが有用」を名指しする — **対処済み 2026-09-12（計器のみ）**
+
+**直したのはスコアではなく読み取り。** F-22 は「セレンディピティ＝距離 × 構造」という**定義の帰結**なので、閾値を動かしても近い当たりは通らない。**変えたのは、落選が「遠くないから」なのか「浅いから」なのかを呼び手が読めるようにした点だけ。**
+
+**実装**: (1) `_serendipity_cause`（`src/pipeline/classify.py`）が `purpose_sim` / `mechanism_dist` と**律速側**（小さい方の因子）を返し、`purpose_sim ≥ 0.70` かつ距離が律速なら `near_but_useful` を立てる。(2) `_record_rejections` が任意の `detail_of` を受け取り、セレンディピティ系3フロア（percentile_gate / output_floor / not_selected）の落選行に併記する。(3) `src/mcp_server.py` が各行に `（構造 purpose_sim 0.89 × 距離 mechanism_dist 0.5 ＝ 律速は距離）` を描画し、該当があれば **★『近いが有用』N 件**の節で名指しして「どの閾値でも通らない／採否の最終判断は呼び手にある」と明記する。
+
+**閾値 0.70 の較正（きりの良い数ではなく実データで決めた）**: 9/12 の6件バッチと 9/05 の CUPED を再生して実測。
+
+| 候補（seihai の評価） | purpose_sim | mechanism_dist | 積 | 新ラベル |
+|---|---|---|---|---|
+| Futility stopping in clinical trials（**今週の中心的収穫**） | 0.83 | 0.505 | 0.419 | **近いが有用** |
+| Quantifying the bias …（**自分の処方への反証装置**） | 0.89 | 0.50 | 0.445 | **近いが有用** |
+| Informing the selection of futility thresholds | 0.78 | 0.49 | 0.382 | **近いが有用** |
+| Optimal Giving-Up Times and the MVT | 0.66 | 0.827 | 0.546 | （律速は構造） |
+| Foraging as an evidence accumulation process | 0.64 | 0.881 | 0.564 | （律速は構造） |
+| CUPED（9/05・呼び手が最有用と判断） | 0.89 | 0.43 | 0.383 | **近いが有用** |
+
+⇒ **呼び手が「実務的に最も効いた」と書いた候補だけにラベルが付き、遠いが浅い2件には付かない。** 0.70 は 0.66/0.64（付けたくない側）と 0.78〜0.89（付けたい側）の帯の間にある。
+
+**効かなかった／やらなかったこと**: (a) **スコア定義は変えていない**——`utility` 系の第2順序（purpose_sim 主導）の併記は F-22 の処方 (a) として残す。(b) 閾値の調整もしていない（F-15 の相対性問題とは別物で、動かしても解けないため）。(c) **落選を出力に昇格させることもしていない**——post-gate は決定論的検証であって採否の最終権限ではない（案X の分担）ので、判断材料だけを増やした。
+
+**検証**: 新規回帰3件（落選行が両因子と律速を持つ／低 purpose の候補にラベルが付かない境界 0.69 対 0.70／MCP 経路の出力に名指しが出る）。**437 → 440 tests: 440 pass。**
+
+**seihai 側への申し送り**: 落選内訳に『近いが有用』が出たら、**それは「捨てろ」ではなく「スコアの定義上は通らないが、採否は呼び手が決める」の合図**。9/05 に CUPED を落選のまま採用した判断がそのまま正しい。
 
 ### F-13-S. bybridge — semantic シードレッグの**供給 0 件の真因＝日本語のテーマ本文を埋め込み検索に入れていた** — **対処済み 2026-09-11**
 

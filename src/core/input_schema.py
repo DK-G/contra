@@ -46,6 +46,18 @@ MAX_ASSUMPTIONS = 5
 MAX_KEYWORDS = 5
 
 
+def _allowed(values) -> str:
+    return ", ".join(sorted(values))
+
+
+def _reject(field_name: str, got, allowed) -> "InputValidationError":
+    """F-21 (docs/field_observations_seihai.md): "is invalid" alone costs the caller a round
+    trip and a source read. The message carries the allowed set and the rejected value."""
+    return InputValidationError(
+        f"{field_name} is invalid: {got!r} (allowed: {_allowed(allowed)})"
+    )
+
+
 def _require_non_empty(value: str, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise InputValidationError(f"{field_name} is required")
@@ -82,11 +94,12 @@ def validate_and_normalize(payload: dict) -> ThemeInput:
     theme_len = len(theme_overview.strip())
     if theme_len < MIN_OVERVIEW_CHARS or theme_len > MAX_OVERVIEW_CHARS:
         raise InputValidationError(
-            f"theme_overview must be {MIN_OVERVIEW_CHARS}-{MAX_OVERVIEW_CHARS} chars"
+            f"theme_overview must be {MIN_OVERVIEW_CHARS}-{MAX_OVERVIEW_CHARS} chars "
+            f"(got {theme_len})"
         )
 
     if approach_type not in APPROACH_TYPES:
-        raise InputValidationError("approach_type is invalid")
+        raise _reject("approach_type", approach_type, APPROACH_TYPES)
 
     if not isinstance(assumptions, list):
         raise InputValidationError("assumptions must be a list")
@@ -94,7 +107,9 @@ def validate_and_normalize(payload: dict) -> ThemeInput:
     assumptions = [a.strip() for a in assumptions if isinstance(a, str) and a.strip()]
     if len(assumptions) < MIN_ASSUMPTIONS or len(assumptions) > MAX_ASSUMPTIONS:
         raise InputValidationError(
-            f"assumptions must be {MIN_ASSUMPTIONS}-{MAX_ASSUMPTIONS} items"
+            f"assumptions must be {MIN_ASSUMPTIONS}-{MAX_ASSUMPTIONS} items "
+            f"(got {len(assumptions)}); it is required even though some tool schemas "
+            f"once listed it as optional (F-21)"
         )
 
     field_value = scope.get("field", "")
@@ -106,9 +121,9 @@ def validate_and_normalize(payload: dict) -> ThemeInput:
     _require_non_empty(time_value, "scope.time_range")
 
     if scale_value not in SCALE_TYPES:
-        raise InputValidationError("scope.scale is invalid")
+        raise _reject("scope.scale", scale_value, SCALE_TYPES)
     if time_value not in TIME_RANGE_TYPES:
-        raise InputValidationError("scope.time_range is invalid")
+        raise _reject("scope.time_range", time_value, TIME_RANGE_TYPES)
 
     include = keywords.get("include", []) or []
     exclude = keywords.get("exclude", []) or []

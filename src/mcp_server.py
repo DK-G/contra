@@ -8,7 +8,17 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional
 
-from src.core.input_schema import validate_and_normalize
+from src.core.input_schema import (
+    APPROACH_TYPES,
+    MAX_OVERVIEW_CHARS,
+    MIN_OVERVIEW_CHARS,
+    MAX_ASSUMPTIONS,
+    MAX_KEYWORDS,
+    MIN_ASSUMPTIONS,
+    SCALE_TYPES,
+    TIME_RANGE_TYPES,
+    validate_and_normalize,
+)
 from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
 from src.pipeline.bridge_diagnostics import (
     render_seed_alignment,
@@ -233,6 +243,52 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     return line
 
 
+# F-21 (docs/field_observations_seihai.md, 3 observations): a tool's self-description drifted
+# from its validator — the approach_type description offered "system-building", which the
+# validator rejects, and `assumptions` sat outside `required` while the validator demanded
+# 2-5 items. Both cost the caller a round trip per occurrence. These builders derive the
+# schema from the validator's OWN constants, so the two cannot drift again, and they publish
+# `enum`/`minItems` so an MCP client rejects a bad value before the call is even made.
+def _enum_prop(allowed, label: str, default: str) -> Dict[str, Any]:
+    values = sorted(allowed)
+    assert default in allowed, f"{label} default {default!r} is not in {values}"
+    return {"type": "string", "enum": values, "default": default,
+            "description": f"{label} Allowed: {', '.join(values)}."}
+
+
+def _approach_type_prop(default: str = "application") -> Dict[str, Any]:
+    return _enum_prop(APPROACH_TYPES, "Type of approach.", default)
+
+
+def _scale_prop() -> Dict[str, Any]:
+    return _enum_prop(SCALE_TYPES, "Scale of study.", "small")
+
+
+def _time_range_prop() -> Dict[str, Any]:
+    return _enum_prop(TIME_RANGE_TYPES, "Time range.", "last_10_years")
+
+
+def _assumptions_prop() -> Dict[str, Any]:
+    return {"type": "array", "items": {"type": "string"},
+            "minItems": MIN_ASSUMPTIONS, "maxItems": MAX_ASSUMPTIONS,
+            "description": (f"Current assumptions or working hypotheses. REQUIRED: "
+                            f"{MIN_ASSUMPTIONS}-{MAX_ASSUMPTIONS} items — fewer or more raises "
+                            f"InputValidationError.")}
+
+
+def _overview_prop() -> Dict[str, Any]:
+    return {"type": "string", "minLength": MIN_OVERVIEW_CHARS, "maxLength": MAX_OVERVIEW_CHARS,
+            "description": (f"Overview of the research theme. REQUIRED LENGTH: "
+                            f"{MIN_OVERVIEW_CHARS}-{MAX_OVERVIEW_CHARS} characters "
+                            f"(roughly 3-6 sentences) — outside that range the validator "
+                            f"rejects the call.")}
+
+
+def _keywords_prop(label: str) -> Dict[str, Any]:
+    return {"type": "array", "items": {"type": "string"}, "maxItems": MAX_KEYWORDS,
+            "description": f"{label} (MAX {MAX_KEYWORDS} — more raises InputValidationError)."}
+
+
 class StdinMcpServer:
     def __init__(self) -> None:
         self.initialized = False
@@ -245,16 +301,16 @@ class StdinMcpServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "theme_overview": {"type": "string", "description": "Overview of the research theme (3-6 sentences)."},
+                        "theme_overview": _overview_prop(),
                         "goal": {"type": "string", "description": "What goal or output you want to achieve."},
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
-                        "approach_type": {"type": "string", "description": "Type of approach (e.g., theory, experiment, system-building, application).", "default": "application"},
-                        "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
+                        "approach_type": _approach_type_prop(),
+                        "assumptions": _assumptions_prop(),
                         "scope_field": {"type": "string", "description": "Core field of study."},
-                        "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
-                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
+                        "scope_scale": _scale_prop(),
+                        "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
+                        "keywords_exclude": _keywords_prop("Exclude keywords"),
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_b_count": {"type": "integer", "description": "Maximum number of serendipitous connections to return.", "default": 1},
                         "llm_model": {"type": "string", "description": "LLM model for classification/generation (self-contained path only; ignored when raw_only).", "default": "gpt-4o-mini"},
@@ -267,7 +323,7 @@ class StdinMcpServer:
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
                         "used_dois": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed DOI exclusions, merged with the file history."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem"]
+                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
                 }
             },
             {
@@ -276,23 +332,23 @@ class StdinMcpServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "theme_overview": {"type": "string", "description": "Overview of the research theme."},
+                        "theme_overview": _overview_prop(),
                         "goal": {"type": "string", "description": "What goal or output you want to achieve."},
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
-                        "approach_type": {"type": "string", "description": "Type of approach.", "default": "application"},
-                        "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
+                        "approach_type": _approach_type_prop(),
+                        "assumptions": _assumptions_prop(),
                         "scope_field": {"type": "string", "description": "Core field of study."},
-                        "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
-                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
+                        "scope_scale": _scale_prop(),
+                        "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
+                        "keywords_exclude": _keywords_prop("Exclude keywords"),
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
                         "track_a_pool_size": {"type": "integer", "description": "Candidate pool size per source (search per_page/limit + pre-score cap), independent of track_a_count. Omit/0 to auto-derive as track_a_count*2 (old linked behaviour). Set explicitly to widen/narrow the search net without changing how many final anchors are returned (larger values cost more GitHub/HF/Kaggle API calls per source)."},
                         "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface", "kaggle"]}, "description": "Practical-anchor sources to search: 'github' (repositories), 'huggingface' (Hub models + datasets), and/or 'kaggle' (datasets + notebooks; needs KAGGLE_API_TOKEN or KAGGLE_USERNAME/KAGGLE_KEY, silently skipped when unset). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface", "kaggle"]},
                         "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
-                    "required": ["theme_overview", "goal", "why_problem"]
+                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
                 }
             },
             {
@@ -313,16 +369,16 @@ class StdinMcpServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "theme_overview": {"type": "string", "description": "Overview of the research theme (3-6 sentences)."},
+                        "theme_overview": _overview_prop(),
                         "goal": {"type": "string", "description": "What goal or output you want to achieve."},
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
-                        "approach_type": {"type": "string", "description": "Type of approach (e.g., theory, experiment, system-building, application).", "default": "application"},
-                        "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Current assumptions or working hypotheses."},
+                        "approach_type": _approach_type_prop(),
+                        "assumptions": _assumptions_prop(),
                         "scope_field": {"type": "string", "description": "Core field of study."},
-                        "scope_scale": {"type": "string", "description": "Scale of study.", "default": "small"},
-                        "scope_time_range": {"type": "string", "description": "Time range (last_10_years or no_limit).", "default": "last_10_years"},
+                        "scope_scale": _scale_prop(),
+                        "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Exclude keywords (MAX 5)."},
+                        "keywords_exclude": _keywords_prop("Exclude keywords"),
                         "concern": {"type": "string", "description": "Specific concern or failure mode."},
                         "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
@@ -340,7 +396,7 @@ class StdinMcpServer:
                         "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). When the prose is not English it is replaced by the English keywords_include (a Japanese query retrieves Japanese-language records, not the subject). false restores lexical-only seeding.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem"]
+                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
                 }
             },
             {
@@ -356,16 +412,16 @@ class StdinMcpServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "theme_overview": {"type": "string"},
+                        "theme_overview": _overview_prop(),
                         "goal": {"type": "string"},
                         "why_problem": {"type": "string"},
-                        "approach_type": {"type": "string", "default": "experiment"},
-                        "assumptions": {"type": "array", "items": {"type": "string"}},
+                        "approach_type": _approach_type_prop("experiment"),
+                        "assumptions": _assumptions_prop(),
                         "scope_field": {"type": "string"},
-                        "scope_scale": {"type": "string", "default": "small"},
-                        "scope_time_range": {"type": "string", "default": "last_10_years"},
-                        "keywords_include": {"type": "array", "items": {"type": "string"}},
-                        "keywords_exclude": {"type": "array", "items": {"type": "string"}},
+                        "scope_scale": _scale_prop(),
+                        "scope_time_range": _time_range_prop(),
+                        "keywords_include": _keywords_prop("Include keywords"),
+                        "keywords_exclude": _keywords_prop("Exclude keywords"),
                         "concern": {"type": "string"},
                         "count": {"type": "integer", "description": "Max entries to emit (cap, not target).", "default": 1},
                         "output_floor": {"type": "number", "description": "Output-quality floor for serendipity.", "default": 0.35},
@@ -406,7 +462,7 @@ class StdinMcpServer:
                             }
                         }
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "candidates"]
+                    "required": ["theme_overview", "goal", "why_problem", "assumptions", "candidates"]
                 }
             }
         ]
@@ -1034,17 +1090,41 @@ class StdinMcpServer:
         # observability principle as bybridge's F-02 diagnostics block).
         title_by_id = {str(m.get("id")): str(m.get("title") or "") for m in materials}
         rejection_lines = []
+        near_useful = []
         for r in diag.get("rejections", []):
             label = title_by_id.get(str(r["id"]), "")
             label = f"「{label[:40]}」" if label else ""
-            rejection_lines.append(
-                f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
-            )
+            line = f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
+            # F-22: serendipity is a PRODUCT, so the product alone never says whether the
+            # candidate was too close or too shallow. Print both factors and the binding one.
+            if "purpose_sim" in r:
+                binding = ("距離(mechanism_dist)" if r.get("binding") == "mechanism_dist"
+                           else "構造(purpose_sim)")
+                line += (f"（構造 purpose_sim {r['purpose_sim']} × 距離 mechanism_dist "
+                         f"{r['mechanism_dist']} ＝ 律速は{binding}）")
+            if r.get("near_but_useful"):
+                line += "　← 近いが有用（F-22）"
+                near_useful.append((r["id"], label))
+            rejection_lines.append(line)
         extra = ""
         if echo_warnings:
             extra += "\n" + "\n".join(echo_warnings)
         if rejection_lines:
             extra += "\n落選内訳:\n" + "\n".join(rejection_lines)
+        if near_useful:
+            # F-22 is a consequence of the score's DEFINITION, not a calibration error: a
+            # candidate that helps BECAUSE it is close cannot clear a distance x structure
+            # gate at any threshold. contra's post-gate is deterministic verification, not
+            # the final say on adoption (案X), so name these instead of burying them.
+            extra += (
+                "\n★『近いが有用』" + f"{len(near_useful)} 件"
+                + "（purpose_sim が高く、距離で落選）: "
+                + " / ".join(f"{wid}{lbl}" for wid, lbl in near_useful)
+                + "\n  セレンディピティ・スコアは 距離 × 構造 なので、"
+                  "近いがゆえに有用な文献は閾値をどう動かしても通りません"
+                  "（F-22・設計上の帰結）。採否の最終判断は呼び手にあります"
+                  "——落選を理由に有用な文献を捨てないでください。"
+            )
         # A1: name every candidate whose prose failed the quote-then-claim verification —
         # the prose was dropped (structured fill took over), the scores were kept.
         grounding_lines = []

@@ -94,3 +94,65 @@ def test_loose_causal_link_surfaced_not_rejected():
     out = apply_post_gates(scores, works, count=1)
     assert len(out) == 1
     assert "ゆるめ" in out[0].label
+
+
+# --- F-22: a rejection row must say WHICH factor was binding -----------------------------
+# Observed 6 times. serendipity = purpose_sim x mechanism_dist, so a candidate that is useful
+# BECAUSE it is close cannot clear the gate at any threshold; the caller could not tell that
+# from the product alone. Calibrated on the 2026-09-12 seihai batch: the three papers the
+# caller called "this week's most practical" are exactly the high-purpose / low-distance ones.
+
+def _rejections(diag, wid):
+    return [r for r in diag.get("rejections", []) if r["id"] == wid]
+
+
+def test_rejection_rows_carry_both_factors_and_the_binding_one():
+    works = {w: _work(w) for w in ("NEAR", "FAR", "PASS")}
+    scores = {
+        "NEAR": _row(0.89, 0.50),   # 0.445 — the 2026-09-12 "Quantifying the bias" case
+        "FAR": _row(0.64, 0.881),   # 0.564 — far but shallow purpose
+        "PASS": _row(0.71, 0.86),   # 0.61  — the one that passed that day
+    }
+    diag = {}
+    apply_post_gates(scores, works, count=1, diag=diag)
+    near = _rejections(diag, "NEAR")[0]
+    assert near["purpose_sim"] == 0.89 and near["mechanism_dist"] == 0.5
+    assert near["binding"] == "mechanism_dist" and near.get("near_but_useful") is True
+    far = _rejections(diag, "FAR")[0]
+    assert far["binding"] == "purpose_sim" and "near_but_useful" not in far
+
+
+def test_near_but_useful_is_not_claimed_for_low_purpose_candidates():
+    """The label means "useful but close", so it must not fire on a weak-purpose candidate
+    that merely happens to be closer than it is aligned."""
+    from src.pipeline.classify import _serendipity_cause
+    assert _serendipity_cause(0.69, 0.40).get("near_but_useful") is None
+    assert _serendipity_cause(0.70, 0.40).get("near_but_useful") is True
+    assert _serendipity_cause(0.83, 0.505).get("near_but_useful") is True   # 9/12 W1
+    assert _serendipity_cause(0.66, 0.827).get("binding") == "purpose_sim"  # 9/12 W4
+    assert _serendipity_cause(None, 0.5) == {}
+
+
+def test_delegate_finalize_names_near_but_useful_rejects():
+    from src.mcp_server import StdinMcpServer
+    cands = [
+        {"id": "W1", "title": "Futility stopping in clinical trials", "abstract": "a" * 40,
+         "year": 2012, "venue": "V", "cited_by_count": 10,
+         "purpose_sim": 0.83, "mechanism_dist": 0.505, "structural_depth": 0.7,
+         "has_causal_pm": True, "connection_label": "逐次打ち切り",
+         "serendipity_rationale": "打ち切り規則の構造"},
+        {"id": "W6", "title": "Overharvesting in human patch foraging", "abstract": "b" * 40,
+         "year": 2023, "venue": "V", "cited_by_count": 10,
+         "purpose_sim": 0.71, "mechanism_dist": 0.86, "structural_depth": 0.7,
+         "has_causal_pm": True, "connection_label": "採餌", "serendipity_rationale": "離脱規則"},
+    ]
+    res = StdinMcpServer().handle_tool_call("delegate_finalize", {
+        "theme_overview": "探索の打ち切り規則を設計する。" * 20,
+        "goal": "決着しない側の打ち切り規則", "why_problem": "枠が有限であるため",
+        "approach_type": "application", "assumptions": ["打ち切りは推定量を歪める", "一律は最適でない"],
+        "scope_field": "statistics", "scope_scale": "small", "scope_time_range": "no_limit",
+        "count": 1, "no_history": True, "grounded_only": False, "candidates": cands,
+    })
+    text = res["content"][0]["text"]
+    assert "近いが有用" in text and "W1" in text
+    assert "律速は距離(mechanism_dist)" in text
