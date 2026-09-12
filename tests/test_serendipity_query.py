@@ -258,3 +258,26 @@ def test_collect_track_b_falls_back_when_no_facets_generated(monkeypatch):
     out = collect_track_b(_theme(), CollectConfig(max_pages=2), home_field_ids=["17"])
     assert not any("search.semantic" in c for c in client.calls)
     assert [w.id for w in out] == ["WLEX"]
+
+
+# --- F-16: the semantic query is capped before it can 400 --------------------------------
+# Measured 2026-09-11: 1,575 chars -> HTTP 400, 1,437 chars -> 200. A facet that trips it
+# returns zero, and on 2026-09-04 that zero was nearly read as "the theme is saturated".
+
+def test_semantic_query_is_capped_at_a_sentence_end():
+    from src.pipeline.serendipity_query import (
+        SEMANTIC_QUERY_MAX_CHARS, build_semantic_query, cap_semantic_query,
+    )
+    long_abstract = "Patch departure follows a marginal value rule. " * 60
+    sq = build_semantic_query("structure anchor.", long_abstract)
+    sent = sq.to_params(per_page=5, page=1)["search.semantic"]
+    assert len(sent) <= SEMANTIC_QUERY_MAX_CHARS
+    assert sent.endswith(".")
+    assert cap_semantic_query("short text") == "short text"
+    assert cap_semantic_query("a b  c") == "a b c"
+
+
+def test_short_queries_are_untouched():
+    from src.pipeline.serendipity_query import build_semantic_query
+    sq = build_semantic_query("anchor", "pseudo abstract")
+    assert sq.to_params(per_page=5, page=1)["search.semantic"] == "anchor pseudo abstract"

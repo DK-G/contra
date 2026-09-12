@@ -70,10 +70,22 @@ def test_5xx_is_retried(monkeypatch):
 
 
 def test_retries_are_bounded(monkeypatch):
-    calls = _patch_urlopen(monkeypatch, [_http_error(429)])
+    calls = _patch_urlopen(monkeypatch, [_http_error(503)])
     with pytest.raises(OpenAlexError) as exc:
         _client(max_retries=2).get({})
     assert "after 3 attempts" in str(exc.value)
+    assert len(calls) == 3
+
+
+def test_exhausted_429_is_named_as_a_shared_quota_not_a_bad_query(monkeypatch):
+    """F-28 (2026-09-12): a byserendipity run starved the bybridge run that followed it, and
+    the generic message let the caller read an IP-level quota as a property of the theme."""
+    calls = _patch_urlopen(monkeypatch, [_http_error(429)])
+    with pytest.raises(OpenAlexError) as exc:
+        _client(max_retries=2).get({})
+    msg = str(exc.value)
+    assert "429" in msg and "クォータ" in msg and "時間をおいて" in msg
+    assert "F-28" in msg
     assert len(calls) == 3
 
 

@@ -23,6 +23,7 @@ from src.pipeline.query import (
     structured_query_variants,
 )
 from src.pipeline.serendipity_query import (
+    SEMANTIC_QUERY_RETRY_CHARS,
     SerendipitySpec,
     build_semantic_query,
     exclude_home_field,
@@ -1037,15 +1038,29 @@ def _collect_track_b_semantic(
             rec["status"] = "未取得（上限到達で打ち切り）"
             continue
         sq = build_semantic_query(spec.structure, facet.pseudo_abstract)
+        payload = None
         try:
             payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
         except OpenAlexError as exc:
-            # OpenAlex's semantic (search.semantic) endpoint is experimental and intermittently
-            # returns 5xx; one flaky facet must not abort the whole collection, so skip it and let
-            # the remaining facets contribute (each facet is an independent semantic query).
-            print(f"[info] Track B semantic facet '{facet.domain}' 取得失敗 ({exc}) — スキップ")
-            rec["status"] = f"取得失敗 ({exc})"
-            continue
+            # F-16: a 400 here is payload-dependent — the caller's manual fix was always "same
+            # domain words, shorter text", verified twice (2026-08-31 single facet, 2026-09-04
+            # all three). Retry ONCE with a shorter query before reporting the facet as empty.
+            if "400" in str(exc):
+                try:
+                    short = build_semantic_query(spec.structure, facet.pseudo_abstract,
+                                                 max_chars=SEMANTIC_QUERY_RETRY_CHARS)
+                    payload = collector.client.get(
+                        short.to_params(per_page=min(cfg.per_page, 50), page=1))
+                    rec["status"] = "ok（400 のためクエリを短縮して再取得・F-16）"
+                    print(f"[info] Track B semantic facet '{facet.domain}' 400 → 短縮して再取得")
+                except OpenAlexError as exc2:
+                    exc = exc2
+            if payload is None:
+                # The endpoint is experimental and intermittently 5xx; one flaky facet must not
+                # abort the whole collection, so skip it and let the remaining facets contribute.
+                print(f"[info] Track B semantic facet '{facet.domain}' 取得失敗 ({exc}) — スキップ")
+                rec["status"] = f"取得失敗 ({exc})"
+                continue
         raw = filter_retracted(normalize_results(payload))
         rec["returned"] = len(raw)
         ok, reason = validate_semantic_results(raw, home_field_ids)

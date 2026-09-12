@@ -117,6 +117,20 @@ class OpenAlexClient:
             except json.JSONDecodeError as exc:
                 raise OpenAlexError(f"invalid json response: {exc}") from exc
         RUN_STATS["gave_up"] += 1
+        # F-28 (docs/field_observations_seihai.md, 2026-09-12): every by* tool draws on ONE
+        # OpenAlex quota for this IP, so a byserendipity run can starve the bybridge run that
+        # follows it (measured: three consecutive bybridge failures right after a successful
+        # byserendipity, reproduced with a bare curl-equivalent outside contra). A 429 that
+        # survives the retries is not "this query is wrong" and not "the theme is exhausted";
+        # the caller's next move is to wait, not to reformulate. Same doctrine as F-16/S-112:
+        # never let an upstream outage read as a property of the candidates.
+        if isinstance(last_exc, urllib.error.HTTPError) and last_exc.code == 429:
+            raise OpenAlexError(
+                f"OpenAlex のレート制限（429）が {attempts} 回の再試行でも解けませんでした"
+                "＝この IP の共有クォータ枯渇です。クエリや候補の問題ではありません"
+                "（by* は同一クォータを共有するため、直前に別の by* を回していると起きやすい・F-28）。"
+                "時間をおいて再実行してください。"
+            ) from last_exc
         raise OpenAlexError(
             f"request failed after {attempts} attempts: {last_exc}"
         ) from last_exc

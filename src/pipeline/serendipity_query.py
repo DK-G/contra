@@ -191,8 +191,28 @@ def spec_from_payload(
     return SerendipitySpec(structure=str(structure or "").strip(), facets=out)
 
 
+# F-16 (docs/field_observations_seihai.md): the semantic endpoint answers 400 above a query
+# length between 1,437 and 1,575 characters (measured 2026-09-11 on English text). A facet that
+# trips it returns zero, which read to the caller as "this distance is barren" — on 2026-09-04
+# that reading nearly retired a live theme. Cut the query at a sentence end below the limit
+# before sending, and keep a shorter length for the one retry.
+SEMANTIC_QUERY_MAX_CHARS = 1200
+SEMANTIC_QUERY_RETRY_CHARS = 600
+
+
+def cap_semantic_query(text: str, limit: int = SEMANTIC_QUERY_MAX_CHARS) -> str:
+    """Collapse whitespace and cut at the last sentence end below ``limit``."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = max(head.rfind(". "), head.rfind("。"))
+    return head[: cut + 1].strip() if cut > limit // 2 else head.strip()
+
+
 def build_semantic_query(
-    structure: str, pseudo_abstract: str, *, work_type: Optional[str] = "article"
+    structure: str, pseudo_abstract: str, *, work_type: Optional[str] = "article",
+    max_chars: int = SEMANTIC_QUERY_MAX_CHARS,
 ) -> StructuredQuery:
     """A semantic-route query combining the theme's structural anchor with a distant pseudo-abstract.
 
@@ -202,7 +222,7 @@ def build_semantic_query(
     ``query + pseudo-document`` (NotebookLM). ``work_type`` composes safely with ``search.semantic``;
     home-domain exclusion is applied client-side (the field-id negation 400s on that endpoint).
     """
-    text = " ".join(t for t in (structure, pseudo_abstract) if t).strip()
+    text = cap_semantic_query(" ".join(t for t in (structure, pseudo_abstract) if t), max_chars)
     return StructuredQuery(anchor_terms=[text], route=ROUTE_SEMANTIC, work_type=work_type)
 
 
@@ -290,6 +310,7 @@ __all__ = [
     "spec_from_payload",
     "build_semantic_query",
     "home_field_fraction",
+    "cap_semantic_query",
     "exclude_home_field",
     "validate_semantic_results",
 ]

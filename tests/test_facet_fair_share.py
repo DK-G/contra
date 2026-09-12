@@ -181,3 +181,71 @@ def test_breakdown_line_flags_a_rejected_facet():
         {"domain": "a", "status": "棄却 (home convergence)", "returned": 50, "kept": 0, "selected": 0},
     ])
     assert "棄却" in line and "収穫0の facet: a" in line
+
+
+# --- F-16: one shortened retry on a 400, and no "saturated" verdict for an outage --------
+
+def test_facet_400_is_retried_once_with_a_shorter_query(monkeypatch):
+    """2026-08-31 and 2026-09-04: the caller's own fix was always 'same domain words, shorter'.
+    Doing it automatically is what turns a lost distance band into a normal harvest."""
+    import src.pipeline.collect as collect_mod
+    from src.pipeline.collect import CollectConfig, collect_track_b_from_spec
+    from src.pipeline.serendipity_query import SerendipityFacet, SerendipitySpec
+    from src.openalex.client import OpenAlexError
+
+    sent = []
+
+    class _Client:
+        def get(self, params):
+            q = params["search.semantic"]
+            sent.append(q)
+            if len(q) > 600:
+                raise OpenAlexError("request failed: HTTP Error 400: Bad Request")
+            return {"results": [{"id": f"W{i}", "display_name": f"hit{i}",
+                                 "publication_year": 2020,
+                                 "abstract_inverted_index": {"a": [0]},
+                                 "primary_topic": {"field": {
+                                     "id": "https://openalex.org/fields/27",
+                                     "display_name": "Medicine"}}} for i in range(12)]}
+
+    class _FakeCollector:
+        def __init__(self, cfg=None):
+            self.client = _Client()
+
+    monkeypatch.setattr(collect_mod, "Collector", _FakeCollector)
+    spec = SerendipitySpec(structure="s" * 700,
+                           facets=[SerendipityFacet(domain="far domain", pseudo_abstract="p" * 200)])
+    stats = []
+    out = collect_track_b_from_spec(_theme(), spec, CollectConfig(), home_field_ids=["20"],
+                                    stats_out=stats)
+    assert len(sent) == 2 and len(sent[1]) < len(sent[0])   # retried, shorter
+    assert len(out) == 12 and out[0].id == "W0"
+    assert "短縮" in stats[0]["status"]
+
+
+def test_zero_harvest_message_names_the_transport_causes_before_saturation(monkeypatch):
+    """F-16 (2026-09-04): the 0-candidate message offered only 'too close' and 'saturated',
+    and the caller nearly retired a live theme on it. Transport causes must come first."""
+    import src.mcp_server as mcp_mod
+
+    def _no_works(*a, **k):
+        stats = k.get("stats_out")
+        if stats is not None:
+            stats.append({"domain": "far domain", "status": "取得失敗 (HTTP Error 400: Bad Request)",
+                          "returned": 0, "kept": 0, "selected": 0})
+        return []
+
+    monkeypatch.setattr(mcp_mod, "collect_track_b_from_spec", _no_works)
+    res = mcp_mod.StdinMcpServer().handle_tool_call("byserendipity_discover", {
+        "theme_overview": "Patch departure under a marginal value rule. " * 6,
+        "goal": "find a stopping rule", "why_problem": "budget is finite",
+        "approach_type": "application", "assumptions": ["a" * 5, "b" * 5],
+        "scope_field": "economics", "scope_scale": "small", "scope_time_range": "no_limit",
+        "raw_only": True, "no_history": True,
+        "facets": [{"domain": "behavioural ecology", "pseudo_abstract": "foraging patch leaving"}],
+        "structure": "a threshold that fires on a level rather than an edge",
+    })
+    text = res["content"][0]["text"]
+    assert "0件" in text
+    assert "400" in text and "429" in text and "504" in text
+    assert text.index("400") < text.index("飽和")
