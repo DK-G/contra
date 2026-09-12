@@ -252,3 +252,44 @@ def test_kaggle_failure_still_returns_other_anchors():
     )
     assert errors == ["kaggle"]
     assert works and all(w.publication_type == "github_repository" for w in works)
+
+
+# --- F-14: the per-anchor evidence line (which keywords matched, and where) --------------
+
+def test_structured_entry_names_the_matched_keywords():
+    """Eight weeks of byrepo output carried the same template sentence for every anchor, so a
+    subject hit and a coincidence read identically. The deterministic evidence now ships."""
+    from src.core.models import OutputEntry, Work
+    from src.core.output_spec import _render_track_a_entry
+
+    work = Work(id="icaros-usc/pyribs", title="icaros-usc/pyribs", year=2025, venue="GitHub",
+                doi=None, cited_by_count=0, abstract="quality diversity library",
+                publication_type="github_repository",
+                source_meta={"reliability_score": 72, "relevance": 0.8,
+                             "anchor_rank_score": 62.6, "theme_fit_keywords": 5,
+                             "theme_fit_matched": [
+                                 {"keyword": "quality-diversity",
+                                  "where": "name/description/topics", "credit": 1.0},
+                                 {"keyword": "archive", "where": "readme", "credit": 0.4}]})
+    entry = OutputEntry(work=work, relationship="", abstract_summary="", caution="",
+                        track="A", label="実装アンカー", relationship_level="高")
+    text = "\n".join(_render_track_a_entry(0, 0, entry))
+    assert "一致キーワード 2/5" in text
+    assert "quality-diversity（名前/説明/topics）" in text
+    assert "archive（README・部分 0.4）" in text
+
+
+def test_no_match_is_stated_as_zero_not_omitted():
+    """S-68 doctrine: absence must be printed, not left blank — an anchor that matched nothing
+    is exactly the case the caller needs to see."""
+    from src.core.models import OutputEntry, Work
+    from src.core.output_spec import _render_track_a_entry
+
+    work = Work(id="a/b", title="a/b", year=2025, venue="GitHub", doi=None, cited_by_count=0,
+                abstract="", publication_type="github_repository",
+                source_meta={"reliability_score": 91, "relevance": 0.0, "anchor_rank_score": 31.8,
+                             "theme_fit_keywords": 5, "theme_fit_matched": []})
+    entry = OutputEntry(work=work, relationship="", abstract_summary="", caution="",
+                        track="A", label="実装アンカー", relationship_level="低")
+    text = "\n".join(_render_track_a_entry(0, 0, entry))
+    assert "一致キーワード なし（0/5）" in text

@@ -86,6 +86,11 @@ class GitRepository:
     readme_text: str = ""
     reliability_score: int = 0
     theme_fit_score: int = 0
+    # F-14/F-20: which of the caller's keywords actually matched, and where. The score
+    # alone cannot tell a subject hit from a coincidence, and every anchor's relationship
+    # line read the same template sentence because nothing per-anchor was carried here.
+    theme_fit_matched: List[Dict[str, Any]] = field(default_factory=list)
+    theme_fit_keywords: int = 0
     activity_score: int = 0
     adoption_score: int = 0
     license_score: int = 0

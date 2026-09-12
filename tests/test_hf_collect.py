@@ -118,8 +118,13 @@ def test_collect_returns_ranked_work_objects_for_models_and_datasets():
     # ranked by reliability_score desc
     scores = [w.source_meta["reliability_score"] for w in works]
     assert scores == sorted(scores, reverse=True)
-    # the strong, recent, licensed model outranks the stale unlicensed one
-    assert works[0].title == "user/strong"
+    # F-14/F-20 (2026-09-12): relevance is coverage of the caller's keywords, so the on-topic
+    # dataset ("mahjong" matches the theme's only keyword) now leads the popular but off-topic
+    # model — that inversion is the point of the multiplicative relevance term (F-03).
+    assert works[0].title == "user/mahjong-dataset"
+    titles = [w.title for w in works]
+    # among the equally off-topic pair, the strong, recent, licensed model still beats the stale one
+    assert titles.index("user/strong") < titles.index("user/weak")
     # model vs dataset routing in url + publication_type
     by_title = {w.title: w for w in works}
     assert by_title["user/strong"].publication_type == "huggingface_model"
@@ -191,15 +196,16 @@ def _kw_theme(*include):
 def test_hf_fit_mention_below_2000_chars_now_counts():
     # The old [:2000] prefix cut missed this mention entirely.
     card = ("x" * 5000) + " anytime-valid inference " + ("y" * 1000)
-    assert _hf_fit(_kw_theme("anytime-valid"), "some/model tags", card) == 7
+    # F-14/F-20: coverage x 20, so 1 of 1 keywords matched reads the full 20.
+    assert _hf_fit(_kw_theme("anytime-valid"), "some/model tags", card) == 20
 
 
 def test_hf_fit_mega_card_scattered_mentions_earn_partial_credit_only():
     chunk = "z" * 40_000
     card = chunk + " e-value " + chunk + " e-value " + chunk
     fit = _hf_fit(_kw_theme("e-value"), "some/model", card)
-    assert 0 <= fit <= 2      # 2 hits / 120KB ~= 0.17 credit, not a full 7
+    assert 0 <= fit <= 6      # 2 hits / 120KB ~= 0.17 coverage, not a full 20
 
 
 def test_hf_fit_strong_field_hit_is_full_credit():
-    assert _hf_fit(_kw_theme("sprt"), "acme/sprt-toolkit tags", "q" * 100_000) == 7
+    assert _hf_fit(_kw_theme("sprt"), "acme/sprt-toolkit tags", "q" * 100_000) == 20

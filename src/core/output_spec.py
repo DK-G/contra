@@ -106,6 +106,8 @@ def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> 
 
 
 def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
+    from src.pipeline.theme_fit import matched_summary
+
     lines = []
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
     lines.append("")
@@ -123,6 +125,12 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
             f"- **順位スコア**: {_meta['anchor_rank_score']} = Reliability × 関連度係数 "
             f"(theme関連度 {_meta.get('relevance', 0.0)})"
         )
+    # F-14: the relationship/hypothesis prose was the SAME template sentence for every anchor,
+    # so a subject hit and a coincidence read identically. This line is the deterministic part
+    # of the answer: which of the caller's keywords matched, and on which surface.
+    if "theme_fit_matched" in _meta:
+        lines.append("- **" + matched_summary(_meta.get("theme_fit_matched") or [],
+                                              int(_meta.get("theme_fit_keywords") or 0)) + "**")
     if _is_github_work(entry.work):
         score = entry.work.source_meta.get("reliability_score", "—")
         issue_signal = entry.work.source_meta.get("issue_signal_summary", "—")

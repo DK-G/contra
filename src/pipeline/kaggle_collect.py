@@ -29,6 +29,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.core.models import ThemeInput, Work
+from src.pipeline.theme_fit import keyword_fit
 
 # kind constants — also the suffix of publication_type ("kaggle_<kind>")
 KIND_DATASET = "dataset"
@@ -171,15 +172,21 @@ def _license_score(license_name: str) -> int:
     return 15
 
 
+_FIT_SCALE = 20          # this source's theme_fit range (reliability component)
+
+
+def _theme_fit(theme: ThemeInput, text: str) -> Dict[str, Any]:
+    """Shared word-boundary / coverage keyword fit (``src/pipeline/theme_fit.py``, F-14/F-20).
+
+    Kaggle items carry only ref/title/subtitle/tags, so everything is identity surface — there
+    is no body text to earn partial credit from.
+    """
+    return keyword_fit(theme.keywords.include, theme.keywords.exclude, text, "",
+                       scale=_FIT_SCALE, exclude_penalty=7, exclude_cap=14)
+
+
 def _theme_fit_score(theme: ThemeInput, text: str) -> int:
-    haystack = text.lower()
-    include_hits = sum(
-        1 for token in theme.keywords.include if token and token.lower() in haystack
-    )
-    exclude_hits = sum(
-        1 for token in theme.keywords.exclude if token and token.lower() in haystack
-    )
-    return max(min(include_hits * 7, 20) - min(exclude_hits * 7, 14), 0)
+    return int(_theme_fit(theme, text)["score"])
 
 
 def _html_url(base_url: str, ref: str, kind: str) -> str:
@@ -206,7 +213,8 @@ def _normalize_dataset(item: Dict[str, Any], theme: ThemeInput, *, base_url: str
     adoption = _dataset_adoption_score(downloads, votes, usability)
     activity = _activity_score(last_updated)
     license_pts = _license_score(license_name)
-    theme_fit = _theme_fit_score(theme, fit_text)
+    fit = _theme_fit(theme, fit_text)
+    theme_fit = int(fit["score"])
     reliability = min(adoption + activity + license_pts + theme_fit, 100)
 
     abstract = subtitle or (" · ".join(tags[:8]) if tags else None)
@@ -235,6 +243,8 @@ def _normalize_dataset(item: Dict[str, Any], theme: ThemeInput, *, base_url: str
             "activity_score": activity,
             "license_score": license_pts,
             "theme_fit_score": theme_fit,
+            "theme_fit_matched": fit["matched"],
+            "theme_fit_keywords": fit["keywords"],
         },
     )
 
@@ -255,7 +265,8 @@ def _normalize_kernel(item: Dict[str, Any], theme: ThemeInput, *, base_url: str)
     # kernels rarely expose a license; a known language is the closest "declared metadata"
     # signal, scored on the same 0-15 pillar so kernels and datasets rank comparably.
     language_pts = 15 if language.strip() else 0
-    theme_fit = _theme_fit_score(theme, fit_text)
+    fit = _theme_fit(theme, fit_text)
+    theme_fit = int(fit["score"])
     reliability = min(adoption + activity + language_pts + theme_fit, 100)
 
     abstract = title or (f"Kaggle notebook by {author}" if author else None)
@@ -284,6 +295,8 @@ def _normalize_kernel(item: Dict[str, Any], theme: ThemeInput, *, base_url: str)
             "activity_score": activity,
             "license_score": language_pts,
             "theme_fit_score": theme_fit,
+            "theme_fit_matched": fit["matched"],
+            "theme_fit_keywords": fit["keywords"],
         },
     )
 

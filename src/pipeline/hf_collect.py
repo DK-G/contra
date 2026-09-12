@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.core.models import ThemeInput, Work
-from src.pipeline.git_collect import _README_DENSITY_UNIT, _README_MIN_LEN
+from src.pipeline.theme_fit import keyword_fit
 
 # kind constants — also the suffix of publication_type ("huggingface_<kind>")
 KIND_MODEL = "model"
@@ -161,33 +161,21 @@ def _license_score(license_name: str) -> int:
     return 15
 
 
-def _theme_fit_score(theme: ThemeInput, strong_text: str, card_text: str = "") -> int:
+_FIT_SCALE = 20          # this source's theme_fit range (reliability component)
+
+
+def _theme_fit(theme: ThemeInput, strong_text: str, card_text: str = "") -> Dict[str, Any]:
     """Keyword fit: id/tags/pipeline/library hits earn full credit; card hits earn
-    length-normalised partial credit (occurrences per 10k chars, capped at 1.0).
-
-    Same F-03 fix as the GitHub readme fit: matching a [:2000] card prefix missed
-    mentions below the fold, while full-text presence made CARD LENGTH a relevance
-    proxy (model cards, like mega-READMEs, mention everything incidentally). The
-    density constants are shared with git_collect (calibrated on live probes).
+    length-normalised partial credit. Shared word-boundary / coverage implementation
+    (``src/pipeline/theme_fit.py``, F-14/F-20) — a model card, like a mega-README, mentions
+    everything once, so presence alone would make CARD LENGTH the relevance proxy.
     """
-    strong = strong_text.lower()
-    card = card_text.lower()
-    denom = max(len(card), _README_MIN_LEN) / _README_DENSITY_UNIT
+    return keyword_fit(theme.keywords.include, theme.keywords.exclude, strong_text, card_text,
+                       scale=_FIT_SCALE, exclude_penalty=7, exclude_cap=14)
 
-    include_credit = 0.0
-    for token in theme.keywords.include:
-        t = (token or "").lower()
-        if not t:
-            continue
-        if t in strong:
-            include_credit += 1.0
-        elif card:
-            include_credit += min(card.count(t) / denom, 1.0)
-    exclude_hits = sum(
-        1 for token in theme.keywords.exclude
-        if token and (token.lower() in strong or token.lower() in card)
-    )
-    return max(min(int(round(include_credit * 7)), 20) - min(exclude_hits * 7, 14), 0)
+
+def _theme_fit_score(theme: ThemeInput, strong_text: str, card_text: str = "") -> int:
+    return int(_theme_fit(theme, strong_text, card_text)["score"])
 
 
 def _fit_text(item_id: str, tags: List[str], pipeline_tag: str, library: str, card: str = "") -> str:
@@ -221,7 +209,8 @@ def _normalize_item(
     adoption = _adoption_score(downloads, likes)
     activity = _activity_score(last_modified)
     license_pts = _license_score(license_name)
-    theme_fit = _theme_fit_score(theme, strong_text, full_card)
+    fit = _theme_fit(theme, strong_text, full_card)
+    theme_fit = int(fit["score"])
     reliability = min(adoption + activity + license_pts + theme_fit, 100)
 
     if card:
@@ -256,6 +245,8 @@ def _normalize_item(
             "activity_score": activity,
             "license_score": license_pts,
             "theme_fit_score": theme_fit,
+            "theme_fit_matched": fit["matched"],
+            "theme_fit_keywords": fit["keywords"],
         },
     )
 

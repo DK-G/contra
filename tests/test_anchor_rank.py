@@ -99,7 +99,8 @@ def test_focused_readme_single_mention_earns_full_credit():
     readme = ("x" * 5700) + " two-sided sequential test of the hypothesis " + ("y" * 1900)
     repo = GitRepository(full_name="gostevehoward/confseq", html_url="",
                         description="Confidence sequences and uniform boundaries", readme_text=readme)
-    assert _theme_fit_score(_theme_with_keywords("sequential test"), repo) == 10
+    # F-14/F-20: the score is now coverage x 30, so 1 of 1 keywords matched reads 30.
+    assert _theme_fit_score(_theme_with_keywords("sequential test"), repo) == 30
 
 
 def test_mega_readme_scattered_mentions_earn_only_partial_credit():
@@ -118,14 +119,14 @@ def test_description_hit_is_full_credit_regardless_of_readme_size():
     repo = GitRepository(full_name="a/b", html_url="",
                         description="anytime-valid confidence sequences toolkit",
                         readme_text="q" * 200_000)
-    assert _theme_fit_score(_theme_with_keywords("anytime-valid"), repo) == 10
+    assert _theme_fit_score(_theme_with_keywords("anytime-valid"), repo) == 30
 
 
 def test_tiny_readme_is_not_inflated():
     # A 50-char readme with a hit must not multiply credit via a tiny denominator.
     repo = GitRepository(full_name="a/b", html_url="", description="",
                         readme_text="the SPRT implementation")
-    assert _theme_fit_score(_theme_with_keywords("SPRT"), repo) == 10  # capped at 1.0 credit
+    assert _theme_fit_score(_theme_with_keywords("SPRT"), repo) == 30  # capped at 1.0 credit
 
 
 # --- F-17 (seihai 2026-08-27): the 関係度 label must follow theme relevance ----------
@@ -166,3 +167,62 @@ def test_relationship_label_renders_with_its_coefficient():
     e = _labelled([_anchor("frouros", 62, 30)])["frouros"]
     md = "\n".join(_render_track_a_entry(0, 0, e))
     assert "- **関係度**: 高（theme関連度 1.0）" in md
+
+
+# --- F-14 / F-20: calibrated on the four ranking bugs seihai actually reported -----------
+
+def _repo(name, desc="", topics=(), readme=""):
+    return GitRepository(full_name=name, html_url="", description=desc,
+                         topics=list(topics), readme_text=readme)
+
+
+def test_abbreviation_no_longer_matches_an_unrelated_substring():
+    """2026-09-05: `cuped` matched `OpenPrinting/cups-filters`, seating a printing subsystem
+    at rank 5 of a variance-reduction query."""
+    kws = ["cuped", "variance-reduction", "confidence-sequence", "e-value", "ab-testing"]
+    printing = _repo("OpenPrinting/cups-filters", "cups filters for printing")
+    assert _theme_fit_score(_theme_with_keywords(*kws), printing) == 0
+
+
+def test_hyphenated_keyword_matches_the_same_words_in_prose():
+    """2026-09-10: `quality-diversity` failed to match "quality diversity optimization",
+    so the subject's standard library lost the credit it had earned."""
+    pyribs = _repo("icaros-usc/pyribs",
+                   "A bare-bones Python library for quality diversity optimization.",
+                   topics=["map-elites", "quality-diversity", "evolutionary-computation"])
+    kws = ["quality-diversity", "map-elites", "novelty-search", "archive", "diversity"]
+    fit = _theme_fit_score(_theme_with_keywords(*kws), pyribs)
+    assert fit >= 18                       # 3 of 5 keywords on the identity surface
+
+
+def test_relevance_no_longer_saturates_at_three_hits():
+    """2026-09-10: four anchors all read relevance 1.0 and the order fell back to repo
+    quality, seating an unrelated agent-skills collection above pyribs by 1.0 point."""
+    three_of_five = _repo("a/b", "quality diversity with map-elites and novelty search")
+    five_of_five = _repo("c/d", "quality diversity map-elites novelty search archive diversity")
+    kws = ["quality-diversity", "map-elites", "novelty-search", "archive", "diversity"]
+    theme = _theme_with_keywords(*kws)
+    partial, full = _theme_fit_score(theme, three_of_five), _theme_fit_score(theme, five_of_five)
+    assert partial < full == 30
+    assert 0.5 <= partial / 30 <= 0.85     # coverage, not a saturated cap
+
+
+def test_on_topic_anchor_outranks_a_better_built_off_topic_one():
+    """The observed inversion: SynaLinks/synalinks-skills (73.0) above pyribs (72.0)."""
+    from src.pipeline.track_a import annotate_anchor_rank
+    from src.core.models import Work
+    kws = ["quality-diversity", "map-elites", "novelty-search", "archive", "diversity"]
+    theme = _theme_with_keywords(*kws)
+    pyribs = _repo("icaros-usc/pyribs", "Python library for quality diversity optimization.",
+                   topics=["map-elites", "quality-diversity"])
+    skills = _repo("SynaLinks/synalinks-skills", "A collection of skills for coding agents.")
+    works = []
+    for repo, reliability in ((pyribs, 72), (skills, 78)):
+        works.append(Work(id=repo.full_name, title=repo.full_name, year=2025, venue="GitHub",
+                          doi=None, cited_by_count=0, abstract=repo.description,
+                          publication_type="github_repository",
+                          source_meta={"reliability_score": reliability,
+                                       "theme_fit_score": _theme_fit_score(theme, repo)}))
+    annotate_anchor_rank(works)
+    ranked = sorted(works, key=lambda w: w.source_meta["anchor_rank_score"], reverse=True)
+    assert ranked[0].id == "icaros-usc/pyribs"

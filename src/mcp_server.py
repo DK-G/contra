@@ -51,6 +51,7 @@ from src.pipeline.collect import (
     collect_track_b_from_spec,
     merge_seed_pools,
 )
+from src.pipeline.theme_fit import matched_summary
 from src.pipeline.query import (
     resolve_field_ids,
     resolve_subfield_ids,
@@ -734,6 +735,11 @@ class StdinMcpServer:
             # why an 86-quality off-topic repo now sits below an 83-quality on-topic one.
             lines.append(f"- **順位スコア**: {meta.get('anchor_rank_score', meta.get('reliability_score', 0))} "
                          f"= Reliability × 関連度係数 (theme関連度 {meta.get('relevance', 0.0)})")
+            # F-14: name the keywords that actually matched — the generated prose below is the
+            # same template for every anchor, so this is what separates a hit from a coincidence.
+            if "theme_fit_matched" in meta:
+                lines.append("- **" + matched_summary(meta.get("theme_fit_matched") or [],
+                                                      int(meta.get("theme_fit_keywords") or 0)) + "**")
             lines.append(f"- 更新年: {entry.work.year} | 種別: {entry.work.venue} | stars: {entry.work.cited_by_count}")
             lines.append(f"- リンク: {entry.work.id}")
             lines.append("")

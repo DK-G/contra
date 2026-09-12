@@ -8,6 +8,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from src.core.models import GitRepository, ThemeInput, Work
+from src.pipeline.theme_fit import (
+    README_DENSITY_UNIT as _README_DENSITY_UNIT_SHARED,
+    README_MIN_LEN as _README_MIN_LEN_SHARED,
+    keyword_fit,
+)
 from src.github.client import GitHubClient
 
 _RESEARCH_TASK_TERMS = [
@@ -192,26 +197,22 @@ _README_DENSITY_UNIT = 10_000
 _README_MIN_LEN = 1_000   # don't inflate credit for near-empty readmes
 
 
-def _theme_fit_score(theme: ThemeInput, repo: GitRepository) -> int:
-    strong = " ".join([repo.full_name, repo.description, " ".join(repo.topics)]).lower()
-    readme = repo.readme_text.lower()
-    denom = max(len(readme), _README_MIN_LEN) / _README_DENSITY_UNIT
+_FIT_SCALE = 30          # this source's theme_fit range (reliability component)
 
-    include_credit = 0.0
-    for token in theme.keywords.include:
-        t = (token or "").lower()
-        if not t:
-            continue
-        if t in strong:
-            include_credit += 1.0          # name/description/topics: full credit
-        elif readme:
-            include_credit += min(readme.count(t) / denom, 1.0)
-    exclude_hits = sum(
-        1 for token in theme.keywords.exclude
-        if token and (token.lower() in strong or token.lower() in readme)
+
+def _theme_fit(theme: ThemeInput, repo: GitRepository) -> Dict[str, Any]:
+    """F-14/F-20 (2026-09-12): word-boundary matching on normalised text, and relevance as the
+    COVERAGE of the caller's keywords rather than a cap that three hits saturated. The three
+    defects this replaces are documented in ``src/pipeline/theme_fit.py``."""
+    return keyword_fit(
+        theme.keywords.include, theme.keywords.exclude,
+        " ".join([repo.full_name, repo.description, " ".join(repo.topics)]),
+        repo.readme_text, scale=_FIT_SCALE, exclude_penalty=10, exclude_cap=20,
     )
-    score = min(int(round(include_credit * 10)), 30) - min(exclude_hits * 10, 20)
-    return max(score, 0)
+
+
+def _theme_fit_score(theme: ThemeInput, repo: GitRepository) -> int:
+    return int(_theme_fit(theme, repo)["score"])
 
 
 def _activity_score(repo: GitRepository) -> int:
@@ -628,7 +629,10 @@ def _apply_reliability(theme: ThemeInput, repo: GitRepository) -> GitRepository:
     repo.security_score = security
     
     # Backwards compatibility metrics
-    repo.theme_fit_score = _theme_fit_score(theme, repo)
+    fit = _theme_fit(theme, repo)
+    repo.theme_fit_score = int(fit["score"])
+    repo.theme_fit_matched = fit["matched"]
+    repo.theme_fit_keywords = int(fit["keywords"])
     repo.activity_score = _activity_score(repo)
     repo.adoption_score = _adoption_score(repo)
     repo.license_score = _license_score(repo)
@@ -663,6 +667,8 @@ def repository_to_work(repo: GitRepository) -> Work:
             "issue_signal_summary": repo.issue_signal_summary,
             "reliability_score": repo.reliability_score,
             "theme_fit_score": repo.theme_fit_score,
+            "theme_fit_matched": repo.theme_fit_matched,
+            "theme_fit_keywords": repo.theme_fit_keywords,
             "activity_score": repo.activity_score,
             "adoption_score": repo.adoption_score,
             "license_score": repo.license_score,
