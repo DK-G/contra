@@ -1462,6 +1462,19 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 ---
 
+## 2026-09-15（火・seihai r02 レーン）
+
+**実行順は byrepo → byserendipity → bybridge（3本並列発行）。429 は0回。**
+
+| ツール | テーマ | 観測 | 様式 |
+|---|---|---|---|
+| byrepo（structured） | 実行層の途中変更をまたぐ逐次 A/B（e-value / anytime-valid / change point） | 1位 `jakorostami/expectation`（関連度 0.6・一致 3/5）＝**主題直撃**。2〜3位は汎用 A/B（関連度 0.2）。**関連度 0.0 の侵入ゼロ（2回連続）**。change point / protocol amendment の専用実装は0件。散文3欄は依然定型文 | F-14 の散文定型の継続（関連度側の改善は再確認） |
+| byserendipity（raw_only） | 同上 3 facet（臨床試験の途中改訂 / 反復調査のモード変更 / センサ再較正下の CUSUM） | facet 1 が `HTTP 504` で 0件 → S-112 の規約どおり**単独再投したら `棄却 (home_converged)` で 0件**。**504 の下に意味的収束が隠れていた**＝規約の2分類（上流障害／意味的収束）は排他でなく**順に剥がれる層**。facet 2/3 は 49/50 返却→60候補。応答 23 万字でファイル退避（F-11 系の継続） | **新: S-112/F-16 の2分類が重なる（504 を剥がすと home_converged）** |
+| bybridge（materials） | 同上（英語 seed_semantic_text 付き） | 最頻 bridge **Testing by Betting（Shafer）**＝主題の基礎文献・交差候補の28%／上位10件の50%・通行 bridge 25本。**主題祖先型は2回連続**。ただし**シード上位トピックが Statistical Methods in Clinical Trials 18/20** に寄り、**交差候補30件のうち約10件が NEJM/JAMA の大規模 RCT 本体（WHI・tPA・RALES 等・被引用 7,000〜16,000）**＝群逐次設計の*方法*の祖先を通って、*方法を使った試験結果*が候補に上がる | **新: bridge は主題祖先でも候補が「適用例の大規模試験」に吸われる（F-13 の候補側版）** |
+| delegate_finalize | — | 2バッチとも `venue` 欠落警告（呼び手が材料を手で転記し venue を落とした＝**今回は呼び手側の echo 漏れ**）。`percentile_gate` 落選 5/6・3/4、F-22「近いが有用」名指し1件（Merging sequential e-values）が正しく機能 | F-22（1行記録）・呼び手側の echo 漏れ |
+
+---
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
