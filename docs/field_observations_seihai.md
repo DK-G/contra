@@ -1449,6 +1449,19 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 ---
 
+## 2026-09-14（月・seihai r01 レーン）
+
+**実行順は F-28 の規約案どおり bybridge → byrepo → byserendipity。** 3本とも完走し **429 は0回**（先週は byserendipity 先行で bybridge が3連続 429）。n=1 だが**規約案が機能した最初の点**。
+
+| ツール | テーマ | 観測 | 様式 |
+|---|---|---|---|
+| byrepo（structured） | 実行非対称下の A/B 比較（noncompliance / SRM / IV） | 5件すべて関連度 0.2〜0.4・**関連度 0.0 の侵入ゼロ**（F-14/20-R の網羅率化後、初めて上位に無関係 repo が載らなかった）。一致キーワードが出力に出るので読み飛ばし判断が速い。ただし SRM 診断・shadow fill の**専用実装は0件**（汎用因果推論ライブラリのみ）。散文3欄は依然定型文 | F-14 の改善確認＋散文定型の継続 |
+| bybridge（materials） | 同上（英語 seed_semantic_text 付き） | シード上位トピック **Advanced Causal Inference Techniques 10/20**＝主題直撃。最頻 bridge は **Identification of Causal Effects Using Instrumental Variables**（交差候補の30%・上位10件の70%）＝**主題の知的祖先であって道具でも名簿でもない**。一方で**サブフィールド一致 5% の「主題ドリフト」警告が出た**が、原因は呼び手が `scope_field` に Economics を宣言し home サブフィールドが Finance に解決されたこと＝**方法論シード（Statistics and Probability）を主題外と誤判定する偽警報**。交差候補は Mendelian randomization が上位を占有したが、**実質収穫1件（NEJM 2015 禁煙インセンティブ RCT＝受容率 90.0% vs 13.7% で ITT と IV の順位が反転）が当日の主結論を担った** | 新: F-13-I の警告が方法論テーマで偽陽性になる |
+| byserendipity（raw_only） | 同上 3 facet（臨床 noncompliance / ネットワーク競合公平性 / 生態学の検出率差） | 3 facet とも成功（24/31/40 残→各20提出）。post-gate 6件→通過1（閾値 0.714）。「近いが有用」名指し3件（F-22-I が正しく機能） | F-22（1行記録） |
+| delegate_finalize | — | `W4290991335` について「材料欄が欠けたまま送信（venue）」警告。**当該 venue は contra 自身が raw 材料で空文字として返した値をそのまま echo したもの**＝呼び手は全欄 echo しており、**上流が欠けている欄を呼び手の echo 漏れとして名指ししている** | 新: F-19-R の名指しが上流欠損と呼び手欠落を区別しない |
+
+---
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
