@@ -343,8 +343,15 @@ def seed_domain_alignment(
     *,
     home_subfield_ids: Iterable[str] = (),
     semantic_count: Optional[int] = None,
+    semantic_pool: Optional[Sequence[Work]] = None,
 ) -> Dict[str, Any]:
     """Topic-hierarchy stats for a seed roster vs the theme's declared home domain.
+
+    ``semantic_pool`` (F-13-L, 2026-09-15) is the semantic leg's full retrieval — the only seeds
+    chosen by the theme's own prose. When given, ``legs`` compares the roster's LEXICAL-origin
+    seeds against it at the Topic level, and names the Subfield the prose actually landed in, so
+    a low Subfield rate can be told apart as "keywords drifted" vs "the declared scope names a
+    different subfield than the subject lives in" (a methodology theme filed under Statistics).
 
     Returns the Field-level keys ``{total, home, fraction, unknown, top_fields}`` plus the
     finer levels ``{sub_home, sub_unknown, sub_fraction, top_subfields, top_topics,
@@ -397,7 +404,58 @@ def seed_domain_alignment(
             "sub_home": sub_in_home, "sub_unknown": sub_unknown,
             "sub_fraction": sub_fraction, "top_subfields": top_sub,
             "top_topics": top_topics, "distinct_topics": len(topic_counts),
-            "semantic_count": semantic_count}
+            "semantic_count": semantic_count,
+            "legs": _leg_agreement(seeds, semantic_pool, sub_home_ids)}
+
+
+def _topic(w: Work) -> str:
+    return str((getattr(w, "source_meta", None) or {}).get("primary_topic_name") or "")
+
+
+def _leg_agreement(
+    seeds: Sequence[Work], semantic_pool: Optional[Sequence[Work]], sub_home_ids: set,
+) -> Optional[Dict[str, Any]]:
+    """Cross-leg check (F-13-L): do the keyword-found seeds sit where the prose-found ones do?
+
+    Topic, not Subfield, is the comparison level on purpose — measured 2026-09-15 on the 9/04
+    drift theme, the semantic leg spans Finance / Economics and Econometrics / Management
+    Science, so a Subfield reference accepted 10/11 drifted lexical seeds (broadband, lending,
+    COVID policy); at Topic level the same seeds agree 0/11.
+    """
+    if semantic_pool is None:
+        return None
+    pool = list(semantic_pool)
+    sem_ids = {w.id for w in pool}
+    pool_topics = {_topic(w) for w in pool} - {""}
+    lexical = [w for w in seeds if w.id not in sem_ids]
+    known = [w for w in lexical if _topic(w)]
+    agree = [w for w in known if _topic(w) in pool_topics]
+    miss: Dict[str, int] = {}
+    for w in known:
+        if _topic(w) not in pool_topics:
+            miss[_topic(w)] = miss.get(_topic(w), 0) + 1
+    sub_counts: Dict[str, List[Any]] = {}
+    for w in pool:
+        meta = getattr(w, "source_meta", None) or {}
+        sid = str(meta.get("primary_topic_subfield_id") or "")
+        if sid:
+            name = str(meta.get("primary_topic_subfield_name") or "") or f"Subfield {sid}"
+            sub_counts.setdefault(sid, [name, 0])[1] += 1
+    classified = sum(n for _, n in sub_counts.values())
+    top_sub = None
+    if classified:
+        sid, (name, n) = max(sub_counts.items(), key=lambda kv: (kv[1][1], kv[1][0]))
+        top_sub = {"id": sid, "name": name, "count": n, "classified": classified,
+                   "is_home": sid in sub_home_ids}
+    return {
+        "semantic_pool": len(pool),
+        "lexical_in_roster": len(lexical),
+        "lexical_topic_known": len(known),
+        "lexical_topic_agree": len(agree),
+        "lexical_topic_fraction": (len(agree) / len(known)) if (known and pool_topics) else None,
+        "lexical_miss_topics": sorted(miss.items(), key=lambda kv: (-kv[1], kv[0])),
+        "semantic_top_subfield": top_sub,
+    }
 
 
 # Warn thresholds, both calibrated against real rosters rather than chosen as round numbers.
@@ -417,6 +475,30 @@ def seed_domain_alignment(
 # cross-subfield themes.
 SEED_ALIGNMENT_WARN_BELOW = 0.5
 SEED_SUBFIELD_WARN_BELOW = 0.35
+#
+# LEXICAL x SEMANTIC TOPIC AGREEMENT (F-13-L): measured live 2026-09-15, share of the roster's
+# lexical-origin seeds whose Topic appears in the semantic leg's retrieval:
+#   drifted: 9/14 IV theme 1/6 = 17% / 9/15 e-value theme 0/7 (HMMER "e-values") / 9/04 0/11
+#   on-topic controls: pairs trading 6/6 = 100% / backtest overfitting 5/5 = 100%
+# Nothing observed between 17% and 100%; 0.5 is the midpoint of that gap.
+SEED_LEG_TOPIC_WARN_BELOW = 0.5
+# The semantic leg "landed" in one Subfield when at least this share of its classified
+# retrievals sit there (9/14 IV: Statistics and Probability 35/39; 9/04 drift: Finance 12/28
+# = 43%, i.e. spread — no single landing, so the Subfield warning keeps its old meaning).
+SEMANTIC_SUBFIELD_LANDING_SHARE = 0.5
+
+
+def _prose_landed_elsewhere(stats: Dict[str, Any]) -> bool:
+    """True when the theme's prose (semantic leg) concentrated in a Subfield OTHER than the
+    declared one — then low Field/Subfield rates measure the scope declaration, not drift, and
+    only the cross-leg line may carry a drift verdict. Requires that line to be computable."""
+    legs = stats.get("legs") or {}
+    top = legs.get("semantic_top_subfield")
+    return bool(
+        top and stats.get("sub_home_resolved") and not top["is_home"]
+        and legs.get("lexical_topic_fraction") is not None
+        and top["count"] / top["classified"] >= SEMANTIC_SUBFIELD_LANDING_SHARE
+    )
 
 
 def render_seed_alignment(
@@ -482,20 +564,62 @@ def render_seed_alignment(
             "（テーマ本文そのものを検索に入れる唯一の取得レッグ）"
         )
 
-    if frac is not None and frac < SEED_ALIGNMENT_WARN_BELOW:
+    prose_elsewhere = _prose_landed_elsewhere(stats)
+    if frac is not None and frac < SEED_ALIGNMENT_WARN_BELOW and not prose_elsewhere:
         lines.append(
             f"  ⚠ シード名簿がテーマの分野から外れています（分野一致 {frac_txt} < "
             f"{SEED_ALIGNMENT_WARN_BELOW:.0%}）。この run の下流（bridge 構築・交差候補・採点）は"
             "外れた名簿の上で正しく動くため、診断の他の数字が健全でも収穫は主題に当たりません。"
             "キーワードの語彙衝突（F-13）を疑ってください。"
         )
-    if sub_frac is not None and sub_frac < SEED_SUBFIELD_WARN_BELOW:
+    legs = stats.get("legs") or None
+    if legs and legs["semantic_pool"]:
+        lfrac = legs["lexical_topic_fraction"]
+        if lfrac is None:
+            lines.append(
+                "  ・語彙レッグの主題一致 (F-13-L): 判定不能（"
+                + ("名簿に語彙由来シードが無い" if not legs["lexical_in_roster"]
+                   else "トピック分類が無い") + "）"
+            )
+        else:
+            lines.append(
+                f"  ・語彙レッグの主題一致 (F-13-L): 語彙由来 {legs['lexical_topic_agree']}/"
+                f"{legs['lexical_topic_known']} = {lfrac:.0%} のトピックが、semantic レッグの取得"
+                f" {legs['semantic_pool']} 件のトピックに含まれる"
+                "（テーマ本文で選ばれた側を基準に、キーワードで選ばれた側を照合）"
+            )
+    top_sub = (legs or {}).get("semantic_top_subfield")
+    low_field = frac is not None and frac < SEED_ALIGNMENT_WARN_BELOW
+    low_sub = sub_frac is not None and sub_frac < SEED_SUBFIELD_WARN_BELOW
+    if prose_elsewhere and (low_sub or low_field):
+        # 2026-09-14: a causal-inference theme declared under economics/finance got the
+        # "within-Field drift" warning because its on-topic seeds are filed under Statistics and
+        # Probability. The low rate there measures the scope declaration, not drift — say so,
+        # and leave the drift verdict to the cross-leg line.
+        lines.append(
+            f"  ℹ {'分野・' if low_field else ''}サブフィールド一致が低い主因は、テーマ本文の意味近傍が "
+            f"{top_sub['name']}（semantic 取得 {top_sub['count']}/{top_sub['classified']}）に"
+            f"着地していることです＝宣言した scope（{subfield_label or 'scope'}）は主題の下位分野と"
+            "違う（方法論テーマで起きる）。この % はドリフトの尺度として読まず、"
+            "ドリフトは上の『語彙レッグの主題一致』行で判定してください。"
+        )
+    elif low_sub:
         lines.append(
             f"  ⚠ 分野(Field)は一致していてもサブフィールドが外れています（{sub_frac:.0%} < "
             f"{SEED_SUBFIELD_WARN_BELOW:.0%}）。宣言した主題"
             f"（{subfield_label or 'scope'}）の論文が名簿にほとんど入っていません＝"
             "同一 Field 内の主題ドリフト（2026-09-04 の様式）。上位トピックを読み、"
             "キーワードが別の下位分野の主流語彙に吸われていないか確認してください。"
+        )
+    lfrac = legs["lexical_topic_fraction"] if (legs and legs["semantic_pool"]) else None
+    if lfrac is not None and lfrac < SEED_LEG_TOPIC_WARN_BELOW:
+        missed = " / ".join(f"{n} {c}" for n, c in legs["lexical_miss_topics"][:4])
+        lines.append(
+            f"  ⚠ キーワードで選ばれたシードが主題から外れています（語彙由来のトピック一致 "
+            f"{lfrac:.0%} < {SEED_LEG_TOPIC_WARN_BELOW:.0%}）。外れたトピック: {missed}。"
+            "名簿のうち semantic 由来の件はテーマ本文で選ばれた主題側で、外れているのは語彙側"
+            "＝キーワードが別の主題の語彙に衝突しています（F-13）。keywords_include を主題の標準語彙へ"
+            "寄せてください。"
         )
     if sem == 0:
         lines.append(

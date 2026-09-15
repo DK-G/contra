@@ -456,3 +456,119 @@ def test_alignment_unresolved_home_field_reports_not_a_zero():
     assert stats["fraction"] is None
     line = render_seed_alignment(stats)
     assert "判定不能" in line and "⚠" not in line
+
+
+# --- F-13-L: lexical x semantic leg agreement (2026-09-15) ---------------------------------
+
+_STATS = ("26", "Mathematics", "2613", "Statistics and Probability")
+_ECON = ("20", "Economics, Econometrics and Finance", "2002", "Economics and Econometrics")
+
+
+def _legseed(wid: str, sub, topic: str) -> Work:
+    w = _w(wid)
+    w.source_meta = {"primary_topic_field_id": sub[0], "primary_topic_field_name": sub[1],
+                     "primary_topic_subfield_id": sub[2], "primary_topic_subfield_name": sub[3],
+                     "primary_topic_name": topic}
+    return w
+
+
+def test_methodology_theme_low_subfield_is_named_as_scope_mismatch_not_drift():
+    """2026-09-14 false alarm: an IV/noncompliance theme declared under economics/finance.
+    Its on-topic seeds live in Statistics and Probability, so Subfield(Finance) read ~0% and the
+    'within-Field drift' warning fired on a roster whose topic was on target."""
+    pool = [_legseed(f"S{i}", _STATS, "Advanced Causal Inference Techniques") for i in range(10)]
+    roster = pool[:7] + [_legseed(f"L{i}", _ECON, "Advanced Causal Inference Techniques")
+                         for i in range(3)]
+    stats = seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                                  semantic_count=10, semantic_pool=pool)
+    assert stats["sub_fraction"] == 0.0
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "⚠" not in line
+    assert "同一 Field 内の主題ドリフト" not in line
+    assert "Statistics and Probability（semantic 取得 10/10）" in line
+    assert "語彙由来 3/3 = 100%" in line
+
+
+def test_lexical_drift_under_a_methodology_theme_is_still_caught_and_attributed():
+    """The live 9/14 reproduction: semantic seeds on target, keyword seeds drifted to housing /
+    taxation / fiscal policy (1/6 agree). The warning must survive the scope-mismatch rewording
+    and must name the lexical leg as the drifted side."""
+    pool = ([_legseed(f"S{i}", _STATS, "Advanced Causal Inference Techniques") for i in range(9)]
+            + [_legseed("S9", _ECON, "Healthcare Policy and Management")])
+    roster = pool[:7] + [
+        _legseed("L0", _ECON, "Healthcare Policy and Management"),
+        _legseed("L1", _ECON, "Housing Market and Economics"),
+        _legseed("L2", _ECON, "Housing Market and Economics"),
+        _legseed("L3", _ECON, "Taxation and Compliance Studies"),
+        _legseed("L4", _ECON, "Taxation and Compliance Studies"),
+        _legseed("L5", _ECON, "Fiscal Policy and Economic Growth"),
+    ]
+    stats = seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                                  semantic_count=10, semantic_pool=pool)
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "語彙由来 1/6 = 17%" in line
+    assert "⚠ キーワードで選ばれたシードが主題から外れています" in line
+    assert "Housing Market and Economics 2" in line
+    assert "サブフィールド一致が低い主因" in line
+
+
+def test_spread_semantic_leg_keeps_the_subfield_drift_warning():
+    """9/04 drift theme re-measured with a live semantic leg: the prose spread over Finance 43% /
+    Econometrics / Management Science — no single landing — so the Subfield warning keeps its
+    meaning, and the cross-leg line independently reports 0/N."""
+    fin = ("20", "Economics, Econometrics and Finance", "2003", "Finance")
+    pool = ([_legseed(f"S{i}", fin, "Financial Markets and Investment Strategies") for i in range(4)]
+            + [_legseed(f"E{i}", _ECON, "Complex Systems and Time Series Analysis") for i in range(3)]
+            + [_legseed(f"M{i}", ("18", "Decision Sciences", "1803", "Management Science"),
+                        "Risk and Portfolio Optimization") for i in range(3)])
+    roster = pool[:2] + [_legseed(f"L{i}", _ECON, "Economic Growth and Productivity") for i in range(8)]
+    stats = seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                                  semantic_count=10, semantic_pool=pool)
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "同一 Field 内の主題ドリフト" in line and "ℹ" not in line
+    assert "語彙由来 0/8 = 0%" in line and "⚠ キーワードで選ばれたシード" in line
+
+
+def test_on_topic_lexical_leg_is_calm():
+    fin = ("20", "Economics, Econometrics and Finance", "2003", "Finance")
+    pool = [_legseed(f"S{i}", fin, "Financial Markets and Investment Strategies") for i in range(6)]
+    roster = pool[:4] + [_legseed(f"L{i}", fin, "Financial Markets and Investment Strategies")
+                         for i in range(4)]
+    line = render_seed_alignment(
+        seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                              semantic_count=6, semantic_pool=pool),
+        subfield_label="Finance")
+    assert "語彙由来 4/4 = 100%" in line and "⚠" not in line and "ℹ" not in line
+
+
+def test_leg_check_absent_without_semantic_pool_and_undecidable_without_lexical_seeds():
+    seeds = [_seed("20", "Economics", "2003", "Finance", "T")] * 4
+    legacy = render_seed_alignment(
+        seed_domain_alignment(seeds, ["20"], home_subfield_ids=["2003"], semantic_count=6))
+    assert "F-13-L" not in legacy
+    pool = [_legseed(f"S{i}", _STATS, "T") for i in range(3)]
+    only_sem = render_seed_alignment(
+        seed_domain_alignment(pool, ["20"], home_subfield_ids=["2003"],
+                              semantic_count=3, semantic_pool=pool))
+    assert "判定不能（名簿に語彙由来シードが無い）" in only_sem
+    assert "⚠ キーワードで選ばれた" not in only_sem
+
+
+def test_field_warning_follows_the_same_scope_mismatch_rule():
+    """Live 9/14 end-to-end run (2026-09-15): the Field line ALSO fired ('分野一致 35% < 50%')
+    because the on-topic seeds are filed under Mathematics. Same cause as the Subfield case, so
+    it is folded into the ℹ line — but only while the cross-leg verdict is computable."""
+    pool = [_legseed(f"S{i}", _STATS, "Advanced Causal Inference Techniques") for i in range(10)]
+    roster = pool[:7] + [_legseed(f"L{i}", _ECON, "Housing Market and Economics") for i in range(3)]
+    stats = seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                                  semantic_count=10, semantic_pool=pool)
+    assert stats["fraction"] < SEED_ALIGNMENT_WARN_BELOW
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "シード名簿がテーマの分野から外れています" not in line
+    assert "ℹ 分野・サブフィールド一致が低い主因" in line
+    assert "⚠ キーワードで選ばれたシードが主題から外れています" in line   # drift still named
+    # without the semantic pool there is no cross-leg verdict, so the old Field warning stands
+    legacy = render_seed_alignment(
+        seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"], semantic_count=10),
+        subfield_label="Finance")
+    assert "シード名簿がテーマの分野から外れています" in legacy

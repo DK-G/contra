@@ -989,6 +989,7 @@ class StdinMcpServer:
             sub_ids = resolve_subfield_ids(theme.scope.field, sub_vocab)
             align = seed_domain_alignment(
                 seeds, home_ids, home_subfield_ids=sub_ids, semantic_count=len(sem_seeds),
+                semantic_pool=sem_seeds if sem_report is not None else None,
             )
             diag_line = (
                 render_seed_alignment(
