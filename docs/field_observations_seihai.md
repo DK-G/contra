@@ -1520,6 +1520,25 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 ---
 
+## 2026-09-16（水・seihai r03 レーン）
+
+**実行順は byrepo → byserendipity → bybridge（3本並列発行＝F-28 規約案の順序を守らなかった）。ただし本日の 429 は順序の問題ではなかった。**
+
+### F-29. 全 by\* 共通 — **OpenAlex の日次 USD 予算（$0.10/日）が朝の時点で枯渇している**（2026-09-16 初観測・F-28 とは別様式）
+
+- **独立プローブ**: contra を介さず `curl https://api.openalex.org/works?search=futility&per_page=1` → **429**。ヘッダ `Retry-After: 6394` / `X-RateLimit-Limit-USD: 0.1` / **`X-RateLimit-Remaining-USD: 0.0008`** / `X-RateLimit-Credits-Required: 10` / `X-RateLimit-Cost-Required-USD: 0.001` / `X-RateLimit-Prepaid-Remaining-USD: 0`。
+- ⇒ **バースト枠の奪い合い（F-28）ではなく日次予算の天井**。検索1回＝10クレジット＝$0.001 で **1日約100回**。by\* 1回は facet×ページ×リトライ（本日 byserendipity は 3 facet でリトライ 6 回）で数十回を消費するので、**日次ルーティン1本分で天井に近づく**。呼び順の規約では回避できない。
+- 本日の実害: byserendipity 3 facet すべて 0 件、bybridge 2回とも seed 取得段で例外。**bynote の A3 実文献接地が全滅**（接地できない類推は出力しない規約により、類推3件を結論から除外）。
+- contra 側の診断メッセージは「時間をおいて再実行」と言うが、**`Retry-After` の値（ここでは約1.8時間）を出していない**＝呼び手は「数十秒待てばよい」と読む。**処方案**: 429 応答の `Retry-After` と `X-RateLimit-Remaining-USD` をそのまま診断に載せ、日次予算枯渇とバースト制限を区別して名指しする。
+
+| ツール | テーマ | 観測 | 様式 |
+|---|---|---|---|
+| byrepo（structured・GitHub のみ） | 決定不能な対比較の futility 停止（conditional power / e-value / 逐次 A/B 終了） | 完走。冒頭警告「関連度が全アンカーで低い（最大 0.2）」。1位 `splitrb/split`（0.2）・2位 `coreyhaines31/marketingskills`（0.2）・**3位 `openacid/slim`（Go の trie・関連度 0.0・一致 0/5）**。futility/sequential の実装0件。散文3欄は定型文 | (iii) 無関係な上位／F-17-R の残る限界（関連度 0.0 の侵入）再発 |
+| byserendipity（raw_only） | 同上 3 facet（オンライン A/B futility / 臨床試験 conditional power / 石油探鉱の評価井放棄） | 3 facet とも 429 で 0 件 | **F-29** |
+| bybridge（materials） | 同上（英語 seed_semantic_text 付き） | 2回とも seed 取得段で 429 例外。観測プロトコルの占有率・bridge 素性は取得不能（旧様式の判定に数えない） | **F-29** |
+
+---
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
