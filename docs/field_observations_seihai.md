@@ -17,6 +17,20 @@
 
 ## 未対処の失敗様式
 
+### F-30. 2026-09-18（seihai r05 担当日）の観測 3 件
+
+テーマ: 「A/B の挑戦者が現職の**行動上のクローン**になっており、比較が原理的に決着しない。着席前に**実現した意思決定の重なり**で拒否する機構と、行動が脱相関した候補を供給する生成器が要る」。
+
+| 日付 | ツール | テーマ | 失敗様式 | 実測値 | 対処状況 |
+|---|---|---|---|---|---|
+| 2026-09-18 | **byrepo**（`structured: true`・pool 40） | 行動重複による admission 拒否の実装 | **(i) 収穫ゼロ ＋ (iii) 無関係な上位結果** ＝ **F-17-R の「残る限界」の再現（4例目）** | **全 4 アンカーの theme 関連度が 0.0〜0.2**。冒頭に語彙衝突の警告。**関連度 0.0 の `HKUDS/Vibe-Trading`（33.6k stars・Reliability 97）が 2 位**、関連度 0.0 の `freqtrade`（54.5k stars・Reliability 89）が 4 位。一致キーワード 0/5 のリポジトリが、一致 2/5 のリポジトリを**順位で上回ってはいない**（36.5 > 33.9）が、**関連度 0.0 の 2 件がそもそも上位 4 に入っている**。返ってきた 4 件はすべて汎用トレーディングボット／株式分析 MCP で、**admission 段階の行動重複検定を持つものはゼロ** | **未対処**（F-17-R の残る限界そのもの。順位スコアは関連度係数を掛けているが、**関連度 0.0 でも Reliability が高ければ上位に残る**のが本様式） |
+| 2026-09-18 | **bybridge**（`materials: true`・S-26 観測プロトコル） | 同上 | **新様式（部分的に良好）＋ 語彙衝突による名簿汚染** | **S-26 の記録項目 2 点はいずれも新様式側**: (i) **最頻 bridge の上位10件占有率 40%**（交差候補全体では 12%・通行 bridge 14 本・共有 bridge 1本のみの候補 54/60）、(ii) **最頻 bridge = `Abandoning Objectives: Evolution Through the Search for Novelty Alone`（被引用 919）＝主題ドメインの基礎文献**（novelty search の原典。名簿由来の分野外ハブではない）。**★contra 側の「候補の主題適合性は未改善」という申告に対する反証**: 主題適合の候補が実際に 3 件出た（CVT-MAP-Elites / QD for Portfolio Optimization / evolutionary origins of modularity）＝**seihai 側で 3 件とも採用した**。**一方で**: 候補 30 件のうち 20 件以上が組織心理学・創造性研究・Facebook 利用（2 位 bridge = `The Search-Transfer Problem`・被引用 5,843 の組織科学ハブ経由）。診断が **`語彙レッグの主題一致 10% < 50%`** を警告し、外れトピックとして `Animal Vocal Communication and Behavior` / `Cephalopods and Marine Biology` / `Computational Drug Discovery Methods` / `Creativity in Education and Neuroscience` を名指し。**シード名簿 20 件にイカの細胞型（eLife 2023）とスズメダイの頭骨（BMC Evol Biol 2009）が混入** | **部分的に対処済み（F-01/F-07 の処置は効いている）／語彙衝突は未対処**。**呼び手側の教訓**: `novelty search` / `behavioral diversity` は**生物行動学の語彙と衝突する**。次回は `quality diversity` / `equivalence testing` / `mutation testing` へ寄せる（呼び手の責任範囲） |
+| 2026-09-18 | **byserendipity**（`raw_only: true`・3 facet） | 同上 | **失敗なし（良好）＝記録は対照として** | **返却 60 候補**（facet ごと 20 件・ホーム除外後 30/39/— ）。`delegate_finalize` に 6 件提出し **接地検証失敗 0 件**。post-gate 通過 1 件・**`近いが有用`（F-22）4 件**（percentile_gate 0.67・固定フロア 0.2 なら 6 件通過）。**F-22 の 4 例目**＝提出 6 件の上位 30% 点が閾値になるので、**良い候補を揃えるほど閾値が上がって落ちる**。seihai 側は contra の明示指示どおり**落選 4 件も全部採用した** | **F-22 は仕様（距離×構造）＝設計上の帰結。計器（落選内訳に律速因子を書く）は F-22-I で対処済みで、本日も正しく機能した** |
+
+**この 3 件が同じ日に並んだことの意味**: 同一テーマ・同一日に **byrepo は収穫ゼロ・bybridge は「上位は主題・下位はハブノイズ」の層構造・byserendipity は良好**。**テーマ側の問題ではない**（byserendipity が 60 候補から 6 件の実用文献を出している）ので、byrepo の不調は**テーマの難しさではなくランキング関数の問題**であることが、同日の対照によって切り分けられる。
+
+
+
 ### F-01. bybridge — 巨大ハブ吸着（7週連続・**seihai 側で 2026-08-16 に呼び出し停止**） → **真の機序を特定し対処済み（2026-08-25）。下記「対処済み」節 F-01-R へ**
 
 **症状**: 交差候補の上位が毎回「共有 bridge 1本」で、内容は分野を問わず**汎用の超高被引用ハブ**に潰れる。過程（シード30／bridge プール50／交差候補60）は正常完走するので**故障ではない**。
