@@ -192,7 +192,7 @@ def material_from_work(work: Work) -> Dict[str, Any]:
     (the ``delegate_finalize`` MCP tool). Carries exactly the fields ``work_from_material`` reads,
     so a round-trip preserves the Work.
     """
-    return {
+    material = {
         "id": work.id,
         "title": work.title,
         "abstract": work.abstract,
@@ -208,6 +208,13 @@ def material_from_work(work: Work) -> Dict[str, Any]:
         "referenced_works": list(work.referenced_works or []),
         "publication_type": work.publication_type,
     }
+    # F-19-R residue (2026-09-14 / 09-17): OpenAlex sometimes has no venue (or abstract) for a
+    # work, contra emits "", the caller echoes it faithfully — and finalize then told the caller
+    # it had dropped the field. Mark the gap at its source; the mark rides along in the echo.
+    empty = _recommended_empty(material)
+    if empty:
+        material[UPSTREAM_EMPTY_KEY] = empty
+    return material
 
 
 def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:
@@ -351,16 +358,51 @@ def verify_grounding(material: Dict[str, Any], theme_text_norm: str) -> List[str
 ECHO_RECOMMENDED = ("title", "abstract", "year", "venue", "cited_by_count")
 
 
+# Marker contra puts on its OWN candidate material listing the recommended fields that were
+# already empty upstream (F-19-R residue). Travels with the echo; finalize reads it back.
+UPSTREAM_EMPTY_KEY = "upstream_empty"
+
+
+def _field_empty(material: Dict[str, Any], key: str) -> bool:
+    value = material.get(key)
+    if value is None:
+        return True
+    return key in ("title", "abstract", "venue") and not str(value).strip()
+
+
+def _recommended_empty(material: Dict[str, Any]) -> List[str]:
+    return [k for k in ECHO_RECOMMENDED if _field_empty(material, k)]
+
+
 def echo_completeness_warnings(materials: Sequence[Dict[str, Any]]) -> List[str]:
-    """One warning line per candidate whose echoed material is missing recommended fields."""
+    """One warning line per candidate whose echoed material is missing recommended fields.
+
+    A field is attributed to the SOURCE, not the caller, when contra's own material marked it
+    empty (``upstream_empty``) or when the key was echoed back present but blank — the shape of
+    a faithful echo of an empty upstream value. Only an absent key/None without a mark is
+    named as the caller's omission (2026-09-15: hand transcription dropped venue).
+    """
     warnings: List[str] = []
     for i, material in enumerate(materials):
-        missing = [
-            k for k in ECHO_RECOMMENDED
-            if material.get(k) is None or (k in ("title", "venue") and not str(material.get(k) or "").strip())
+        wid = str(material.get("id") or f"#{i}")
+        marked = {str(k) for k in (material.get(UPSTREAM_EMPTY_KEY) or [])}
+        empty = [k for k in ECHO_RECOMMENDED if _field_empty(material, k)]
+        upstream = [
+            k for k in empty
+            if k in marked or (k in material and material.get(k) is not None)
         ]
+        missing = [k for k in empty if k not in upstream]
+        if upstream:
+            line = (
+                f"ℹ 候補 {wid}: {', '.join(upstream)} は contra の取得材料の時点で空でした"
+                "（呼び手の echo 漏れではありません・再投は不要）— 該当欄は空のまま描画されます。"
+            )
+            if any(k in ("title", "abstract") for k in upstream):
+                line += (
+                    " この候補の接地検証は、空でない方の欄（title/abstract）だけに対して行われます。"
+                )
+            warnings.append(line)
         if missing:
-            wid = str(material.get("id") or f"#{i}")
             line = (
                 f"⚠ 候補 {wid}: 材料欄が欠けたまま送信されています（{', '.join(missing)}）"
                 "— 該当欄は空のまま描画されます。contra が返した候補材料を全欄 echo してください。"
