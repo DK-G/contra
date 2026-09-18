@@ -36,7 +36,7 @@ from src.pipeline.bridges import (
     hybrid_bridge_rank_key,
     shared_bridge_count,
 )
-from src.openalex.client import reset_run_stats, run_stats_caveat
+from src.openalex.client import low_budget_caveat, reset_run_stats, run_stats_caveat
 from src.pipeline.classify import select_track_b
 from src.pipeline.collect import (
     CollectConfig,
@@ -501,7 +501,7 @@ class StdinMcpServer:
 
             # F-11(3): a run where some fetches failed must not look like a clean zero
             # harvest — surface the fetch caveat in the RESULT, not just the server log.
-            caveat = run_stats_caveat()
+            caveat = run_stats_caveat() or low_budget_caveat()
             if caveat and isinstance(result.get("content"), list):
                 result["content"].append({"type": "text", "text": caveat})
 

@@ -25,11 +25,75 @@ _RETRY_STATUSES = {429, 500, 502, 503, 504}
 # resets this before each tool call and appends a caveat line when anything went wrong.
 # Counters, not state: clients are constructed per collection stage, so per-instance stats
 # would fragment across the run.
-RUN_STATS = {"requests": 0, "retried": 0, "gave_up": 0}
+RUN_STATS = {"requests": 0, "retried": 0, "gave_up": 0, "budget": None}
 
 
 def reset_run_stats() -> None:
-    RUN_STATS.update(requests=0, retried=0, gave_up=0)
+    RUN_STATS.update(requests=0, retried=0, gave_up=0, budget=None)
+
+
+# --- F-29 (2026-09-16): the DAILY USD budget, not the burst limit ------------------------
+#
+# OpenAlex meters this IP in USD: $0.10/day, $0.001 (10 credits) per search = about 100
+# searches per day, shared by every by* tool and every session on the machine. The budget
+# resets at 00:00 UTC (= 09:00 JST, measured 2026-09-18: X-RateLimit-Reset 42732 s at 21:08
+# JST) — AFTER seihai's 07:05 daily run, so whatever ran since 09:00 the previous day is
+# charged to that run. On 2026-09-16 the probe read Remaining-USD 0.0008 < Cost-Required
+# 0.001 with Retry-After 6394 s; contra retried twice (useless: the wait is hours, not
+# seconds) and then said "wait and retry", which the caller read as seconds.
+# Every response carries the meter, so it is read on success too; a 429 whose meter says
+# "budget below the cost of one request" is not retried and names the wait in hours.
+
+def _hdr_float(headers: Any, name: str) -> Optional[float]:
+    try:
+        value = headers.get(name) if headers is not None else None
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def read_budget(headers: Any) -> Optional[Dict[str, Optional[float]]]:
+    """The USD meter from one OpenAlex response's headers; None when absent."""
+    meter = {
+        "remaining_usd": _hdr_float(headers, "X-RateLimit-Remaining-USD"),
+        "limit_usd": _hdr_float(headers, "X-RateLimit-Limit-USD"),
+        "cost_usd": (_hdr_float(headers, "X-RateLimit-Cost-Required-USD")
+                     or _hdr_float(headers, "X-RateLimit-Cost-USD")),
+        "reset_sec": _hdr_float(headers, "X-RateLimit-Reset"),
+        "retry_after_sec": _hdr_float(headers, "Retry-After"),
+    }
+    if meter["remaining_usd"] is None and meter["retry_after_sec"] is None:
+        return None
+    return meter
+
+
+def budget_exhausted(meter: Optional[Dict[str, Optional[float]]]) -> bool:
+    """True when the daily USD budget cannot pay for one more request."""
+    if not meter or meter.get("remaining_usd") is None:
+        return False
+    cost = meter.get("cost_usd") or 0.001
+    return meter["remaining_usd"] < cost
+
+
+def _wait_phrase(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "待ち時間は応答に含まれていません"
+    resume = time.strftime("%H:%M", time.localtime(time.time() + seconds))
+    if seconds >= 3600:
+        return f"Retry-After {int(seconds)} 秒＝約 {seconds / 3600:.1f} 時間（再開目安 {resume}）"
+    return f"Retry-After {int(seconds)} 秒（再開目安 {resume}）"
+
+
+def budget_line(meter: Optional[Dict[str, Optional[float]]]) -> str:
+    """'本日の残予算 $0.052 / $0.1（検索あと約 52 回）' — '' without a meter."""
+    if not meter or meter.get("remaining_usd") is None:
+        return ""
+    cost = meter.get("cost_usd") or 0.001
+    limit = meter.get("limit_usd")
+    left = int(meter["remaining_usd"] / cost) if cost else 0
+    return (f"OpenAlex 日次予算の残り ${meter['remaining_usd']:g}"
+            + (f" / ${limit:g}" if limit is not None else "")
+            + f"（検索あと約 {left} 回・リセットは 00:00 UTC＝09:00 JST）")
 
 
 def run_stats_caveat() -> str:
@@ -47,7 +111,22 @@ def run_stats_caveat() -> str:
         else "（リトライで回復済み。ただしこの行は HTTP 応答だけを見ており、"
         "段や facet ごとの欠損は保証しない——facet 別内訳を参照）。"
     )
-    return "⚠ 取得診断: " + " / ".join(parts) + tail
+    budget = budget_line(RUN_STATS.get("budget"))
+    return "⚠ 取得診断: " + " / ".join(parts) + tail + (f" {budget}" if budget else "")
+
+
+def low_budget_caveat(threshold: float = 0.25) -> str:
+    """One line when the day's budget is below `threshold` of the limit, even on a clean run.
+
+    The budget is shared with seihai's 07:05 run, which is charged for everything since 09:00
+    JST the day before — a caller that sees the meter low can defer, before the 429 arrives.
+    """
+    meter = RUN_STATS.get("budget")
+    if not meter or meter.get("remaining_usd") is None or not meter.get("limit_usd"):
+        return ""
+    if meter["remaining_usd"] >= threshold * meter["limit_usd"]:
+        return ""
+    return "ℹ " + budget_line(meter) + "。この予算は by* 全体と seihai の朝の実行で共有されています（F-29）。"
 
 
 @dataclass
@@ -101,8 +180,25 @@ class OpenAlexClient:
             try:
                 with urllib.request.urlopen(req, timeout=self.config.timeout_sec) as res:
                     data = res.read().decode("utf-8")
+                    meter = read_budget(getattr(res, "headers", None))
+                    if meter:
+                        RUN_STATS["budget"] = meter
             except urllib.error.HTTPError as exc:
                 last_exc = exc
+                meter = read_budget(getattr(exc, "headers", None))
+                if meter:
+                    RUN_STATS["budget"] = meter
+                if exc.code == 429 and budget_exhausted(meter):
+                    # F-29: hours of wait, not seconds — a retry cannot succeed; say so now.
+                    RUN_STATS["gave_up"] += 1
+                    raise OpenAlexError(
+                        "OpenAlex の日次予算が枯渇しています（429・"
+                        f"残 ${meter['remaining_usd']:g} < 1 回の費用 ${meter.get('cost_usd') or 0.001:g}"
+                        + (f"・上限 ${meter['limit_usd']:g}/日" if meter.get("limit_usd") is not None else "")
+                        + f"）。{_wait_phrase(meter.get('retry_after_sec'))}。"
+                        "数十秒の待ちや呼び順の変更では回復しません。クエリや候補の問題でもありません"
+                        "（予算は by* 全体・全セッションで共有され、00:00 UTC＝09:00 JST にリセット・F-29）。"
+                    ) from exc
                 if exc.code in _RETRY_STATUSES:
                     continue
                 raise OpenAlexError(f"request failed: {exc}") from exc
@@ -130,6 +226,8 @@ class OpenAlexClient:
                 "＝この IP の共有クォータ枯渇です。クエリや候補の問題ではありません"
                 "（by* は同一クォータを共有するため、直前に別の by* を回していると起きやすい・F-28）。"
                 "時間をおいて再実行してください。"
+                + (f"（{_wait_phrase(RUN_STATS['budget'].get('retry_after_sec'))}）"
+                   if (RUN_STATS.get("budget") or {}).get("retry_after_sec") is not None else "")
             ) from last_exc
         raise OpenAlexError(
             f"request failed after {attempts} attempts: {last_exc}"
@@ -141,6 +239,10 @@ __all__ = [
     "OpenAlexConfig",
     "OpenAlexError",
     "RUN_STATS",
+    "budget_exhausted",
+    "budget_line",
+    "low_budget_caveat",
+    "read_budget",
     "reset_run_stats",
     "run_stats_caveat",
 ]

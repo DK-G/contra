@@ -119,7 +119,7 @@ def test_clean_run_has_no_caveat(monkeypatch):
     _patch_urlopen(monkeypatch, [{"ok": True}])
     _client().get({})
     assert run_stats_caveat() == ""
-    assert RUN_STATS == {"requests": 1, "retried": 0, "gave_up": 0}
+    assert RUN_STATS == {"requests": 1, "retried": 0, "gave_up": 0, "budget": None}
 
 
 def test_recovered_retry_is_reported_as_recovered(monkeypatch):
@@ -148,4 +148,78 @@ def test_stats_accumulate_across_clients_and_reset(monkeypatch):
     _client().get({})                          # a second client, same run
     assert RUN_STATS["requests"] == 2
     reset_run_stats()
-    assert RUN_STATS == {"requests": 0, "retried": 0, "gave_up": 0}
+    assert RUN_STATS == {"requests": 0, "retried": 0, "gave_up": 0, "budget": None}
+
+
+# --- F-29 (2026-09-16): the daily USD budget is not the burst limit -----------------------
+
+def _http_error_with(code: int, headers: dict) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://api.openalex.org/works", code, "err", headers, io.BytesIO(b""))
+
+
+# The exact headers seihai's independent curl probe read on 2026-09-16.
+_OBSERVED_0916 = {
+    "Retry-After": "6394", "X-RateLimit-Limit-USD": "0.1", "X-RateLimit-Remaining-USD": "0.0008",
+    "X-RateLimit-Credits-Required": "10", "X-RateLimit-Cost-Required-USD": "0.001",
+    "X-RateLimit-Prepaid-Remaining-USD": "0",
+}
+
+
+def test_exhausted_daily_budget_is_not_retried_and_names_the_wait_in_hours(monkeypatch):
+    from src.openalex.client import reset_run_stats
+    reset_run_stats()
+    calls = _patch_urlopen(monkeypatch, [_http_error_with(429, _OBSERVED_0916)])
+    with pytest.raises(OpenAlexError) as exc:
+        _client(max_retries=2).get({})
+    msg = str(exc.value)
+    assert len(calls) == 1                         # no useless retries against an hours-long wait
+    assert "日次予算" in msg and "F-29" in msg
+    assert "6394" in msg and "1.8 時間" in msg     # the caller must not read "wait" as seconds
+    assert "0.0008" in msg and "0.001" in msg
+    assert "09:00 JST" in msg
+
+
+def test_burst_429_with_budget_left_is_still_retried(monkeypatch):
+    burst = dict(_OBSERVED_0916, **{"X-RateLimit-Remaining-USD": "0.05", "Retry-After": "2"})
+    calls = _patch_urlopen(monkeypatch, [_http_error_with(429, burst), {"results": []}])
+    assert _client(max_retries=2).get({}) == {"results": []}
+    assert len(calls) == 2
+
+
+def test_exhausted_burst_429_names_retry_after_when_present(monkeypatch):
+    burst = dict(_OBSERVED_0916, **{"X-RateLimit-Remaining-USD": "0.05", "Retry-After": "30"})
+    _patch_urlopen(monkeypatch, [_http_error_with(429, burst)])
+    with pytest.raises(OpenAlexError) as exc:
+        _client(max_retries=1).get({})
+    assert "F-28" in str(exc.value) and "Retry-After 30 秒" in str(exc.value)
+
+
+def test_429_without_meter_headers_keeps_old_behaviour(monkeypatch):
+    calls = _patch_urlopen(monkeypatch, [_http_error(429)])
+    with pytest.raises(OpenAlexError):
+        _client(max_retries=2).get({})
+    assert len(calls) == 3
+
+
+def test_meter_is_read_from_successful_responses_and_warns_when_low(monkeypatch):
+    from src.openalex.client import RUN_STATS, low_budget_caveat, reset_run_stats
+
+    class _MeteredResponse(_FakeResponse):
+        def __init__(self, payload, headers):
+            super().__init__(payload)
+            self.headers = headers
+
+    def fake_urlopen(req, timeout=None):
+        return _MeteredResponse({"results": []}, {
+            "X-RateLimit-Remaining-USD": "0.012", "X-RateLimit-Limit-USD": "0.1",
+            "X-RateLimit-Cost-USD": "0.001", "X-RateLimit-Reset": "3600"})
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    reset_run_stats()
+    _client().get({})
+    assert RUN_STATS["budget"]["remaining_usd"] == 0.012
+    line = low_budget_caveat()
+    assert "あと約 12 回" in line and "seihai" in line
+    RUN_STATS["budget"]["remaining_usd"] = 0.09
+    assert low_budget_caveat() == ""               # a healthy meter adds nothing to the output
+    reset_run_stats()
