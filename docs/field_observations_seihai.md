@@ -1640,6 +1640,17 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 ---
 
+## 2026-09-19（土・seihai 週次指針）
+
+**実行順は bybridge → byserendipity → byrepo（9/12 の教訓＝bybridge を先に。直列発行）。429 は0回。**
+
+| ツール | テーマ | 観測 | 様式 |
+|---|---|---|---|
+| bybridge（materials） | A/B で挑戦者が「劣る側」に決着したときの停止規則（有害性境界・監視委員会・条件変化前の証拠） | **名簿健全**: 分野一致 20/20・上位トピック Statistical Methods in Clinical Trials 20/20・semantic 供給 43・語彙レッグ主題一致 10/10。最頻 bridge **Discrete Sequential Boundaries for Clinical Trials**（主題の基礎文献）・交差候補の 25%／**上位10件の 40%**・通行 bridge 16本。交差候補30件の大半は**早期中止された大規模 RCT の本体論文**（WHI・ALLHAT・d-sotalol など）で、**主題構造（有害性で止めた実例）には適合**。4件採点→通過1（ALLHAT＝多腕試験で1腕だけ中止） | S-26 観測（旧様式ではない。上位10件占有 40% は 9/17 の 30% よりやや高い） |
+| byserendipity（raw_only） | 同上（facet: オンライン A/B のガードレール停止 / SPC の片側 CUSUM / 漁業の harvest control rule） | 3 facet すべて成功・60件。facet 1（オンライン実験）は返却 50→ホーム除外後 15 と大きく削られた（統計ホームとの近さ）。4件提出→通過1（IWC management procedure）。**「近いが有用」F-22 名指し1件**（JPM 2003 CUSUM で運用者の劣後を監視＝今週の主収穫）が正しく機能 | F-22（1行記録） |
+| byrepo（structured・github） | 片側 CUSUM による劣後検出・群逐次の有害性境界 | 上位6件中**2件が主題外**: 3位 `labs-barkley/barkley-reference-architecture`（犬の行動解析）・6位 `nadirnet/nadir-core`（ADAS ドラレコ）＝README に "cusum" が出るだけで関連度 0.4／0.2 を得た。主題直撃の `keaven/gsDesign` は関連度 0.2「低」で5位 | F-14 の6回目（README 部分一致が関連度を与える形） |
+| delegate_finalize | — | 2バッチとも接地照合失敗 0・anomaly/hollow 0 | — |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
