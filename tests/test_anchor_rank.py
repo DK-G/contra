@@ -76,7 +76,55 @@ def test_fit_scale_is_normalised_per_source():
 
 def test_unannotated_work_falls_back_to_reliability():
     w = _anchor("legacy", 70, 0)
-    assert anchor_rank_key(w) == 70.0   # no anchor_rank_score stamped yet
+    assert anchor_rank_key(w) == (0, 70.0)   # no anchor_rank_score stamped yet; fit 0 -> tier 0
+
+
+# --- F-29 (first half): zero-match anchors sort behind every matching anchor ----------
+
+def _replay(rows):
+    """rows: (id, reliability, fit on the GitHub 0-30 scale). Returns the ranked ids."""
+    return [w.id for w in _ranked([_anchor(i, r, f) for i, r, f in rows])]
+
+
+def test_observed_2026_09_12_zero_match_repos_fall_below_rpact():
+    # Real run: redamon (relevance 0.0, Reliability 100 -> 35.0) and agent-framework
+    # (0.0, 86 -> 30.1) sat above the on-topic rpact (0.33 -> 32.9, Reliability 58).
+    order = _replay([
+        ("keaven/gsDesign", 77, 10), ("Merck/gsDesign2", 76, 10), ("jasp-stats/jaspPower", 54, 20),
+        ("samugit83/redamon", 100, 0), ("rpact-com/rpact", 58, 10),
+        ("microsoft/agent-framework", 86, 0),
+    ])
+    assert order.index("rpact-com/rpact") < order.index("samugit83/redamon")
+    assert order.index("rpact-com/rpact") < order.index("microsoft/agent-framework")
+    assert order[-2:] == ["samugit83/redamon", "microsoft/agent-framework"]   # still returned
+
+
+def test_observed_2026_09_18_zero_match_bots_leave_the_head():
+    # Real run: Vibe-Trading (0.0, Reliability 97) at rank 2, freqtrade (0.0, 89) at rank 4.
+    order = _replay([
+        ("matching-a", 65, 6), ("HKUDS/Vibe-Trading", 97, 0),
+        ("matching-b", 60, 6), ("freqtrade/freqtrade", 89, 0),
+    ])
+    assert order == ["matching-a", "matching-b", "HKUDS/Vibe-Trading", "freqtrade/freqtrade"]
+
+
+def test_tier_leaves_order_among_matching_anchors_unchanged():
+    # The open half of F-29 (09-11: freqtrade 0.20 x 89 over MSML 0.40 x 54) is NOT touched.
+    order = _replay([("morganstanley/MSML", 54, 12), ("freqtrade/freqtrade", 89, 6)])
+    assert order == ["freqtrade/freqtrade", "morganstanley/MSML"]
+
+
+def test_all_zero_match_theme_keeps_quality_order():
+    # The floor's original purpose (F-03): a thin theme with no matches still ranks.
+    assert _replay([("a", 60, 0), ("b", 90, 0)]) == ["b", "a"]
+
+
+def test_rank_line_names_the_tier_demotion():
+    from src.pipeline.track_a import rank_tier_note
+    zero, hit = _anchor("zero", 90, 0), _anchor("hit", 50, 10)
+    annotate_anchor_rank([zero, hit])
+    assert "一致キーワード 0 件" in rank_tier_note(zero.source_meta)
+    assert rank_tier_note(hit.source_meta) == ""
 
 
 # --- density-normalised readme fit (calibrated on live probes, 2026-08-21) ----

@@ -107,6 +107,7 @@ def _render_4part_body(section_idx: int, entry_idx: int, entry: OutputEntry) -> 
 
 def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) -> List[str]:
     from src.pipeline.theme_fit import matched_summary
+    from src.pipeline.track_a import rank_tier_note
 
     lines = []
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
@@ -123,7 +124,7 @@ def _render_track_a_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     if "anchor_rank_score" in _meta:
         lines.append(
             f"- **順位スコア**: {_meta['anchor_rank_score']} = Reliability × 関連度係数 "
-            f"(theme関連度 {_meta.get('relevance', 0.0)})"
+            f"(theme関連度 {_meta.get('relevance', 0.0)}{rank_tier_note(_meta)})"
         )
     # F-14: the relationship/hypothesis prose was the SAME template sentence for every anchor,
     # so a subject hit and a coincidence read identically. This line is the deterministic part

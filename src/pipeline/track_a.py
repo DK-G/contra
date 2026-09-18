@@ -14,7 +14,7 @@ self-skips (returns no anchors, not an error) when no credentials are configured
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 from src.core.models import ThemeInput, Work
 from src.pipeline.git_collect import GitCollectConfig, collect_track_a_git_works
@@ -129,8 +129,8 @@ _FIT_MAX_OTHER = 20
 
 
 def _relevance_of(work: Work) -> float:
-    fit = work.source_meta.get("theme_fit_score", 0) or 0
-    fit_max = _FIT_MAX_GITHUB if work.publication_type == "github_repository" else _FIT_MAX_OTHER
+    fit = (getattr(work, "source_meta", None) or {}).get("theme_fit_score", 0) or 0
+    fit_max = _FIT_MAX_GITHUB if getattr(work, "publication_type", None) == "github_repository" else _FIT_MAX_OTHER
     try:
         return min(max(float(fit) / fit_max, 0.0), 1.0)
     except (TypeError, ValueError):
@@ -138,7 +138,7 @@ def _relevance_of(work: Work) -> float:
 
 
 def annotate_anchor_rank(works: Sequence[Work]) -> None:
-    """Stamp source_meta with `relevance` (0-1) and `anchor_rank_score` (the sort key)."""
+    """Stamp source_meta with `relevance` (0-1), `anchor_rank_score` and `relevance_tier`."""
     for w in works:
         relevance = _relevance_of(w)
         reliability = w.source_meta.get("reliability_score", 0) or 0
@@ -146,15 +146,42 @@ def annotate_anchor_rank(works: Sequence[Work]) -> None:
         w.source_meta["anchor_rank_score"] = round(
             reliability * (_RANK_RELEVANCE_FLOOR + (1.0 - _RANK_RELEVANCE_FLOOR) * relevance), 1
         )
+        w.source_meta["relevance_tier"] = 1 if relevance > 0 else 0
 
 
-def anchor_rank_key(work: Work) -> float:
-    """Sort key for Track A anchors. Falls back to raw reliability when unannotated."""
+# --- F-29 (byrepo, first half): a zero-match anchor never outranks a matching one ----------
+#
+# The floor above keeps zero-match anchors RANKABLE, but at 0.35 it also lets a high-Reliability
+# zero-match anchor beat a weakly matching one: 2026-09-12 two relevance-0.0 repos (an AI
+# red-team framework, Reliability 100 -> 35.0; an agent framework -> 30.1) sat above the
+# on-topic rpact (0.33 -> 32.9); 09-16 a Go trie (0.0) took rank 3; 09-18 two 0.0 trading bots
+# took 2 of the top 4. The sort is now two-tier: anchors with ANY keyword match first, ordered
+# by the unchanged score; zero-match anchors after them, also by score. Nothing is removed —
+# a thin theme with no matches still returns its zero-match anchors, which is the floor's
+# original purpose (F-03, 2026-08-21). What this does NOT touch is the order among matching
+# anchors (09-11: freqtrade 0.20 x 89 over MSML 0.40 x 54) — that needs the floor itself to
+# move, which re-orders every run and is left as the open half of F-29.
+
+def anchor_rank_key(work: Work) -> Tuple[int, float]:
+    """Sort key for Track A anchors: (relevance tier, rank score).
+
+    Falls back to raw reliability (and a tier recomputed from the fit) when unannotated.
+    """
     meta = work.source_meta or {}
     if "anchor_rank_score" in meta:
-        return float(meta["anchor_rank_score"])
-    return float(meta.get("reliability_score", 0) or 0)
+        tier = meta.get("relevance_tier")
+        if tier is None:
+            tier = 1 if anchor_relevance(work) > 0 else 0
+        return (int(tier), float(meta["anchor_rank_score"]))
+    return (1 if _relevance_of(work) > 0 else 0, float(meta.get("reliability_score", 0) or 0))
 
+
+
+def rank_tier_note(meta: dict) -> str:
+    """Suffix for the 順位スコア line: says why a higher score sits below a lower one (F-29)."""
+    if (meta or {}).get("relevance_tier") == 0:
+        return "・一致キーワード 0 件のため、一致のあるアンカーすべての後ろに並ぶ"
+    return ""
 
 # --- F-17: the 関係度 label must be a function of theme relevance ------------
 #

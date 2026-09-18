@@ -76,6 +76,7 @@ from src.pipeline.track_a import (
     SOURCE_GITHUB,
     SOURCE_HUGGINGFACE,
     anchor_rank_key,
+    rank_tier_note,
     collect_track_a_works,
     normalize_sources,
 )
@@ -742,7 +743,7 @@ class StdinMcpServer:
             # F-03: the ACTUAL sort key — reliability x relevance — so the caller can see
             # why an 86-quality off-topic repo now sits below an 83-quality on-topic one.
             lines.append(f"- **順位スコア**: {meta.get('anchor_rank_score', meta.get('reliability_score', 0))} "
-                         f"= Reliability × 関連度係数 (theme関連度 {meta.get('relevance', 0.0)})")
+                         f"= Reliability × 関連度係数 (theme関連度 {meta.get('relevance', 0.0)}{rank_tier_note(meta)})")
             # F-14: name the keywords that actually matched — the generated prose below is the
             # same template for every anchor, so this is what separates a hit from a coincidence.
             if "theme_fit_matched" in meta:
