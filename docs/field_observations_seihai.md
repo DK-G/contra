@@ -1663,6 +1663,18 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **delegate_finalize** | — | 2バッチとも**接地照合失敗 0**・anomaly/hollow 0。**F-15（閾値がバッチで動く）の明瞭な実例**: 提出5件で percentile_gate が **0.466** まで上がり通過1件、**固定フロア 0.2 なら5件とも通過**。落選4件はいずれも本日の結論を実際に支えた文献だった（seihai 側は F-22 の枠で採用している） | バッチA 5件→通過1 / バッチB 2件→通過1 |
 
 
+## 2026-09-22（火・seihai r02/F2）
+
+テーマ: GP が進化させた M1 FX エントリー規則の「水準述語による再点火 churn」を、遷移条件・再武装課金・スプレッド状態ゲートで避ける。実行順は byrepo → byserendipity → bybridge（直列）。429 は0回。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured） | スプレッド／流動性を入力にした GP 売買規則・回転課金の実装 | 上位3件すべて主題外: `vilkovgr/0dte-strategies`（0DTE オプション・関連度 0.4）・`Lumiwealth/lumibot`（汎用売買基盤 0.3）・`DEAP/deap`（汎用 GP ライブラリ 0.2）。GP×スプレッド状態・churn 課金の実装は0件。関連度 0.0 の侵入は無し | (iii) 無関係な上位（収穫ゼロ） |
+| **byserendipity**（raw_only・facet 3枚） | Near=執行・マイクロストラクチャ／Far=イベントトリガ制御・ヒステリシス／Very Far=神経の不応期・適応 | facet 1（Near）が `棄却 (home_converged)` で 0 件＝ホーム（quantitative finance）と同じ領域を Near に置いた呼び手側の設計による（S-112 の (i)・既知）。facet 2/3 は 50/49 返却→60候補。応答 25.6 万字でファイル退避。6件採点→通過1（Prescott & Sejnowski 2008）、落選は hollow 2・percentile_gate 3（閾値 0.468、固定フロア 0.2 なら4件通過＝F-15） | 接地照合失敗 0 |
+| **delegate_finalize** | — | **★新しい観測（小）: 呼び手が送った `purpose_sim` 0.58 が、落選内訳では 0.45 として表示された**（W2804218996「A Consistent Threshold-Based Policy for ETC」・`has_causal_pm: false`・`structural_depth` 0.55）。他の5件は送った値のまま。どの規則で書き換えたのかが出力に出ていない＝**呼び手の採点が黙って変わる**（F-09「沈黙劣化」の近縁）。venue 欠落警告は今回も呼び手の echo 漏れ（venue を落として転記した） | 0.58→0.45（1/6件） |
+| **bybridge**（materials） | GP 売買規則・取引コストの文献から共有引用で他分野へ | 最頻 bridge **Brock–Lakonishok–LeBaron「Simple Technical Trading Rules…」**（主題の基礎文献）・交差候補の 30%／**上位10件の 30%**・通行 bridge 28本・共有 bridge 1本のみの候補 21/60。**旧様式ではない（主題祖先型は3回連続）**。**★ただし「交差候補」30件の大半が主題そのもの**（GA/GP 売買規則・テクニカル分析の収益性・data snooping）で、分野外は SINDy・風力予測・生態学の ML 入門など少数。名簿のサブフィールド一致 30%・語彙レッグ主題一致 20% の警告も出た（`genetic programming` が Evolutionary Algorithms トピックへ衝突）。4件採点→通過0（fallback 1＝SINDy 0.28）、**F-22「近いが有用」名指し1件**（Dempster & Jones 2001：GP×FX tick×取引コスト×損失規則の即時退役＝今日の収穫の中心） | 交差候補 30 / 構造が合う 1 |
+
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
