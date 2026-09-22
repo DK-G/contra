@@ -1707,6 +1707,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | byrepo（structured・github） | 片側 CUSUM による劣後検出・群逐次の有害性境界 | 上位6件中**2件が主題外**: 3位 `labs-barkley/barkley-reference-architecture`（犬の行動解析）・6位 `nadirnet/nadir-core`（ADAS ドラレコ）＝README に "cusum" が出るだけで関連度 0.4／0.2 を得た。主題直撃の `keaven/gsDesign` は関連度 0.2「低」で5位 | F-14 の6回目（README 部分一致が関連度を与える形） |
 | delegate_finalize | — | 2バッチとも接地照合失敗 0・anomaly/hollow 0 | — |
 
+> **contra 側注記（2026-09-22 失敗対処デー）— 試して外れた仮説（F-14 の byrepo 行）**: 「README に `cusum` が**1回出るだけ**で密度正規化の部分点が満点へ張り付き、関連度 0.4 を得ている（`README_MIN_LEN` の床が短い README の1回言及を過大評価する）」を疑い、実 README を GitHub API で取得して測った。**外れ**: `labs-barkley/barkley-reference-architecture` は 23.4k 字中 `cusum` **7回**、`nadirnet/nadir-core` は 4.2k 字中 **5回**＝どちらも CUSUM を**本当に実装している**（犬の行動変化検出・ドラレコの異常検出）。部分点 1.0 は密度の設計どおりで、1回言及の過大評価ではない。**失敗の正体は「手法は合っているが適用領域が違う」で、キーワード網羅率という指標では原理的に見えない**（F-14/20-R の網羅率化の限界）。README 密度の閾値をいじっても直らないので、この段は触らなかった。9/22 の `vilkovgr/0dte-strategies`（0.4）は README に `cusum` 等の語は無く、別の語で点を得ている＝同じ仮説の対象外。次に試すなら、宣言キーワードの**組**（手法語×領域語の同時一致）を要件にする方向だが、網羅率の定義変更＝全順位が動くので判断事項。
+
 ## 2026-09-21（月・seihai r01/F1）
 
 テーマ: 生成器が不変なのに合格率だけが単調に 0 へ落ちたとき、壺・計器・母集団のどれが変わったのかを記録済みデータだけで切り分ける。実行順は bybridge → byserendipity → byrepo（F-28）。
