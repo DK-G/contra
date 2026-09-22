@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-22（CL-0112） F-32-R: bybridge の 2-hop ホーム除外を Field に加えて Topic 単位でも行う
+
+### 概要
+* 機序（実 API）: 9/22 の最頻 bridge（BLL 1992）の引用元のうち、Economics 以外の 427 件の 52% が Topic「Stock Market Forecasting Methods」＝OpenAlex はこの主題を Decision Sciences に分類。Field 除外が主題を素通しさせていた。
+* `src/pipeline/query.py`: `StructuredQuery.exclude_topic_ids`（`primary_topic.id:!T…`）と `dominant_topic_ids`（名簿の2件以上が占める Topic、最大5本）。
+* `src/pipeline/collect.py`: `CollectConfig.home_topic_exclusion`（既定 True）。2-hop の全クエリに Topic 否定を追加。
+* `src/mcp_server.py`: 診断行「ホーム除外 (F-32)」と MCP 引数 `home_topic_exclusion`。
+* **実測**（9/22 テーマ再構成・同一シードで 2-hop を2回）: 上位30件中の名簿 Topic 所属 16 → 0。残る限界＝金融の主題が Business 側の別 Topic で残る。
+* 新規回帰4件（旧コードで落ちることを確認）。**485 → 489 tests: 489 pass。** OpenAlex 消費 $0.0187。
+
+---
+
 ## 2026-09-22（CL-0111） F-31-R: delegate_finalize が purpose_sim を F-10 上限で書き換えたとき、書き換えと規則を名指しする
 
 ### 概要

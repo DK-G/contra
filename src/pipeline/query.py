@@ -104,6 +104,8 @@ class StructuredQuery:
     field_ids           : OpenAlex Topic *Field* ids (e.g. "17" = Computer Science); OR'd.
     concept_ids         : OpenAlex concept/topic ids to REQUIRE; AND'd.
     exclude_concept_ids : concept/topic ids to NEGATE (home-domain exclusion etc.).
+    exclude_topic_ids   : OpenAlex primary-Topic ids (e.g. "T11326") to NEGATE — the finer
+                          home-domain exclusion under the Field one (F-32).
     cites               : OpenAlex work ids; candidate must cite ANY of these (Phase 2 bridge).
     year_from / year_to : inclusive publication-year bounds.
     work_type           : OpenAlex work type (e.g. "article").
@@ -117,6 +119,7 @@ class StructuredQuery:
     exclude_field_ids: List[str] = field(default_factory=list)
     concept_ids: List[str] = field(default_factory=list)
     exclude_concept_ids: List[str] = field(default_factory=list)
+    exclude_topic_ids: List[str] = field(default_factory=list)
     cites: List[str] = field(default_factory=list)
     year_from: Optional[int] = None
     year_to: Optional[int] = None
@@ -130,7 +133,8 @@ class StructuredQuery:
     def is_empty(self) -> bool:
         return not (
             self.anchor_terms or self.field_ids or self.exclude_field_ids
-            or self.concept_ids or self.exclude_concept_ids or self.cites
+            or self.concept_ids or self.exclude_concept_ids or self.exclude_topic_ids
+            or self.cites
             or self.year_from or self.year_to or self.work_type
             or self.max_referenced_works
         )
@@ -152,6 +156,8 @@ class StructuredQuery:
             parts.append(f"concepts.id:{cid}")
         for cid in self.exclude_concept_ids:
             parts.append(f"concepts.id:!{cid}")
+        for tid in self.exclude_topic_ids:
+            parts.append(f"primary_topic.id:!{tid}")
         if self.year_from is not None and self.year_to is not None:
             parts.append(f"publication_year:{self.year_from}-{self.year_to}")
         elif self.year_from is not None:
@@ -394,6 +400,27 @@ def dominant_field_ids(works: Iterable[Any], *, max_fields: int = 2, min_count: 
     return [fid for fid, c in ranked if c >= min_count][:max_fields]
 
 
+def dominant_topic_ids(works: Iterable[Any], *, max_topics: int = 5, min_count: int = 2) -> List[str]:
+    """The primary-Topic id(s) shared by at least ``min_count`` works — the home domain one level
+    finer than :func:`dominant_field_ids`.
+
+    F-32 (2026-09-22): OpenAlex files a subject's papers under whichever Field fits the venue, so
+    one subject can straddle two Fields. Measured on the citers of Brock-Lakonishok-LeBaron
+    (the 9/22 top bridge): 70% sit in Economics, but 221 of the 427 remaining are Topic
+    "Stock Market Forecasting Methods" filed under Decision Sciences — the theme's own subject,
+    which the Field exclusion let through as "cross-domain". A Topic the seed roster itself
+    occupies (twice or more — one stray seed is not a home) is home, whatever Field it is in.
+    """
+    counts: Dict[str, int] = {}
+    for w in works:
+        meta = getattr(w, "source_meta", None) or {}
+        tid = meta.get("primary_topic_id")
+        if tid:
+            counts[str(tid)] = counts.get(str(tid), 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [tid for tid, c in ranked if c >= min_count][:max_topics]
+
+
 __all__ = [
     "StructuredQuery",
     "sanitize_filter_value",
@@ -405,6 +432,7 @@ __all__ = [
     "subfield_vocabulary",
     "load_subfield_taxonomy",
     "dominant_field_ids",
+    "dominant_topic_ids",
     "OPENALEX_FIELDS",
     "ROUTE_FILTER",
     "ROUTE_SEARCH",

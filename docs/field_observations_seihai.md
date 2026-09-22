@@ -765,6 +765,36 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-32-R. bybridge — **「交差候補」が主題そのものになる機序＝ホーム除外が Field 単位で、主題の論文が兄弟 Field に分類されていた** — **対処済み 2026-09-22（部分的）**
+
+**様式（1例・2026-09-22 seihai r02）**: 交差候補30件の大半が GA/GP 売買規則・テクニカル分析の収益性・data snooping＝主題そのもの。
+
+**機序（実 API で特定・group_by 2回）**: 当日の最頻 bridge（Brock–Lakonishok–LeBaron 1992, W2101544483）を引用する article 1,417 件の primary Field は、Economics 70%・**Decision Sciences 17%**・Business 5%・CS 4%。2-hop 走査はシード名簿の主要 Field（Economics など）を `primary_topic.field.id:!` で除外するが、Economics 以外の 427 件のうち **221 件（52%）は Topic「Stock Market Forecasting Methods」(T11326)**＝**OpenAlex はこの主題を Decision Sciences に分類している**。Dempster & Jones 2001 もこの Topic/Field。**Field 除外は正しく働いたうえで、主題が素通りしていた**（Field は掲載誌側の分類で、1つの主題が複数の Field にまたがる）。
+
+**変えたもの（段＝bybridge の citation 2-hop 候補取得 `collect_citation_candidates` のホーム除外のみ。シード段・bridge プール・順位付け・多様化は不変）**:
+1. `query.dominant_topic_ids(seeds)`＝シード名簿の **2件以上**が占める primary Topic（最大5本。1件だけの迷子シードはホームと見なさない）。
+2. 2-hop の全クエリ（bridge ごとの取得と OR 補充の両方）に `primary_topic.id:!T…` を追加。Field 除外はそのまま。
+3. 診断に `- ホーム除外 (F-32): …Field … と、名簿が2件以上占める Topic … を除外` を常時表示。
+4. MCP 引数 `home_topic_exclusion`（既定 true）。false で Field のみの旧挙動。
+
+**実測 before/after（9/22 テーマの再構成＝GP 売買規則×FX×取引コスト、scope quantitative finance、英語 seed_semantic_text 付き。シード段は1回だけ走らせ、同じシード20件・同じ bridge プールで 2-hop を2回）**:
+
+名簿: Field は Economics・Computer Science、Topic は Financial Markets and Investment Strategies 6 / **Stock Market Forecasting Methods 5** / Evolutionary Algorithms 5 / Complex Systems and Time Series 3（＝9/22 と同じく `genetic programming` が Evolutionary Algorithms へ衝突した名簿）。
+
+| 上位30件（materials として返る範囲） | before（Field のみ） | after（Field＋Topic） |
+|---|---|---|
+| 名簿の Topic に属する候補 | **16 件**（すべて Stock Market Forecasting Methods） | **0 件** |
+| Field 内訳 | Decision Sciences 19 / Business 4 / 他 | Business 12 / Engineering 4 / Decision Sciences 4 / 他 |
+| 上位の顔ぶれ | GP 売買規則（Dempster & Jones 2001・Allen & Karjalainen 1999・GP 株価予測…） | Arab 株のテクニカル売買・Bollinger Bands・為替介入と売買規則リターン・GP 風力予測・生物のモジュール性の進化・生態学の ML 入門・誘電破壊の記号回帰 |
+
+**★残る限界（外れた部分を黙って消さない）**: after の上位にも**金融の主題が別 Topic・別 Field で残る**（Islamic Finance and Banking Studies・Corporate Finance and Governance＝いずれも Business, Management and Accounting）。名簿がこれらの Topic を占めていないので、Topic 除外は届かない。**主題の論文が「名簿に無い兄弟 Topic」に散る分は未対処**。Subfield 単位（Finance は Economics 側にも Business 側にもある）への拡張は同じ段の2件目になるので次回以降へ回した。また **9/22 の当日収穫（Dempster & Jones 2001）は、この変更後は bybridge の交差候補には出ない**＝bybridge の役割（分野外）どおりだが、主題直撃の文献は近傍側（シード名簿・byrepo・byserendipity の Near）から拾う前提になる。
+
+**検証**: 新規回帰4件（dominant_topic_ids の2件閾値と順位／bridge ごと・OR 補充の全クエリに Topic 否定が載る／false で消える／filter 文字列）。**新規4件が旧コードで落ちることを確認**。**485 → 489 tests: 489 pass。** 実 API 消費: 本件の特定と before/after で **$0.0187**（残予算 $0.1000 → $0.0813。filter 呼び出しは $0.0001・検索は $0.001、単件取得は無料と実測）。
+
+**seihai 側への申し送り**: bybridge の診断に「ホーム除外 (F-32)」行が増える。S-26 の観測プロトコルで「交差候補が主題そのもの」を記録していた日は、この行で名簿の Topic が除外されたかを確かめられる。主題直撃の候補がほしい場合は `home_topic_exclusion: false`。
+
+---
+
 ### F-31-R. delegate_finalize — **呼び手の `purpose_sim` を F-10 上限で書き換えたとき、その事実と規則を名指しする** — **対処済み 2026-09-22（計器のみ）**
 
 **様式（1例・2026-09-22 seihai r02）**: 呼び手が `purpose_sim` 0.58・`has_causal_pm: false`・`structural_depth` 0.55 で送った W2804218996 が、落選内訳で `purpose_sim 0.45` と表示された。他の5件は送った値のまま。**書き換えの規則は F-10（2026-08-21）の `_apply_causal_cap`**＝「判定器自身が因果対応ゆるめと言う候補は、構造を partial 水準 0.45 で頭打ちにし、セレンディピティ積も同率で縮小」。規則自体は意図どおりで、LLM 経路でも委譲経路でも同じに掛かる。**欠けていたのは表示**: 上限前の値は `purpose_sim_uncapped` に保存されていたが、出力のどこにも出ていなかった（F-09 と同じ「沈黙劣化」の形＝呼び手の採点が黙って変わる）。
@@ -1698,7 +1728,7 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **byrepo**（structured） | スプレッド／流動性を入力にした GP 売買規則・回転課金の実装 | 上位3件すべて主題外: `vilkovgr/0dte-strategies`（0DTE オプション・関連度 0.4）・`Lumiwealth/lumibot`（汎用売買基盤 0.3）・`DEAP/deap`（汎用 GP ライブラリ 0.2）。GP×スプレッド状態・churn 課金の実装は0件。関連度 0.0 の侵入は無し | (iii) 無関係な上位（収穫ゼロ） |
 | **byserendipity**（raw_only・facet 3枚） | Near=執行・マイクロストラクチャ／Far=イベントトリガ制御・ヒステリシス／Very Far=神経の不応期・適応 | facet 1（Near）が `棄却 (home_converged)` で 0 件＝ホーム（quantitative finance）と同じ領域を Near に置いた呼び手側の設計による（S-112 の (i)・既知）。facet 2/3 は 50/49 返却→60候補。応答 25.6 万字でファイル退避。6件採点→通過1（Prescott & Sejnowski 2008）、落選は hollow 2・percentile_gate 3（閾値 0.468、固定フロア 0.2 なら4件通過＝F-15） | 接地照合失敗 0 |
 | **delegate_finalize** | — | **★新しい観測（小）: 呼び手が送った `purpose_sim` 0.58 が、落選内訳では 0.45 として表示された**（W2804218996「A Consistent Threshold-Based Policy for ETC」・`has_causal_pm: false`・`structural_depth` 0.55）。他の5件は送った値のまま。どの規則で書き換えたのかが出力に出ていない＝**呼び手の採点が黙って変わる**（F-09「沈黙劣化」の近縁）。venue 欠落警告は今回も呼び手の echo 漏れ（venue を落として転記した） | 0.58→0.45（1/6件）。**→ F-31 として起票し 2026-09-22 に対処済み（書き換えの名指し）。下記「対処済み」節 F-31-R** |
-| **bybridge**（materials） | GP 売買規則・取引コストの文献から共有引用で他分野へ | 最頻 bridge **Brock–Lakonishok–LeBaron「Simple Technical Trading Rules…」**（主題の基礎文献）・交差候補の 30%／**上位10件の 30%**・通行 bridge 28本・共有 bridge 1本のみの候補 21/60。**旧様式ではない（主題祖先型は3回連続）**。**★ただし「交差候補」30件の大半が主題そのもの**（GA/GP 売買規則・テクニカル分析の収益性・data snooping）で、分野外は SINDy・風力予測・生態学の ML 入門など少数。名簿のサブフィールド一致 30%・語彙レッグ主題一致 20% の警告も出た（`genetic programming` が Evolutionary Algorithms トピックへ衝突）。4件採点→通過0（fallback 1＝SINDy 0.28）、**F-22「近いが有用」名指し1件**（Dempster & Jones 2001：GP×FX tick×取引コスト×損失規則の即時退役＝今日の収穫の中心） | 交差候補 30 / 構造が合う 1 |
+| **bybridge**（materials） | GP 売買規則・取引コストの文献から共有引用で他分野へ | 最頻 bridge **Brock–Lakonishok–LeBaron「Simple Technical Trading Rules…」**（主題の基礎文献）・交差候補の 30%／**上位10件の 30%**・通行 bridge 28本・共有 bridge 1本のみの候補 21/60。**旧様式ではない（主題祖先型は3回連続）**。**★ただし「交差候補」30件の大半が主題そのもの**（GA/GP 売買規則・テクニカル分析の収益性・data snooping）で、分野外は SINDy・風力予測・生態学の ML 入門など少数。名簿のサブフィールド一致 30%・語彙レッグ主題一致 20% の警告も出た（`genetic programming` が Evolutionary Algorithms トピックへ衝突）。4件採点→通過0（fallback 1＝SINDy 0.28）、**F-22「近いが有用」名指し1件**（Dempster & Jones 2001：GP×FX tick×取引コスト×損失規則の即時退役＝今日の収穫の中心） | 交差候補 30 / 構造が合う 1。**→ 「交差候補が主題そのもの」を F-32 として起票し、2026-09-22 に主因（Topic が兄弟 Field に分類される）を対処。下記「対処済み」節 F-32-R** |
 
 
 ## 追記のしかた

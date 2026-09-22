@@ -53,6 +53,8 @@ from src.pipeline.collect import (
 )
 from src.pipeline.theme_fit import matched_summary
 from src.pipeline.query import (
+    dominant_field_ids,
+    dominant_topic_ids,
     resolve_field_ids,
     resolve_subfield_ids,
     subfield_labels,
@@ -404,6 +406,7 @@ class StdinMcpServer:
                         "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
                         "seed_semantic": {"type": "boolean", "description": "Add a semantic seed leg: the theme's own prose (overview+goal+why) queried against OpenAlex search.semantic, home-Field kept client-side, fair-share merged with the lexical seeds (F-13). When the prose is not English it is replaced by the English keywords_include (a Japanese query retrieves Japanese-language records, not the subject). false restores lexical-only seeding.", "default": True},
                         "min_seeds": {"type": "integer", "description": "Refuse to build an answer when fewer than this many seeds survive the gates (F-26: a 2-seed roster returned 30 cross-domain candidates that looked like a normal run). contra first re-fetches wider once; 0 disables both.", "default": 5},
+                        "home_topic_exclusion": {"type": "boolean", "description": "Also exclude, from the cross-domain candidates, papers whose OpenAlex primary Topic is one the seed roster occupies (2+ seeds), not only the roster's Field (F-32). OpenAlex files one subject under sibling Fields (e.g. Stock Market Forecasting Methods -> Decision Sciences), so Field-only exclusion returned the theme's own subject as 'cross-domain'. false restores Field-only exclusion.", "default": True},
                         "seed_semantic_keep_offfield": {"type": "boolean", "description": "Keep semantic-leg seeds whose OpenAlex Field is not the home Field, ranked behind the home ones (F-27). The hard keep dropped this leg's most on-topic seeds, because OpenAlex files method-side work under Computer Science / Decision Sciences / Mathematics. false restores the pre-2026-09-12 hard keep.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
@@ -967,8 +970,10 @@ class StdinMcpServer:
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
+        home_topic_exclusion = bool(args.get("home_topic_exclusion", True))
         cands = collect_citation_candidates(
-            seeds, CollectConfig(), max_count=60, used_ids=used_ids, bridges=bridge_pool
+            seeds, CollectConfig(home_topic_exclusion=home_topic_exclusion), max_count=60,
+            used_ids=used_ids, bridges=bridge_pool,
         )
         # C(ii): theme relevance leads the ranking, citations demoted to a tie-breaker;
         # C(i): no single bridge may fill the display window (2026-08-22 ruling).
@@ -1019,6 +1024,32 @@ class StdinMcpServer:
                 f"{max(1, 60 // _BRIDGE_QUOTA_DIVISOR)} 件までしか交差候補を供給できない"
                 f"（プール順＝複数シードが共有する bridge から先に走査。不足分は従来の一括 "
                 f"OR 走査で補充）\n" + diag_line
+            )
+        if diagnostics:
+            # F-32 instrument: say WHAT was excluded as home, at both levels. On 9/22 the
+            # caller saw "cross-domain" candidates that were the theme's own subject and could
+            # not tell whether the exclusion had run at all.
+            _fids = dominant_field_ids(seeds)
+            _tids = dominant_topic_ids(seeds) if home_topic_exclusion else []
+            _tname = {}
+            for w in seeds:
+                meta = w.source_meta or {}
+                if meta.get("primary_topic_id"):
+                    _tname[str(meta["primary_topic_id"])] = meta.get("primary_topic_name") or ""
+            _fname = {}
+            for w in seeds:
+                meta = w.source_meta or {}
+                if meta.get("primary_topic_field_id"):
+                    _fname[str(meta["primary_topic_field_id"])] = meta.get("primary_topic_field_name") or ""
+            diag_line = (
+                "- ホーム除外 (F-32): 交差候補から、シード名簿の主要 Field "
+                + ("・".join(f"{_fname.get(f) or f}" for f in _fids) or "なし")
+                + " と、名簿が2件以上占める Topic "
+                + ("・".join(f"{_tname.get(t) or t}" for t in _tids) or "なし")
+                + " を除外（Field だけでは、主題が兄弟 Field に分類された論文が交差候補として通る"
+                + ("" if home_topic_exclusion else "・home_topic_exclusion:false で Topic 除外は無効")
+                + "）\n"
+                + diag_line
             )
         if diagnostics and dead_seed_count:
             diag_line = (

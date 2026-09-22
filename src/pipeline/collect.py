@@ -18,6 +18,7 @@ from src.pipeline.query import (
     ROUTE_SEMANTIC,
     StructuredQuery,
     dominant_field_ids,
+    dominant_topic_ids,
     resolve_field_ids,
     structured_query_from_theme,
     structured_query_variants,
@@ -48,6 +49,11 @@ class CollectConfig:
     # 71,804-citation hub swamped 85% of the pool on 2026-09-08). False restores the pre-2026-09-08
     # behaviour (one OR query, paged).
     bridge_fair_share: bool = True
+    # F-32 (2026-09-22): also exclude, in the citation 2-hop scan, candidates whose primary Topic
+    # is one the seed roster occupies (see query.dominant_topic_ids). The Field exclusion alone
+    # let the theme's own subject through when OpenAlex files it under a sibling Field
+    # ("Stock Market Forecasting Methods" -> Decision Sciences). False restores Field-only.
+    home_topic_exclusion: bool = True
 
 
 class Collector:
@@ -804,6 +810,7 @@ def _citation_query(
     seeds: List[Work],
     home_field_ids: List[str],
     max_refs: int,
+    home_topic_ids: Optional[List[str]] = None,
 ) -> StructuredQuery:
     """The 2-hop candidate query for one bridge (or the whole pool), with home-domain exclusion.
 
@@ -816,6 +823,7 @@ def _citation_query(
         cites=list(bridges),
         exclude_field_ids=home_field_ids,
         exclude_concept_ids=[] if home_field_ids else _seed_l0_concept_ids(seeds),
+        exclude_topic_ids=list(home_topic_ids or []),
         work_type="article",
         max_referenced_works=max_refs,
     )
@@ -862,6 +870,7 @@ def collect_citation_candidates(
 
     exclude: Set[str] = {s.id for s in seeds} | set(used_ids or set())
     home_field_ids = dominant_field_ids(seeds)
+    home_topic_ids = dominant_topic_ids(seeds) if cfg.home_topic_exclusion else []
     collector = Collector(cfg)
     out: List[Work] = []
     seen: Set[str] = set()
@@ -891,7 +900,7 @@ def collect_citation_candidates(
         for bridge in bridges:
             if len(out) >= max_count:
                 break
-            sq = _citation_query([bridge], seeds, home_field_ids, max_refs)
+            sq = _citation_query([bridge], seeds, home_field_ids, max_refs, home_topic_ids)
             try:
                 payload = collector.client.get(sq.to_params(per_page=per_page, page=1))
             except OpenAlexError:
@@ -900,7 +909,7 @@ def collect_citation_candidates(
 
     # Legacy OR scan — the backfill. It is also the whole scan when the fair share is disabled.
     if len(out) < max_count:
-        sq = _citation_query(bridges, seeds, home_field_ids, max_refs)
+        sq = _citation_query(bridges, seeds, home_field_ids, max_refs, home_topic_ids)
         for page in range(1, cfg.max_pages + 1):
             payload = collector.client.get(sq.to_params(per_page=cfg.per_page, page=page))
             if absorb(payload, max_count) == 0:

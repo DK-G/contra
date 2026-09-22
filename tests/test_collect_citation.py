@@ -366,3 +366,55 @@ def test_fair_share_survives_one_failing_bridge(monkeypatch):
 
     assert len(out) == 40
     assert not any(w.id.startswith("B0c") for w in out)
+
+
+# --- F-32: Topic-level home exclusion under the Field one ---------------------------------
+# 2026-09-22: the theme's own subject ("Stock Market Forecasting Methods", T11326) is filed by
+# OpenAlex under Decision Sciences, a sibling of the seeds' Economics Field, so the Field
+# exclusion let it through as "cross-domain" (measured: 221 of the 427 non-Economics citers of
+# the day's top bridge). A Topic the seed roster occupies twice or more is home too.
+
+def _seed_with_topic(wid, refs, fid, tid):
+    s = _seed(wid, refs, ["C1"])
+    s.source_meta = {"primary_topic_field_id": fid, "primary_topic_id": tid}
+    return s
+
+
+def test_dominant_topic_ids_needs_two_seeds_and_ranks_by_count():
+    from src.pipeline.query import dominant_topic_ids
+    seeds = [_seed_with_topic("A", [], "20", "T11326"), _seed_with_topic("B", [], "18", "T11326"),
+             _seed_with_topic("C", [], "20", "T10101"), _seed_with_topic("D", [], "20", "T10101"),
+             _seed_with_topic("E", [], "20", "T10101"), _seed_with_topic("F", [], "17", "T99999")]
+    assert dominant_topic_ids(seeds) == ["T10101", "T11326"]    # the stray single T99999 is not home
+    assert dominant_topic_ids(seeds, max_topics=1) == ["T10101"]
+    assert dominant_topic_ids([]) == []
+
+
+def test_citation_scan_excludes_the_rosters_topics_in_every_query(monkeypatch):
+    client = _FakeClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed_with_topic("WA", ["W100", "W101"], "20", "T11326"),
+             _seed_with_topic("WB", ["W100", "W102"], "20", "T11326")]
+    collect_citation_candidates(seeds, CollectConfig(max_pages=2), max_count=10)
+    assert client.calls, "no query was sent"
+    for params in client.calls:                  # per-bridge round-robin AND the OR backfill
+        assert "primary_topic.field.id:!20" in params["filter"]
+        assert "primary_topic.id:!T11326" in params["filter"]
+
+
+def test_topic_exclusion_can_be_switched_off(monkeypatch):
+    client = _FakeClient()
+    _patch_collector(monkeypatch, client)
+    seeds = [_seed_with_topic("WA", ["W100"], "20", "T11326"),
+             _seed_with_topic("WB", ["W100"], "20", "T11326")]
+    collect_citation_candidates(
+        seeds, CollectConfig(max_pages=2, home_topic_exclusion=False), max_count=10)
+    assert all("primary_topic.id:!" not in p["filter"] for p in client.calls)
+
+
+def test_filter_string_renders_topic_negation():
+    from src.pipeline.query import StructuredQuery
+    sq = StructuredQuery(cites=["W1"], exclude_topic_ids=["T1", "T2"])
+    flt = sq._filter_string()
+    assert "primary_topic.id:!T1" in flt and "primary_topic.id:!T2" in flt
+    assert not StructuredQuery(exclude_topic_ids=["T1"]).is_empty()
