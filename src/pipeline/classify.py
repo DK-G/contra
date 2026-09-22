@@ -891,7 +891,7 @@ def _update_diag(diag: Optional[dict], **kw) -> None:
 _NEAR_USEFUL_PURPOSE = 0.70
 
 
-def _serendipity_cause(purpose_sim, mechanism_dist) -> Dict[str, Any]:
+def _serendipity_cause(purpose_sim, mechanism_dist, purpose_sim_uncapped=None) -> Dict[str, Any]:
     """Name the binding factor of a serendipity rejection (F-22). Never a verdict on value."""
     if not isinstance(purpose_sim, (int, float)) or not isinstance(mechanism_dist, (int, float)):
         return {}
@@ -903,6 +903,9 @@ def _serendipity_cause(purpose_sim, mechanism_dist) -> Dict[str, Any]:
     }
     if binding == "mechanism_dist" and purpose_sim >= _NEAR_USEFUL_PURPOSE:
         out["near_but_useful"] = True
+    # F-31: the factor printed is the post-cap one; say what was submitted before the cap.
+    if isinstance(purpose_sim_uncapped, (int, float)) and purpose_sim_uncapped != purpose_sim:
+        out["purpose_sim_submitted"] = round(float(purpose_sim_uncapped), 3)
     return out
 
 
@@ -966,6 +969,7 @@ def _serendipity_scored(
 
 def _apply_causal_cap(
     all_scored: List[Tuple[float, str, dict]],
+    diag: Optional[dict] = None,
 ) -> List[Tuple[float, str, dict]]:
     """Reflect the judge's own verdict in the grade (F-10, field_observations_seihai.md).
 
@@ -976,6 +980,10 @@ def _apply_causal_cap(
     the judge itself calls loose is capped at the "partial" level; the serendipity product is
     rescaled by the same factor so ranking stays consistent with the displayed scores. The
     uncapped value is kept in `purpose_sim_uncapped` for diagnostics.
+
+    F-31 (2026-09-22): the uncapped value was kept but never SHOWN, so on the delegation path
+    the caller saw its own 0.58 come back as 0.45 with no rule named. Every cap is now also
+    recorded in diag["purpose_caps"] (passed or rejected alike) for the output to print.
     """
     cap = _PURPOSE_LEVELS["partial"]
     out: List[Tuple[float, str, dict]] = []
@@ -984,6 +992,13 @@ def _apply_causal_cap(
         if s.get("has_causal_pm") is False and purpose > cap:
             s["purpose_sim_uncapped"] = purpose
             s["purpose_sim"] = cap
+            if diag is not None:
+                diag.setdefault("purpose_caps", []).append({
+                    "id": wid,
+                    "submitted": round(float(purpose), 3),
+                    "capped": cap,
+                    "rule": "has_causal_pm=false -> partial (F-10)",
+                })
             if purpose:
                 ser = ser * (cap / purpose)
                 # keep the fine tie-breaker consistent with the demoted grade
@@ -1042,7 +1057,8 @@ def _quality_gate_and_build(
     # the binding one, so "useful but close" is distinguishable from "far but shallow".
     def _detail(wid):
         s = score_by_id.get(wid) or {}
-        return _serendipity_cause(s.get("purpose_sim"), s.get("mechanism_dist"))
+        return _serendipity_cause(s.get("purpose_sim"), s.get("mechanism_dist"),
+                                  s.get("purpose_sim_uncapped"))
     _record_rejections(
         diag, ser_by_id.keys(), {wid for _s, wid, _d in passed},
         floor="percentile_gate(serendipity)", threshold=effective_gate,
@@ -1189,7 +1205,7 @@ def apply_post_gates(
                      anomaly=anomaly_count, hollow=0, passed=0, qualified=0)
         return []
     # F-10: agent-supplied rows may carry has_causal_pm — same cap as the LLM path.
-    all_scored = _apply_causal_cap(all_scored)
+    all_scored = _apply_causal_cap(all_scored, diag)
     kept, hollow_count, _loose = _hollow_filter(all_scored, struct_depth_gate)
     _record_rejections(
         diag, {wid for _s, wid, _d in all_scored}, {wid for _s, wid, _d in kept},
@@ -1311,7 +1327,7 @@ def select_track_b(
             s["has_causal_pm"] = j["has_causal_pm"]
             s["judge_reason"] = j["judge_reason"]
     # F-10: the judge's has_causal_pm verdict must reach the numeric grade, not just the label.
-    all_scored = _apply_causal_cap(all_scored)
+    all_scored = _apply_causal_cap(all_scored, diag)
     all_scored, hollow_count, loose_causal_count = _hollow_filter(all_scored, struct_depth_gate)
     print(
         f"[info] hollow 除外 (structural_depth<{struct_depth_gate:.2f}): {hollow_count} 件 "

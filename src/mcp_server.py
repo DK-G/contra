@@ -37,7 +37,7 @@ from src.pipeline.bridges import (
     shared_bridge_count,
 )
 from src.openalex.client import low_budget_caveat, reset_run_stats, run_stats_caveat
-from src.pipeline.classify import select_track_b
+from src.pipeline.classify import _PURPOSE_LEVELS, select_track_b
 from src.pipeline.collect import (
     CollectConfig,
     _BRIDGE_QUOTA_DIVISOR,
@@ -463,7 +463,10 @@ class StdinMcpServer:
                                     "mechanism_dist": {"type": "number"},
                                     "purpose_pct": {"type": "integer", "description": "Optional 0-100 fine alignment within the grade; tie-breaker only."},
                                     "structural_depth": {"type": "number"},
-                                    "has_causal_pm": {"type": "boolean"},
+                                    "has_causal_pm": {"type": "boolean", "description": (
+                                        "Optional judge verdict. false caps purpose_sim at the 'partial' level "
+                                        f"({_PURPOSE_LEVELS['partial']}) and scales serendipity by the same factor "
+                                        "(F-10); every such rewrite is listed in the output (F-31).")},
                                     "connection_label": {"type": "string"},
                                     "serendipity_rationale": {"type": "string"},
                                     "theme_quote": {"type": "string", "description": "GROUNDING CONTRACT: verbatim extract (>=10 chars) from the SUBMITTED theme text (theme_overview/goal/why_problem/assumptions/concern) that your relational claim maps FROM. Required whenever relationship or serendipity_rationale is supplied; contra verifies it deterministically and DROPS ungrounded prose (scores kept)."},
@@ -1196,7 +1199,9 @@ class StdinMcpServer:
             if "purpose_sim" in r:
                 binding = ("距離(mechanism_dist)" if r.get("binding") == "mechanism_dist"
                            else "構造(purpose_sim)")
-                line += (f"（構造 purpose_sim {r['purpose_sim']} × 距離 mechanism_dist "
+                submitted = (f"［送信値 {r['purpose_sim_submitted']} を F-10 上限で抑制］"
+                             if "purpose_sim_submitted" in r else "")
+                line += (f"（構造 purpose_sim {r['purpose_sim']}{submitted} × 距離 mechanism_dist "
                          f"{r['mechanism_dist']} ＝ 律速は{binding}）")
             if r.get("near_but_useful"):
                 line += "　← 近いが有用（F-22）"
@@ -1205,6 +1210,22 @@ class StdinMcpServer:
         extra = ""
         if echo_warnings:
             extra += "\n" + "\n".join(echo_warnings)
+        # F-31: contra rewrites a submitted purpose_sim when the caller's own has_causal_pm
+        # is false (F-10 cap). Name every rewrite — passed or rejected — with the rule, so the
+        # caller's score never changes silently (observed 2026-09-22: 0.58 shown as 0.45).
+        cap_lines = []
+        for c in diag.get("purpose_caps", []):
+            label = title_by_id.get(str(c["id"]), "")
+            label = f"「{label[:40]}」" if label else ""
+            cap_lines.append(f"- {c['id']}{label}: purpose_sim {c['submitted']} → {c['capped']}")
+        if cap_lines:
+            extra += (
+                "\n採点の書き換え (F-10 上限・F-31):\n" + "\n".join(cap_lines)
+                + "\n  has_causal_pm=false と送られた候補は、構造 purpose_sim を partial 水準 "
+                + f"{diag['purpose_caps'][0]['capped']} で頭打ちにし、セレンディピティ積も同率で縮小します"
+                  "（ラベル「構造対応ゆるめ」と数値の矛盾を防ぐ規則）。"
+                  "送信した値が高すぎたという判定ではありません。"
+            )
         if rejection_lines:
             extra += "\n落選内訳:\n" + "\n".join(rejection_lines)
         if near_useful:

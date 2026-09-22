@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-09-22（CL-0111） F-31-R: delegate_finalize が purpose_sim を F-10 上限で書き換えたとき、書き換えと規則を名指しする
+
+### 概要
+* `src/pipeline/classify.py`: `_apply_causal_cap` が書き換えを `diag["purpose_caps"]` に記録（委譲・LLM 両経路）。`_serendipity_cause` が上限前の値を `purpose_sim_submitted` として落選行へ載せる。上限の値・掛け方は不変。
+* `src/mcp_server.py`: `採点の書き換え (F-10 上限・F-31)` ブロックと、落選内訳の `［送信値 0.58 を F-10 上限で抑制］`。`has_causal_pm` のスキーマ説明を定数から生成。
+* **実測**: 9/22 の形（0.58・has_causal_pm=false）で、告知なし → 書き換え1件を規則つきで名指し。他5件は無表示のまま。
+* 新規回帰4件（旧コードで4件とも落ちることを確認）。**481 → 485 tests: 485 pass。**
+
+---
+
 ## 2026-09-18（CL-0110） F-19-V: 上流で空だった材料欄を、呼び手の echo 漏れとして名指ししない
 
 ### 概要
