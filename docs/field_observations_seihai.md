@@ -1756,6 +1756,17 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **delegate_finalize**（serendipity バッチ） | — | 採点6→通過1（percentile_gate 0.49・固定フロア 0.2 なら3件）。**接地照合失敗 1 件は呼び手側の誤り**: 返送時に abstract を 900 字へ切り詰めたため、`source_quote` の該当文（TRB 2006・原文には実在）が echo から消えていた。contra の照合は正しく働いた。**被験体の不具合ではない**（呼び手の規約: abstract は切らずに echo する） | 通過1・hollow 1・接地失敗1（呼び手起因） |
 | **bybridge**（materials） | FX 日中スプレッド・流動性の文献から共有引用で他分野へ・英語 seed_semantic_text 付き | **semantic レッグが `HTTP 504` で供給 0 件**（名簿は語彙シードのみ＝主題適合は未検証）。名簿に主題外（自社株買い・利益調整・観光業の流動性）が混入。交差候補の上位は F-32 のホーム除外をすり抜けた**微細構造理論（Kyle 系の情報非対称・ディーラー間取引）**＝主題の隣接理論で遠い類推ではない。`status=fallback`（出力床 0.35 超 0 件） | 最頻 bridge **Kyle 1985**（主題側）・上位10件占有 **40%**・全体 23%・通行 bridge 23 本・採点4→実質通過 0 |
 
+## 2026-09-25（金・seihai r05/F9）
+
+テーマ: クローン挑戦者（全約定を2秒差で複製）との対比較を「等価」で終わらせる規則と、現職の実現行動から離れる生成。実行順は byrepo・byserendipity・bybridge（並列）→ 失敗 facet の単独再投 3 回 → delegate_finalize 2 回。429 は0回。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured・github のみ） | TOST 逐次等価検定・QD アーカイブの実装 | **失敗なし（改善例）**: 4件全部 theme 関連度 0.4（`Lakens/TOSTER`・`icaros-usc/pyribs`・`fast-cma-es`・`openevolve`）。語彙衝突警告なし。9/18 同系テーマの 0.0〜0.2 から改善＝`keywords_include` を主題の標準語（`tost`/`map-elites`/`quality-diversity`）に寄せた効果 | 4件 |
+| **byserendipity**（raw_only・facet 3枚） | Near=プラットフォーム試験の arm dropping／Far=R&D 並行案件／Very Far=群集生態の機能的冗長性 | **F-16/S-112 の再現（504）**: 同時実行で facet 1・2 が `HTTP 504` 3 attempts 失敗（facet 3 のみ 50→19）。**単独再投でも facet 1・2 とも再び 504**。facet 2 は pseudo_abstract/structure を約 1/3 に縮めて 3 回目で通った（50→36）。**facet 1（platform trials）は短文化しても 504＝Near 距離段は当日消失**。「短くしたら通った」は1例のみで長さ依存かは未確定（同時刻に bybridge も 504 を受けており上流負荷の可能性が高い） | 取得 19＋36・Near 0 |
+| **delegate_finalize**（serendipity） | — | 採点5→通過1（percentile_gate 0.542・固定フロア 0.2 なら5件）。接地照合失敗 0。落選4件の律速は全て構造（purpose_sim） | 通過1 |
+| **bybridge**（materials・英語 seed_semantic_text 付き） | 等価性検定・arm dropping・行動記述子多様性 | **2日連続で semantic レッグが `HTTP 504` で供給 0 件**。名簿は語彙シードのみで**医療の報告ガイドライン（CONSORT/SPIRIT/STROBE）へ漂流**: サブフィールド一致 5%・上位トピック Health Systems 9/20。交差候補 30 件中 28 件が報告チェックリストの巨大ハブ（PRISMA-ScR 被引用 44k・STROBE 各版）。最頻 bridge は "Reporting of Noninferiority and Equivalence Randomized Trials"（主題語彙は合うが医療報告ドメイン）・上位10件占有 20%。**主題適合は1件**（Lakens 2017 "Equivalence Tests"・delegate_finalize で output_floor 落ち＝F-22「近いが有用」） | 交差 60・主題適合 1 |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
