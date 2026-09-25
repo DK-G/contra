@@ -59,6 +59,11 @@ class CollectConfig:
     # that clear within minutes and are not charged to the daily budget; the leg supplied 0
     # seeds on 9/24 and 9/25 because three quick attempts all fell inside one streak. 0 = off.
     semantic_gateway_patience_sec: float = 180.0
+    # F-33-S (2026-09-25): the same patience for byserendipity's semantic facet retrieval (same
+    # endpoint, separate tool/stage so its effect is attributed separately). The streak is a
+    # property of the endpoint, not of a facet: the first facet absorbs the warm-up, the rest
+    # then pass. 0 = off (3 quick attempts, then the facet is reported as 取得失敗).
+    facet_gateway_patience_sec: float = 180.0
 
 
 class Collector:
@@ -1048,6 +1053,9 @@ def _collect_track_b_semantic(
     buckets: List[List[Work]] = []
     stats: List[Dict[str, Any]] = []
     valid_facets = 0
+    client_cfg = getattr(collector.client, "config", None)
+    if client_cfg is not None:
+        client_cfg.gateway_patience_sec = max(0.0, cfg.facet_gateway_patience_sec)
     for facet in spec.facets:
         rec: Dict[str, Any] = {"domain": facet.domain, "status": "ok",
                                "returned": 0, "kept": 0, "selected": 0}
@@ -1075,11 +1083,20 @@ def _collect_track_b_semantic(
                 except OpenAlexError as exc2:
                     exc = exc2
             if payload is None:
+                gw = getattr(collector.client, "last_gateway_wait", None)
+                if gw and gw.get("gateway_504"):
+                    rec["gateway_wait"] = gw
                 # The endpoint is experimental and intermittently 5xx; one flaky facet must not
                 # abort the whole collection, so skip it and let the remaining facets contribute.
                 print(f"[info] Track B semantic facet '{facet.domain}' 取得失敗 ({exc}) — スキップ")
                 rec["status"] = f"取得失敗 ({exc})"
                 continue
+        gw = getattr(collector.client, "last_gateway_wait", None)
+        if gw and gw.get("gateway_504") and gw.get("recovered"):
+            rec["gateway_wait"] = gw
+            if rec["status"] == "ok":
+                rec["status"] = (f"ok（504 を {gw['gateway_504']} 回受け {gw['waited_sec']:g} 秒"
+                                 "待って回復・F-33）")
         raw = filter_retracted(normalize_results(payload))
         rec["returned"] = len(raw)
         ok, reason = validate_semantic_results(raw, home_field_ids)
@@ -1109,7 +1126,9 @@ def _collect_track_b_semantic(
     chosen = {w.id for w in works}
     bi = 0
     for rec in stats:
-        if rec["status"] == "ok":
+        # startswith: a recovered facet's status carries a note ("ok（400 …）" F-16,
+        # "ok（504 …）" F-33) — an exact "ok" match left those facets' selected count at 0.
+        if rec["status"].startswith("ok"):
             rec["selected"] = sum(1 for w in buckets[bi] if w.id in chosen)
             bi += 1
     if stats_out is not None:

@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-09-25（CL-0114） F-33-S: byserendipity の facet 取得も 504 の立ち上がりを待ち切る＋回復 facet の採用数 0 表示を修正
+
+### 概要
+* `src/pipeline/collect.py`: `CollectConfig.facet_gateway_patience_sec`（既定 180）を facet 取得のクライアントに設定。回復した facet の status に `ok（504 を N 回受け X 秒待って回復・F-33）`。採用数の集計を `startswith("ok")` に（注記つき ok の facet＝F-16 の 400 回復を含む＝が 0 と表示されていた潜在バグ）。
+* `src/mcp_server.py`: 504 の案内文を更新（最長 180 秒待つ・それでも落ちたら数分おいて単独再投）。
+* **実測**（冷えた状態を2回作って1回ずつ・3 facet）: before Near 取得失敗・候補 50 → after 3 facet とも回復・候補 60（Near 採用 24）。
+* 新規回帰2件（旧コードで落ちることを確認）。**496 → 498 tests: 498 pass。** OpenAlex 消費 $0.005。
+
+---
+
 ## 2026-09-25（CL-0113） F-33-R: bybridge の semantic シードレッグが、504 の連続（エンドポイントの冷えた立ち上がり）を最長 180 秒待ち切る
 
 ### 概要

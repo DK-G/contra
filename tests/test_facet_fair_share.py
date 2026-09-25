@@ -249,3 +249,44 @@ def test_zero_harvest_message_names_the_transport_causes_before_saturation(monke
     assert "0件" in text
     assert "400" in text and "429" in text and "504" in text
     assert text.index("400") < text.index("飽和")
+
+
+# --- F-33-S (2026-09-25): facet retrieval waits out the endpoint's cold-start 504 streak ---
+
+class _WarmingClient(_PerFacetClient):
+    """First facet came back after a 504 streak (the client waited it out); the rest were warm."""
+
+    def __init__(self, prefixes: List[str]) -> None:
+        from src.openalex.client import OpenAlexConfig
+        super().__init__(prefixes)
+        self.config = OpenAlexConfig()
+        self.last_gateway_wait = None
+
+    def get(self, params):
+        self.last_gateway_wait = ({"gateway_504": 3, "recovered": True, "waited_sec": 42.0}
+                                  if not self.calls else None)
+        return super().get(params)
+
+
+def test_facet_retrieval_turns_on_504_patience_and_names_the_recovery(monkeypatch):
+    client = _WarmingClient(["N", "F", "V"])
+    _patch_collector(monkeypatch, client)
+    stats: List[Dict[str, Any]] = []
+    out = collect_track_b_from_spec(
+        _theme(), _spec(), CollectConfig(), max_count=60, home_field_ids=["17"], stats_out=stats,
+    )
+    assert client.config.gateway_patience_sec == CollectConfig().facet_gateway_patience_sec > 0
+    assert stats[0]["status"] == "ok（504 を 3 回受け 42 秒待って回復・F-33）"
+    assert [r["status"] for r in stats[1:]] == ["ok", "ok"]
+    assert len(out) == 60
+    # the recovered facet's share is still counted (live run 2026-09-25 showed 0 before the fix)
+    assert [r["selected"] for r in stats] == [20, 20, 20]
+
+
+def test_facet_patience_can_be_turned_off(monkeypatch):
+    client = _WarmingClient(["N"])
+    _patch_collector(monkeypatch, client)
+    spec = SerendipitySpec("struct", [SerendipityFacet("near", "a" * 40)])
+    collect_track_b_from_spec(_theme(), spec, CollectConfig(facet_gateway_patience_sec=0),
+                              max_count=60, home_field_ids=["17"])
+    assert client.config.gateway_patience_sec == 0
