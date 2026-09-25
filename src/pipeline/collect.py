@@ -54,6 +54,11 @@ class CollectConfig:
     # let the theme's own subject through when OpenAlex files it under a sibling Field
     # ("Stock Market Forecasting Methods" -> Decision Sciences). False restores Field-only.
     home_topic_exclusion: bool = True
+    # F-33 (2026-09-25): the bybridge semantic seed leg re-sends a 504 until this many seconds
+    # have passed (OpenAlexConfig.gateway_patience_sec). The endpoint's 504s come in streaks
+    # that clear within minutes and are not charged to the daily budget; the leg supplied 0
+    # seeds on 9/24 and 9/25 because three quick attempts all fell inside one streak. 0 = off.
+    semantic_gateway_patience_sec: float = 180.0
 
 
 class Collector:
@@ -325,17 +330,22 @@ def collect_seeds_semantic_report(
         "source": q["source"], "chars": len(q["text"]), "truncated": q["truncated"],
         "prose_non_latin_share": q["prose_non_latin_share"], "raw": 0, "languages": {},
         "dropped_no_abstract": 0, "dropped_home_field": 0, "offfield_demoted": 0,
-        "keep_offfield": keep_offfield, "supplied": 0, "error": None,
+        "keep_offfield": keep_offfield, "supplied": 0, "error": None, "gateway_wait": None,
     }
     if not q["text"]:
         return [], report
     collector = Collector(cfg)
+    client_cfg = getattr(collector.client, "config", None)
+    if client_cfg is not None:
+        client_cfg.gateway_patience_sec = max(0.0, cfg.semantic_gateway_patience_sec)
     sq = StructuredQuery(anchor_terms=[q["text"]], route=ROUTE_SEMANTIC, work_type="article")
     try:
         payload = collector.client.get(sq.to_params(per_page=min(cfg.per_page, 50), page=1))
     except OpenAlexError as exc:
         report["error"] = str(exc)
+        report["gateway_wait"] = getattr(collector.client, "last_gateway_wait", None)
         return [], report
+    report["gateway_wait"] = getattr(collector.client, "last_gateway_wait", None)
     raw = filter_retracted(normalize_results(payload))
     report["raw"] = len(raw)
     report["languages"] = dict(Counter(w.language or "?" for w in raw).most_common(4))

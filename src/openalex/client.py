@@ -137,12 +137,23 @@ class OpenAlexConfig:
     min_interval_sec: float = 0.2
     max_retries: int = 2            # extra attempts on transient failures (0 = old behaviour)
     retry_backoff_sec: float = 1.0  # first retry waits this long, second waits double
+    # F-33 (2026-09-25): after the normal retries, keep re-sending a request whose last answer
+    # was a 504 until this many seconds have passed since the first attempt (0 = off, the old
+    # behaviour). Only worth it where a 504 streak is known to clear: see OpenAlexClient.get.
+    gateway_patience_sec: float = 0.0
+    gateway_retry_interval_sec: float = 5.0
 
 
 class OpenAlexClient:
     def __init__(self, config: Optional[OpenAlexConfig] = None) -> None:
         self.config = config or OpenAlexConfig()
         self._last_call_at = 0.0
+        # F-33: how the last get() went through a 504 streak — {"gateway_504": n,
+        # "waited_sec": s, "recovered": bool}; None when the call saw no 504.
+        self.last_gateway_wait: Optional[Dict[str, Any]] = None
+
+    def _now(self) -> float:  # separated so tests can drive the patience clock
+        return time.time()
 
     def _rate_limit(self) -> None:
         elapsed = time.time() - self._last_call_at
@@ -172,10 +183,37 @@ class OpenAlexClient:
         attempts = max(0, self.config.max_retries) + 1
         last_exc: Optional[Exception] = None
         RUN_STATS["requests"] += 1
-        for attempt in range(attempts):
-            if attempt:
+        # F-33 (docs/field_observations_seihai.md, 2026-09-25): the `search.semantic` endpoint
+        # answers 504 at exactly 9.1 s (a gateway timeout) in STREAKS that clear after minutes,
+        # after which every request passes in 2-7 s (probe 21:03-21:07 JST: 10 x 504, then
+        # 8/8 x 200 for the same 716-char query). The streak does not depend on query length or
+        # per-page (8-word and 15-word queries 504-ed while a 25-word one passed), and a 504 is
+        # not charged against the daily USD budget (no meter headers; Remaining-USD moved only
+        # on successes). Three attempts within ~3 s of backoff land inside one streak — that is
+        # how the bybridge semantic leg supplied 0 seeds on 9/24 and 9/25 and the roster drifted.
+        # So, where the caller opts in, a 504 is re-sent every `gateway_retry_interval_sec`
+        # until `gateway_patience_sec` has passed since the first attempt: it costs wall time,
+        # not budget. 429 and every other status keep the bounded behaviour above.
+        started = self._now()
+        gw_504 = 0
+        self.last_gateway_wait = None
+        attempt = 0
+        while True:
+            if attempt >= attempts:
+                patient = (
+                    self.config.gateway_patience_sec > 0
+                    and isinstance(last_exc, urllib.error.HTTPError) and last_exc.code == 504
+                    and self._now() - started + self.config.gateway_retry_interval_sec
+                    <= self.config.gateway_patience_sec
+                )
+                if not patient:
+                    break
+                RUN_STATS["retried"] += 1
+                self._sleep(self.config.gateway_retry_interval_sec)
+            elif attempt:
                 RUN_STATS["retried"] += 1
                 self._sleep(self.config.retry_backoff_sec * (2 ** (attempt - 1)))
+            attempt += 1
             self._rate_limit()
             try:
                 with urllib.request.urlopen(req, timeout=self.config.timeout_sec) as res:
@@ -199,6 +237,8 @@ class OpenAlexClient:
                         "数十秒の待ちや呼び順の変更では回復しません。クエリや候補の問題でもありません"
                         "（予算は by* 全体・全セッションで共有され、00:00 UTC＝09:00 JST にリセット・F-29）。"
                     ) from exc
+                if exc.code == 504:
+                    gw_504 += 1
                 if exc.code in _RETRY_STATUSES:
                     continue
                 raise OpenAlexError(f"request failed: {exc}") from exc
@@ -208,11 +248,17 @@ class OpenAlexClient:
             finally:
                 self._last_call_at = time.time()
 
+            if gw_504:
+                self.last_gateway_wait = {"gateway_504": gw_504, "recovered": True,
+                                          "waited_sec": round(self._now() - started, 1)}
             try:
                 return json.loads(data)
             except json.JSONDecodeError as exc:
                 raise OpenAlexError(f"invalid json response: {exc}") from exc
         RUN_STATS["gave_up"] += 1
+        if gw_504:
+            self.last_gateway_wait = {"gateway_504": gw_504, "recovered": False,
+                                      "waited_sec": round(self._now() - started, 1)}
         # F-28 (docs/field_observations_seihai.md, 2026-09-12): every by* tool draws on ONE
         # OpenAlex quota for this IP, so a byserendipity run can starve the bybridge run that
         # follows it (measured: three consecutive bybridge failures right after a successful
@@ -230,7 +276,9 @@ class OpenAlexClient:
                    if (RUN_STATS.get("budget") or {}).get("retry_after_sec") is not None else "")
             ) from last_exc
         raise OpenAlexError(
-            f"request failed after {attempts} attempts: {last_exc}"
+            f"request failed after {attempt} attempts: {last_exc}"
+            + (f"（504 を {gw_504} 回・{self.last_gateway_wait['waited_sec']:g} 秒待って未回復・F-33）"
+               if gw_504 and self.config.gateway_patience_sec > 0 else "")
         ) from last_exc
 
 

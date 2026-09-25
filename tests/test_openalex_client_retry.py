@@ -223,3 +223,65 @@ def test_meter_is_read_from_successful_responses_and_warns_when_low(monkeypatch)
     RUN_STATS["budget"]["remaining_usd"] = 0.09
     assert low_budget_caveat() == ""               # a healthy meter adds nothing to the output
     reset_run_stats()
+
+
+# --- F-33 (2026-09-25): 504 streaks on search.semantic — patience, not more quick retries ---
+
+
+def _patient_client(patience: float, interval: float = 5.0, max_retries: int = 2):
+    cfg = OpenAlexConfig(min_interval_sec=0.0, max_retries=max_retries, retry_backoff_sec=0.0,
+                         gateway_patience_sec=patience, gateway_retry_interval_sec=interval)
+    c = OpenAlexClient(cfg)
+    clock = {"t": 0.0}
+    c._now = lambda: clock["t"]
+
+    def fake_sleep(s):
+        clock["t"] += s
+
+    c._sleep = fake_sleep
+    return c
+
+
+def test_patience_off_keeps_three_attempts_on_504(monkeypatch):
+    calls = _patch_urlopen(monkeypatch, [_http_error(504)])
+    c = _patient_client(0.0)
+    with pytest.raises(OpenAlexError) as exc:
+        c.get({})
+    assert len(calls) == 3
+    assert "F-33" not in str(exc.value)
+    assert c.last_gateway_wait == {"gateway_504": 3, "recovered": False, "waited_sec": 0.0}
+
+
+def test_504_streak_is_waited_out_and_reported_as_recovered(monkeypatch):
+    """The 2026-09-25 probe: 504 x N then 200 — three quick attempts fall inside the streak."""
+    calls = _patch_urlopen(monkeypatch, [_http_error(504)] * 6 + [{"ok": True}])
+    c = _patient_client(60.0, interval=5.0)
+    assert c.get({}) == {"ok": True}
+    assert len(calls) == 7
+    assert c.last_gateway_wait == {"gateway_504": 6, "recovered": True, "waited_sec": 20.0}
+
+
+def test_patience_is_bounded_and_named_in_the_error(monkeypatch):
+    calls = _patch_urlopen(monkeypatch, [_http_error(504)])
+    c = _patient_client(30.0, interval=5.0)
+    with pytest.raises(OpenAlexError) as exc:
+        c.get({})
+    # 3 normal attempts, then one every 5 s while (elapsed + 5) <= 30 -> 6 more
+    assert len(calls) == 9
+    assert "F-33" in str(exc.value) and "504 を 9 回" in str(exc.value)
+    assert c.last_gateway_wait["recovered"] is False
+
+
+def test_patience_does_not_extend_429_or_other_5xx(monkeypatch):
+    for code in (429, 503):
+        calls = _patch_urlopen(monkeypatch, [_http_error(code)])
+        with pytest.raises(OpenAlexError):
+            _patient_client(120.0).get({})
+        assert len(calls) == 3, code
+
+
+def test_clean_call_leaves_no_gateway_record(monkeypatch):
+    _patch_urlopen(monkeypatch, [{"ok": True}])
+    c = _patient_client(120.0)
+    c.get({})
+    assert c.last_gateway_wait is None

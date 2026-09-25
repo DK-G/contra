@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-25（CL-0113） F-33-R: bybridge の semantic シードレッグが、504 の連続（エンドポイントの冷えた立ち上がり）を最長 180 秒待ち切る
+
+### 概要
+* 機序（実 API）: `search.semantic` は放置後の最初の約 30〜40 秒、長さ・per-page に関係なく 9.1 秒で 504 を返し、明けると 2〜7 秒で通り続ける（3 回再現）。504 は日次予算を消費しない。従来の 3 回・約 30 秒のリトライは立ち上がりの直前で諦めていた＝9/24・9/25 の「供給 0 件」。
+* `src/openalex/client.py`: `OpenAlexConfig.gateway_patience_sec`（既定 0＝従来どおり）・`gateway_retry_interval_sec`、`OpenAlexClient.last_gateway_wait`。504 のときだけ延長。429・他の 5xx は不変。
+* `src/pipeline/collect.py`: `CollectConfig.semantic_gateway_patience_sec`（既定 180）を semantic シードレッグだけが使う。report に `gateway_wait`。
+* `src/pipeline/bridge_diagnostics.py`: `semantic レッグ内訳` 行で回復／未回復（「語彙シードのみ」）を名指し。
+* **実測**（冷えた状態を2回作って1回ずつ）: before 504×3・30.4 秒で諦め・供給 0 → after 504×3・42.0 秒で回復・供給 38（主題直撃）。
+* 新規回帰7件（旧コードで7件とも落ちることを確認）。**489 → 496 tests: 496 pass。** OpenAlex 消費 $0.015。
+
+---
+
 ## 2026-09-22（CL-0112） F-32-R: bybridge の 2-hop ホーム除外を Field に加えて Topic 単位でも行う
 
 ### 概要

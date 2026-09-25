@@ -572,3 +572,34 @@ def test_field_warning_follows_the_same_scope_mismatch_rule():
         seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"], semantic_count=10),
         subfield_label="Finance")
     assert "シード名簿がテーマの分野から外れています" in legacy
+
+
+def test_semantic_leg_turns_on_504_patience_and_reports_the_wait(monkeypatch):
+    """F-33 (2026-09-25): the leg opts its client into waiting out a 504 streak and says so."""
+    from src.openalex.client import OpenAlexConfig
+
+    class _Streak:
+        config = OpenAlexConfig()
+        last_gateway_wait = {"gateway_504": 4, "recovered": True, "waited_sec": 42.0}
+
+        def get(self, params):
+            return {"results": [_raw("W1")]}
+
+    client = _Streak()
+    _patch_collector(monkeypatch, client)
+    out, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig())
+    assert client.config.gateway_patience_sec == CollectConfig().semantic_gateway_patience_sec > 0
+    assert rep["gateway_wait"]["recovered"] and "504 を 4 回受け 42 秒待って回復" in render_semantic_leg(rep)
+
+
+def test_unrecovered_504_streak_says_the_roster_is_lexical_only(monkeypatch):
+    class _Down:
+        last_gateway_wait = {"gateway_504": 23, "recovered": False, "waited_sec": 178.2}
+
+        def get(self, params):
+            raise OpenAlexError("request failed after 23 attempts: HTTP Error 504")
+
+    _patch_collector(monkeypatch, _Down())
+    _, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig())
+    line = render_semantic_leg(rep)
+    assert "504 を 23 回・178.2 秒待って未回復" in line and "語彙シードのみ" in line

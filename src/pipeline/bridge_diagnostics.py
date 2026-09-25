@@ -654,7 +654,18 @@ def render_semantic_leg(report: Optional[Dict[str, Any]]) -> str:
         + ("（上限で切詰め）" if report.get("truncated") else "")
         + (f"・テーマ本文の非ラテン文字率 {share:.0%}" if share > 0 else "")
     )
+    gw = report.get("gateway_wait") or {}
     if report.get("error"):
+        if gw.get("gateway_504") and not gw.get("recovered"):
+            # F-33: the leg already waited out the streak it could; say how long, so the caller
+            # neither reads the drifted lexical-only roster as the theme's neighbourhood nor
+            # re-sends immediately into the same streak.
+            return (
+                head + f" → 取得失敗（504 を {gw['gateway_504']} 回・{gw['waited_sec']:g} 秒待って未回復・F-33）"
+                "＝検索文の良否は未判定。**この回の名簿は語彙シードのみ**で主題適合は未検証です。"
+                "504 はエンドポイントが冷えた状態から立ち上がるまで（実測 30〜40 秒、長い日は数分）連続し、明けると続けて通ります（課金されません）——"
+                "数分おいてから同じ呼び出しを再投してください。"
+            )
         return (
             head + f" → 取得失敗（{report['error']}）＝検索文の良否は未判定。"
             "504 は一過性のことが多い（同じ呼び出しの再投で通る例あり・F-16）。"
@@ -672,6 +683,8 @@ def render_semantic_leg(report: Optional[Dict[str, Any]]) -> str:
         f" → abstract 無し −{report.get('dropped_no_abstract', 0)}"
         + field_txt
         + f" → 供給 {report.get('supplied', 0)}"
+        + (f"（504 を {gw['gateway_504']} 回受け {gw['waited_sec']:g} 秒待って回復・F-33）"
+           if gw.get("gateway_504") and gw.get("recovered") else "")
     )
     if report.get("source") == "theme_prose" and share > 0.3:
         line += (
