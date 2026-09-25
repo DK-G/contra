@@ -1834,6 +1834,17 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-09-25 失敗対処デー）**: 9/24・9/25 の bybridge 行「semantic レッグが `HTTP 504` で供給 0 件」は機序を特定して対処済み＝エンドポイントが冷えた状態から立ち上がるまで約 30〜40 秒 504 を返し、従来の 3 回・約 30 秒のリトライはその直前で諦めていた。実 API で before 供給 0 → after 供給 38（主題直撃）。「対処済み」節 **F-33-R**。
 
+## 2026-09-26（土・seihai 週次指針）
+
+テーマ: 自動退役の「命令」が実行層に届いたかをどう確かめるか（H-05 初作動で dormant ビルドがチャートの保存入力に上書きされ、監査は ok のままだった）＋等価クローン腕の検出。実行順は bybridge → byserendipity（3 facet 同時）→ byrepo → byserendipity 単独再投 3 回 → delegate_finalize 2 回。429 は0回。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **bybridge**（materials・英語 seed_semantic_text 付き・scope_field "Statistics / clinical trial monitoring"） | 命令と実効の乖離／等価性検定／有害性の停止境界 | **3日連続で semantic レッグが `HTTP 504` で供給 0 件**（今回は 14 回・185.5 秒待って未回復＝**9/25 の対処（180 秒待機）後も再現**）。語彙シードは keywords の "actuation" に引かれて**制御理論・最適化へ漂流**（Field Mathematics 20/20・上位トピック Advanced Optimization 5／Numerical ODE 3）。**最頻 bridge は "Structured semidefinite programs…"（分野外ハブ）・上位10件占有 60%＝S-26 以前の旧様式に近い形**。交差候補 30 件中、主題に接するのは生物学的同等性の総説 1 件のみ（post-gate で output_floor 落選 0.262） | 候補 30 → 通過 0（fallback 1） |
+| **byserendipity**（raw_only・facet 3枚） | Near=臨床試験の treatment fidelity／Far=SRE の configuration drift／Very Far=原子力制御室の指示（弁の指令と位置） | **F-33 の再現・対処後も継続**: 3 facet 同時で全て 504（各 14 回・約 185 秒）。★**同時刻に seihai 側から独立に `curl` で search.semantic を叩くと 3 回中 2 回 200（1.9〜3.5 秒）**＝エンドポイントは応答していたのに contra の要求だけが 185 秒間 504 を受け続けた。「冷えたエンドポイントの立ち上がり待ち」だけでは説明できない（要求の形＝per-page・filter・select などの差を疑う。未検証の仮説）。単独再投: SRE facet は 504 を 11 回受け 155.8 秒後に回復（4 件）、原子力 facet は単独でも 14 回 504 で失敗 | 4 件（1 facet のみ） |
+| **delegate_finalize**（serendipity 2 回） | — | bridge 分: 採点2→通過0（fallback 1・hollow 1）。serendipity 分: 採点3→通過1（Policy Drift Detection, Zenodo 2023・0.38）・percentile_gate 0.376（固定フロア 0.2 なら2件）。接地照合失敗 0。**呼び手側の不備**: bridge 分で `cited_by_count` を echo し忘れた（警告どおり） | 通過1 |
+| **byrepo**（structured・github） | 等価性検定（TOST）・desired/actual state reconciliation・kill switch 検証の実装 | 上位2件は theme 関連度 0.4（`Lakens/TOSTER`・`ashish24142/signoff`＝モデル差し替えの等価性サインオフ）。**F-14 の7回目**: 3〜5位は README に "kill switch" が出るだけの無関係（予測市場 MM ボット・SNS 感情トレードボット・**サブスクリプション課金の解析ドラフト**）。"configuration drift"／"reconciliation" の一致は 0 件。**初回呼び出しは `scope.field is required` で失敗**（スキーマ上 required ではない＝ツール説明と検証の不一致） | 5 件中 主題適合 2 |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
