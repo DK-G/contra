@@ -765,7 +765,7 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
-### F-34-R〜F-38-R. 後知恵テスト（2026-09-27）の不具合 5 件 — **対処済み 2026-09-27**（branch `agent/contra-hindsight-bugfixes`・未 merge）
+### F-34-R〜F-38-R. 後知恵テスト（2026-09-27）の不具合 5 件 — **対処済み 2026-09-27**（branch `agent/contra-hindsight-bugfixes`・main 8ed568d へ merge 済み 2026-09-27）
 
 5 件とも、再現テストを先に書き、旧コードで落ちることを確認してから直した（新規 16 件・**498 → 514 tests: 514 pass**）。1 件 1 コミット。実 API 消費は計 $0.0013（単価の probe・Subfield 分類表の取得・1 facet の live 確認）。
 
