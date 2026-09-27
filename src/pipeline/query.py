@@ -173,9 +173,17 @@ class StructuredQuery:
     def _semantic_filter_string(self) -> str:
         """The subset of filters that compose with ``search.semantic`` (verified 2026-06-23).
 
-        ``type:article`` and year bounds compose fine, but a ``primary_topic.field.id:!`` negation
-        returns HTTP 400 — so field/concept/cites filters are deliberately omitted here and the
-        semantic route relies on client-side home-domain exclusion instead.
+        A ``primary_topic.field.id:!`` negation returns HTTP 400, so field/concept/cites filters
+        are deliberately omitted and the semantic route relies on client-side home-domain
+        exclusion instead.
+
+        F-39 (2026-09-28): the ``type:`` filter is omitted too and applied client-side
+        (``keep_semantic_types``). With it, the endpoint answered 504 at its 9.1 s gateway limit
+        for a terrain-navigation query on every attempt (and ``type:article|conference-paper``
+        as well), while the same text passed in 1.8-3.9 s without it, and with a year-only
+        filter in 2.7 s. A music query with ``type:article`` passed once in 8.0 s and 504-ed
+        the next times. ``type:article`` also dropped ``conference-paper``, about 40% of the
+        nearest works in both probes.
         """
         parts: List[str] = []
         if self.year_from is not None and self.year_to is not None:
@@ -184,8 +192,6 @@ class StructuredQuery:
             parts.append(f"from_publication_date:{self.year_from}-01-01")
         elif self.year_to is not None:
             parts.append(f"to_publication_date:{self.year_to}-12-31")
-        if self.work_type:
-            parts.append(f"type:{self.work_type}")
         return ",".join(parts)
 
     def to_params(self, *, per_page: int = 50, page: int = 1) -> Dict[str, Any]:
@@ -495,4 +501,29 @@ __all__ = [
     "ROUTE_FILTER",
     "ROUTE_SEARCH",
     "ROUTE_SEMANTIC",
+    "SEMANTIC_TYPE_ALLOW",
+    "keep_semantic_types",
 ]
+
+
+# F-39 (2026-09-28): the semantic route cannot filter by type server-side without timing out,
+# so the type a query asked for is enforced here. ``article`` keeps OpenAlex's
+# ``conference-paper`` as well: OpenAlex files proceedings papers under their own type, and in
+# engineering / computing they were ~40% of the nearest works that ``type:article`` threw away.
+SEMANTIC_TYPE_ALLOW: Dict[str, frozenset] = {
+    "article": frozenset({"article", "conference-paper"}),
+}
+
+
+def keep_semantic_types(works: Sequence[Any], work_type: Optional[str]) -> List[Any]:
+    """Client-side type filter for semantic-route results (F-39).
+
+    Keeps works whose ``publication_type`` is allowed for ``work_type``. A work with no recorded
+    type is kept (fail open: a missing label is not evidence of a non-research record).
+    """
+    works = list(works)
+    if not work_type:
+        return works
+    allowed = SEMANTIC_TYPE_ALLOW.get(work_type, frozenset({work_type}))
+    return [w for w in works
+            if not getattr(w, "publication_type", None) or w.publication_type in allowed]

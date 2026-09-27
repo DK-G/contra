@@ -58,7 +58,8 @@ def test_build_semantic_query_combines_structure_and_pseudo_abstract():
     assert "tipping point" in text
     params = sq.to_params(per_page=50)
     assert "search.semantic" in params and "search" not in params
-    assert params["filter"] == "type:article"
+    # F-39: no server-side type filter (it timed the endpoint out); enforced client-side.
+    assert "filter" not in params
 
 
 def test_build_semantic_query_tolerates_empty_structure():
