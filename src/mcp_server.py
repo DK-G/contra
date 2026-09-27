@@ -225,25 +225,48 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     if not stats:
         return ""
     parts: List[str] = []
-    empty: List[str] = []
+    failed: List[str] = []    # transport / not queried — re-sending the facet alone can help
+    rejected: List[str] = []  # 棄却 — a verdict on the results; re-sending returns the same
+    emptied: List[str] = []   # fetched, but nothing survived exclusion / dedup
     for i, r in enumerate(stats, 1):
         dom = r.get("domain") or f"facet{i}"
-        if r.get("status") != "ok":
-            parts.append(f"[{i}] {dom}: {r.get('status')}")
-            empty.append(dom)
+        status = str(r.get("status") or "")
+        # F-35 (2026-09-27): a recovered facet's status carries a note ("ok（504 …）" F-33,
+        # "ok（400 …）" F-16). The exact `!= "ok"` test here — the same hole F-33-S closed in
+        # the collector's tally — listed every such facet as 0-harvest next to its 20
+        # submissions (all 3 facets, 3 of 4 hindsight runs).
+        if not status.startswith("ok"):
+            parts.append(f"[{i}] {dom}: {status}")
+            (rejected if status.startswith("棄却") else failed).append(dom)
             continue
         sel = r.get("selected", 0)
+        note = status[len("ok"):]
         parts.append(
-            f"[{i}] {dom}: 返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+            f"[{i}] {dom}: " + (f"ok{note} / " if note else "")
+            + f"返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
         )
         if not sel:
-            empty.append(dom)
+            emptied.append(dom)
     line = "★facet 別内訳: " + " ・ ".join(parts)
-    if empty:
+    missing = "この距離段は今回の材料に含まれていません。"
+    if failed:
         line += (
-            "\n⚠ 収穫0の facet: " + ", ".join(empty) + "。この距離段は今回の材料に含まれていません"
-            "（A2 の3距離が実質的に潰れている状態）。その距離を確実に引くには、当該 facet を単独の"
-            "呼び出しで投げ直してください。"
+            f"\n⚠ 収穫0の facet: {', '.join(failed)}（取得失敗）。{missing}504 なら数分おいて"
+            "当該 facet を単独の呼び出しで投げ直してください（400 は pseudo_abstract を短く・"
+            "429 は時間をおく）。"
+        )
+    if rejected:
+        line += (
+            f"\n⚠ 収穫0の facet: {', '.join(rejected)}（棄却）。{missing}棄却は検索結果の性質に"
+            "対する判定なので、同じ facet を投げ直しても同じ結果になります——facet をより遠い"
+            "具体ドメインへ見直してください（home_converged ＝ 結果がホーム分野に収束。何を"
+            "ホームとしたかは scope_field の行を参照）。"
+        )
+    if emptied:
+        line += (
+            f"\n⚠ 収穫0の facet: {', '.join(emptied)}（取得は成功・ホーム除外／重複／履歴除外で"
+            f"提出 0）。{missing}facet をより遠い具体ドメインへ見直すか、履歴除外が原因なら "
+            "no_history を検討してください。"
         )
     return line
 
