@@ -53,6 +53,7 @@ from src.pipeline.collect import (
 )
 from src.pipeline.theme_fit import matched_summary
 from src.pipeline.query import (
+    OPENALEX_FIELDS,
     dominant_field_ids,
     dominant_topic_ids,
     resolve_field_ids,
@@ -293,6 +294,34 @@ def _keywords_prop(label: str) -> Dict[str, Any]:
             "description": f"{label} (MAX {MAX_KEYWORDS} — more raises InputValidationError)."}
 
 
+# F-34 (2026-09-27): F-21's twin on scope_field — the validator demanded a non-empty
+# scope.field while every theme tool left it out of `required`, so the first call of each
+# hindsight run (4/4) and the seihai 2026-09-26 byrepo call failed on "scope.field is
+# required". A default was rejected: in byserendipity/bybridge the value is what home
+# exclusion and seed scoping resolve against, and an empty default would switch both off
+# silently (the F-37 failure). One list keeps the four tools' `required` from drifting apart.
+_THEME_REQUIRED = ["theme_overview", "goal", "why_problem", "assumptions", "scope_field"]
+
+
+def _scope_field_prop(use: str) -> Dict[str, Any]:
+    """``scope_field`` description; where it drives exclusion/scoping it lists the Field names."""
+    fields = ", ".join(sorted(OPENALEX_FIELDS.values()))
+    if use == "exclusion":
+        effect = ("byserendipity drops candidates filed under that Field and rejects facets "
+                  "that converge on it")
+    elif use == "seed_scope":
+        effect = "bybridge scopes its lexical seed queries to that Field (F-13)"
+    else:
+        return {"type": "string", "description": (
+            f"REQUIRED (the validator rejects an empty value). {use}")}
+    return {"type": "string", "description": (
+        "REQUIRED. The theme's home field of study. Name one of the 26 OpenAlex Fields so that "
+        f"{effect}: {fields}. Text that resolves to no Field (a Subfield name such as "
+        "'Neurology', or free text such as 'Satellite navigation') switches that off, and the "
+        "output says so (F-37); broad names resolve broadly ('Biomedical engineering' -> the "
+        "whole Engineering Field).")}
+
+
 # F-26: below this many surviving seeds, a bybridge run cannot be told apart from a healthy
 # one by its output shape, so it refuses instead. Calibrated on the observed failure (2 seeds
 # produced a full 30-candidate answer about clinical gait analysis) and on the healthy runs of
@@ -317,7 +346,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("exclusion"),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -334,7 +363,7 @@ class StdinMcpServer:
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
                         "used_dois": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed DOI exclusions, merged with the file history."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -348,7 +377,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("Core field of study; also a query/relevance token."),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -359,7 +388,7 @@ class StdinMcpServer:
                         "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface", "kaggle"]}, "description": "Practical-anchor sources to search: 'github' (repositories), 'huggingface' (Hub models + datasets), and/or 'kaggle' (datasets + notebooks; needs KAGGLE_API_TOKEN or KAGGLE_USERNAME/KAGGLE_KEY, silently skipped when unset). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface", "kaggle"]},
                         "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -385,7 +414,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("seed_scope"),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -410,7 +439,7 @@ class StdinMcpServer:
                         "seed_semantic_keep_offfield": {"type": "boolean", "description": "Keep semantic-leg seeds whose OpenAlex Field is not the home Field, ranked behind the home ones (F-27). The hard keep dropped this leg's most on-topic seeds, because OpenAlex files method-side work under Computer Science / Decision Sciences / Mathematics. false restores the pre-2026-09-12 hard keep.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -431,7 +460,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string"},
                         "approach_type": _approach_type_prop("experiment"),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string"},
+                        "scope_field": _scope_field_prop("Send the same value as the collect call it finalizes."),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": _keywords_prop("Include keywords"),
@@ -479,7 +508,7 @@ class StdinMcpServer:
                             }
                         }
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions", "candidates"]
+                    "required": _THEME_REQUIRED + ["candidates"]
                 }
             }
         ]
