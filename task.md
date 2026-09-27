@@ -1,5 +1,5 @@
 <!-- CURRENT-START / ここだけを常に最新に保つ。ここより下は履歴で、読むのは必要時のみ。 -->
-## 現在地（2026-07-25）
+## 現在地（2026-09-27）
 - フェーズ: **実装は完了・Phase 1 の Done 判定待ち**。検索クエリ精度 Phase 2（bybridge）/ Phase 3（byserendipity）、キー無し委譲ループ（`delegate_finalize` ＋ 各 MCP の `structured` フラグ）、byrepo の A-RS1/A-RS2 配点移行、`fill_track_entries` の統合テストまで全て `[x]`。完了記録は `docs/archive/task-history.md` へ退避済み。
 - 進行中: **MCP サーバとして実稼働中**（`byserendipity` / `byrepo` / `bybridge` / `bynote_link_concepts` / `delegate_finalize` がツールとして利用可能なことを 2026-07-25 に確認）。Track A「Git 実用アンカー設計」は設計5項目とも完了（`docs/specs/track_a_git_anchor_design.md`）。
 - 次の一手:
@@ -8,7 +8,7 @@
 - ★ブロッカー/外部待ち: 上記1の残5件は**全て「実 LLM API キーが必要」または「人間の質的判断が必要」**。**実装が Done 判定を追い越しており、人間が評価しない限り Phase 1 を閉じられない**のが唯一かつ最大のボトルネック。
 - 直近の重い判断: **Web 化・課金は現時点では実装しない**（必要になったら Phase 2 として再評価）。PRF は bybridge の異分野目的と衝突するため不採用とし Track A 収集へ再配置。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。判断の経緯は `DECISION_LOG.md`。
 - 2026-09-07 統合: `codex/shared-routines`（`docs/agent_rules/bynote.md`）を main へ merge。`feature/bybridge`（6 月の byrepo 拡張・main から 133 遅れ・core 9 ファイル衝突）は**不採用**として origin に残し、ローカル worktree と branch は撤去。
-- 09-27: 後知恵テストの不具合 F-34〜38 を修正し main 8ed568d へ merge・未 push（残件は field_observations）。
+- 09-27: 後知恵テスト（Kaggle 4 題で勝因 0/4）→ F-34〜38 修正と生成・観測過程 facet 追加（DECISION_LOG）、main・push 済み。効果未検証・選別の弱点 F-22 は未着手。
 <!-- CURRENT-END -->
 
 # 作業タスクリスト
