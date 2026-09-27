@@ -84,16 +84,32 @@ def _wait_phrase(seconds: Optional[float]) -> str:
     return f"Retry-After {int(seconds)} 秒（再開目安 {resume}）"
 
 
+# F-36 (2026-09-27): "searches left" was remaining / the LAST response's cost, but OpenAlex
+# prices requests by kind — a search costs $0.001 (10 credits), a filter list call $0.0001
+# (1 credit; probed 2026-09-27: X-RateLimit-Cost-USD 0.0001 / Credits-Used 1). bybridge ends
+# on filter calls, so on 2026-09-27 the same day read "$0.097 -> 約 97 回" after byserendipity
+# and "$0.0838 -> 約 838 回" after bybridge. The count is now priced at the search cost: the
+# documented price, or the dearest request this run actually paid for if that is higher.
+SEARCH_COST_USD = 0.001
+
+
+def _record_meter(meter: Dict[str, Optional[float]]) -> None:
+    previous = RUN_STATS.get("budget") or {}
+    meter["search_cost_usd"] = max(SEARCH_COST_USD, meter.get("cost_usd") or 0.0,
+                                   previous.get("search_cost_usd") or 0.0)
+    RUN_STATS["budget"] = meter
+
+
 def budget_line(meter: Optional[Dict[str, Optional[float]]]) -> str:
-    """'本日の残予算 $0.052 / $0.1（検索あと約 52 回）' — '' without a meter."""
+    """'OpenAlex 日次予算の残り $0.052 / $0.1（検索 1 回 $0.001 換算であと約 52 回…）' — '' without a meter."""
     if not meter or meter.get("remaining_usd") is None:
         return ""
-    cost = meter.get("cost_usd") or 0.001
+    unit = meter.get("search_cost_usd") or max(SEARCH_COST_USD, meter.get("cost_usd") or 0.0)
     limit = meter.get("limit_usd")
-    left = int(meter["remaining_usd"] / cost) if cost else 0
+    left = int(meter["remaining_usd"] / unit + 1e-9)
     return (f"OpenAlex 日次予算の残り ${meter['remaining_usd']:g}"
             + (f" / ${limit:g}" if limit is not None else "")
-            + f"（検索あと約 {left} 回・リセットは 00:00 UTC＝09:00 JST）")
+            + f"（検索 1 回 ${unit:g} 換算であと約 {left} 回・リセットは 00:00 UTC＝09:00 JST）")
 
 
 def run_stats_caveat() -> str:
@@ -220,12 +236,12 @@ class OpenAlexClient:
                     data = res.read().decode("utf-8")
                     meter = read_budget(getattr(res, "headers", None))
                     if meter:
-                        RUN_STATS["budget"] = meter
+                        _record_meter(meter)
             except urllib.error.HTTPError as exc:
                 last_exc = exc
                 meter = read_budget(getattr(exc, "headers", None))
                 if meter:
-                    RUN_STATS["budget"] = meter
+                    _record_meter(meter)
                 if exc.code == 429 and budget_exhausted(meter):
                     # F-29: hours of wait, not seconds — a retry cannot succeed; say so now.
                     RUN_STATS["gave_up"] += 1
@@ -287,6 +303,7 @@ __all__ = [
     "OpenAlexConfig",
     "OpenAlexError",
     "RUN_STATS",
+    "SEARCH_COST_USD",
     "budget_exhausted",
     "budget_line",
     "low_budget_caveat",

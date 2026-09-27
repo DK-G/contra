@@ -285,3 +285,55 @@ def test_clean_call_leaves_no_gateway_record(monkeypatch):
     c = _patient_client(120.0)
     c.get({})
     assert c.last_gateway_wait is None
+
+
+# --- F-36 (2026-09-27): "searches left" must be priced at the search cost -----------------
+# The meter divided the remaining USD by the LAST response's cost. A search costs $0.001
+# (10 credits) but a filter list call costs $0.0001 (1 credit; probed 2026-09-27:
+# X-RateLimit-Cost-USD 0.0001 / Credits-Used 1), so the same day read "$0.097 -> 約 97 回"
+# after byserendipity (last request a semantic search) and "$0.0838 -> 約 838 回" after
+# bybridge (last request a filter call).
+
+class _HeaderedResponse(_FakeResponse):
+    def __init__(self, payload, headers):
+        super().__init__(payload)
+        self.headers = headers
+
+
+def _metered_sequence(monkeypatch, metas):
+    it = iter(metas)
+
+    def fake_urlopen(req, timeout=None):
+        return _HeaderedResponse({"results": []}, next(it))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+
+def test_searches_left_is_priced_at_the_search_cost_not_the_last_request(monkeypatch):
+    from src.openalex.client import RUN_STATS, budget_line, reset_run_stats
+    _metered_sequence(monkeypatch, [
+        {"X-RateLimit-Remaining-USD": "0.097", "X-RateLimit-Limit-USD": "0.1",
+         "X-RateLimit-Cost-USD": "0.001"},                      # search.semantic
+        {"X-RateLimit-Remaining-USD": "0.0838", "X-RateLimit-Limit-USD": "0.1",
+         "X-RateLimit-Cost-USD": "0.0001"},                     # cites: filter list
+    ])
+    reset_run_stats()
+    c = _client()
+    c.get({"search.semantic": "q"})
+    c.get({"filter": "cites:W1"})
+    line = budget_line(RUN_STATS["budget"])
+    assert "$0.0838" in line
+    assert "約 83 回" in line and "838 回" not in line
+    reset_run_stats()
+
+
+def test_filter_only_run_still_counts_searches_at_the_search_price(monkeypatch):
+    from src.openalex.client import RUN_STATS, budget_line, reset_run_stats
+    _metered_sequence(monkeypatch, [
+        {"X-RateLimit-Remaining-USD": "0.0678", "X-RateLimit-Limit-USD": "0.1",
+         "X-RateLimit-Cost-USD": "0.0001"},
+    ])
+    reset_run_stats()
+    _client().get({"filter": "ids.openalex:W1"})
+    assert "約 67 回" in budget_line(RUN_STATS["budget"])
+    reset_run_stats()
