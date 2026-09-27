@@ -56,6 +56,7 @@ from src.pipeline.query import (
     OPENALEX_FIELDS,
     dominant_field_ids,
     dominant_topic_ids,
+    home_scope_note,
     resolve_field_ids,
     resolve_subfield_ids,
     subfield_labels,
@@ -328,7 +329,7 @@ _THEME_REQUIRED = ["theme_overview", "goal", "why_problem", "assumptions", "scop
 
 def _scope_field_prop(use: str) -> Dict[str, Any]:
     """``scope_field`` description; where it drives exclusion/scoping it lists the Field names."""
-    fields = ", ".join(sorted(OPENALEX_FIELDS.values()))
+    fields = " / ".join(sorted(OPENALEX_FIELDS.values()))
     if use == "exclusion":
         effect = ("byserendipity drops candidates filed under that Field and rejects facets "
                   "that converge on it")
@@ -667,12 +668,15 @@ class StdinMcpServer:
         used_ids, used_titles, used_dois = _history_exclusions(theme, args)
         _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
         facet_stats: List[Dict[str, Any]] = []
+        home_ids = resolve_field_ids(theme.scope.field)
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
-            stats_out=facet_stats,
+            home_field_ids=home_ids, stats_out=facet_stats,
         )
-        facet_diag = _facet_breakdown_line(facet_stats)
+        # F-37: what "home" was taken to mean, stated before the facet verdicts that rely on it.
+        facet_diag = (home_scope_note(theme.scope.field, home_ids) + "\n"
+                      + _facet_breakdown_line(facet_stats))
         if not works:
             return {
                 "content": [{"type": "text", "text": (
@@ -907,6 +911,9 @@ class StdinMcpServer:
         home_ids = resolve_field_ids(theme.scope.field)
         seed_field_scope = bool(args.get("seed_field_scope", True))
         scope_ids = home_ids if seed_field_scope else []
+        # F-37: an unresolved scope leaves the lexical seed search unscoped without a word.
+        scope_note = (home_scope_note(theme.scope.field, home_ids, use="seed_scope")
+                      if seed_field_scope else "")
         lex_seeds = collect_and_filter(
             theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True,
             home_field_ids=scope_ids,
@@ -978,6 +985,7 @@ class StdinMcpServer:
                     f"- 言語ゲート（seed_language={seed_language!r}）で除外 {lang_dropped} 件\n"
                     f"- referenced_works が空で除外 {dead_seed_count} 件\n"
                     + (render_semantic_leg(sem_report) + "\n" if sem_report else "")
+                    + (f"- {scope_note}\n" if scope_note and not home_ids else "")
                     + "- 打ち手: (a) 言語ゲートを外す（`seed_language: null`）——日本語テーマでは"
                       "語彙シードの大半が日本語誌に落ちます。(b) 英語の擬似アブストラクトを "
                       "`seed_semantic_text` に渡して semantic レッグを効かせる。(c) キーワードを"
@@ -1122,6 +1130,8 @@ class StdinMcpServer:
                 f"- シード言語ゲート (C(iii)): 言語 '{seed_language}' 以外のレコード "
                 f"{lang_dropped} 件をシード候補から除外（seed_language:null で無効化可）\n" + diag_line
             )
+        if scope_note and (diagnostics or not home_ids):
+            diag_line = f"- {scope_note}\n" + diag_line
         if not cands:
             head = (
                 f"citation 2-hop で交差候補が見つかりませんでした"
