@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-09-27（CL-0118） 点数だけの候補は出力枠に入れない（F-15-U2）
+
+### 概要
+* `src/pipeline/classify.py`: `_has_material` を追加。`_quality_gate_and_build` の出力選択（MMR・並べ替え）と fallback を、title/abstract を持つ候補に限る（全件が材料無しのときだけ従来どおり）。材料の無い通過候補は `not_selected(no_material)` として記録。
+* `src/mcp_server.py`: `not_selected(no_material)` の落選行に再投の案内。
+* `docs/agent_rules/byserendipity.md`: 手順4の点数だけの候補の扱いを更新。
+* `tests/test_full_batch_submission.py`: 新規 3 件・既存 1 件の期待値を変更。
+* 発端: 再テスト run-a で MMR が点数だけの候補（タグ無し＝類似度 0）を 2 件選び、空欄で描画した。
+
+---
+
 ## 2026-09-27（CL-0117） percentile ゲートのバッチ依存（F-15）を全件提出で解く（F-15-U）
 
 ### 概要

@@ -1359,6 +1359,8 @@ class StdinMcpServer:
             if r.get("near_but_useful"):
                 line += "　← 近いが有用（F-22）"
                 near_useful.append((r["id"], label))
+            if r["floor"] == "not_selected(no_material)":
+                line += "　← ゲートは全部通過。材料（title/abstract）付きで再投すれば出力候補になる（F-15-U2）"
             rejection_lines.append(line)
         extra = ""
         if echo_warnings:
