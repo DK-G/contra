@@ -786,8 +786,13 @@ def _percentile_gate(scores: List[float], top_pct: float = 0.30, floor: float = 
     if not scores:
         return floor
     sorted_desc = sorted(scores, reverse=True)
-    k = max(1, int(len(sorted_desc) * top_pct))
+    k = _percentile_rank(len(sorted_desc), top_pct)
     return max(sorted_desc[k - 1], floor)
+
+
+def _percentile_rank(n: int, top_pct: float = 0.30) -> int:
+    """Rank whose score becomes the percentile bar. For n <= 6 it is 1: the bar is the best score."""
+    return max(1, int(n * top_pct))
 
 
 # ---------------------------------------------------------------------------
@@ -1087,6 +1092,9 @@ def _quality_gate_and_build(
         gate_is_batch_relative=effective_gate > gate,
         passed_at_absolute_floor=sum(1 for s in ser_vals if s >= gate),
         batch_size=len(all_scored),
+        # F-15-U: the rank whose score is the bar. In a thin batch the pass count is a
+        # function of the batch size (k=1 up to 6 candidates), not of candidate quality.
+        percentile_rank=_percentile_rank(len(all_scored), 0.30),
     )
 
     # Fallback when nothing clears the output-quality bar (M3 suppresses weak single-best).

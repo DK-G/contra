@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-27（CL-0117） percentile ゲートのバッチ依存（F-15）を全件提出で解く（F-15-U）
+
+### 概要
+* `docs/agent_rules/byserendipity.md`: 手順4に「採点した候補は全件提出（描画しない候補は `id` と点数だけでよい）」「`not_selected(count=…)` は出力と同じ重みで読む」を追加。
+* `src/pipeline/delegate.py`: `score_only_ids` / `score_only_summary` を追加。`echo_completeness_warnings(materials, rendered_ids=None)` は、出力に入らなかった点数だけの候補を個別警告から外す（`rendered_ids` 未指定なら従来どおり）。
+* `src/pipeline/classify.py`: `_percentile_rank` を切り出し、診断に `percentile_rank` を記録。
+* `src/mcp_server.py`: delegate_finalize の診断に「分位の母数が 10 件未満なら上位 k 件を通すだけ」の行（`_THIN_PERCENTILE_BATCH`）。点数だけの候補の警告を1行に、落選内訳をゲートごとの件数にまとめる（`not_selected` と近いが有用は名指し）。echo 警告の算出を post-gate 後へ移動。
+* `tests/test_full_batch_submission.py`: 新規 8 件。
+* ゲートの挙動（閾値・床・本数）は不変。DECISION_LOG の同日 facet 項で F-15 を F-22 と誤記していた箇所を訂正。
+
+---
+
 ## 2026-09-27（CL-0116） byserendipity に生成・観測過程 facet
 
 ### 概要

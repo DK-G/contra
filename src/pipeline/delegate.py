@@ -379,17 +379,56 @@ def _recommended_empty(material: Dict[str, Any]) -> List[str]:
     return [k for k in ECHO_RECOMMENDED if _field_empty(material, k)]
 
 
-def echo_completeness_warnings(materials: Sequence[Dict[str, Any]]) -> List[str]:
+def score_only_ids(materials: Sequence[Dict[str, Any]]) -> Set[str]:
+    """Ids of candidates sent as id + scores only: neither title nor abstract was echoed.
+
+    F-15-U (2026-09-27): the percentile gate is a quantile of the submitted batch, so it is
+    only meaningful when the caller submits every candidate it scored. Callers keep the
+    payload small by echoing full material only for the candidates they expect to render
+    and sending the rest as id + scores. A key echoed present-but-blank or marked
+    ``upstream_empty`` is a faithful echo of an empty source, not a score-only submission.
+    """
+    ids: Set[str] = set()
+    for i, material in enumerate(materials):
+        marked = {str(k) for k in (material.get(UPSTREAM_EMPTY_KEY) or [])}
+        if all(material.get(k) is None and k not in marked for k in ("title", "abstract")):
+            ids.add(str(material.get("id") or f"#{i}"))
+    return ids
+
+
+def score_only_summary(
+    materials: Sequence[Dict[str, Any]], rendered_ids: Set[str],
+) -> Optional[str]:
+    """One line for the score-only candidates that did not reach the output (F-15-U)."""
+    silent = score_only_ids(materials) - set(rendered_ids)
+    if not silent:
+        return None
+    return (
+        f"ℹ 点数だけで送られた候補 {len(silent)} 件は出力に入らず、分位ゲートの母数として"
+        "だけ使われました（描画と接地検証の対象外。byserendipity 手順4）。"
+    )
+
+
+def echo_completeness_warnings(
+    materials: Sequence[Dict[str, Any]], rendered_ids: Optional[Set[str]] = None,
+) -> List[str]:
     """One warning line per candidate whose echoed material is missing recommended fields.
 
     A field is attributed to the SOURCE, not the caller, when contra's own material marked it
     empty (``upstream_empty``) or when the key was echoed back present but blank — the shape of
     a faithful echo of an empty upstream value. Only an absent key/None without a mark is
     named as the caller's omission (2026-09-15: hand transcription dropped venue).
+
+    With ``rendered_ids`` (known after the post-gate), a score-only candidate that did NOT
+    reach the output is left to ``score_only_summary`` instead of one line each (F-15-U).
+    One that did reach the output keeps its warning: it renders blank (F-09).
     """
+    skip = score_only_ids(materials) - set(rendered_ids) if rendered_ids is not None else set()
     warnings: List[str] = []
     for i, material in enumerate(materials):
         wid = str(material.get("id") or f"#{i}")
+        if wid in skip:
+            continue
         marked = {str(k) for k in (material.get(UPSTREAM_EMPTY_KEY) or [])}
         empty = [k for k in ECHO_RECOMMENDED if _field_empty(material, k)]
         upstream = [

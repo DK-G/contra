@@ -53,6 +53,9 @@ description: contra の Track B を使って遠いが構造的に接続する論
    - `connection_label`（接続点チップ・関係/過程を表す）と `serendipity_rationale`（論文固有の発見を埋め込んだ変数対応の1文）
    - **生成過程 facet から来た候補**（materials の `facet` 欄で分かる）の `purpose_sim` は、`concern` に書いた生成・観測過程との因果構造の一致で付け、`theme_quote` もその文から取る。予測対象の振る舞いと一致しないことを理由に下げない。ゲートの閾値は変えない（床と percentile はそのまま効く）。
 4. **（contra MCP・キー無し）post-gate と出力**: 採点済み候補（contra が配った materials を echo ＋ 上記スコア）を `mcp__contra__delegate_finalize` に渡す。contra が決定論で硬い床（anomaly / near-domain cap / serendipity / hollow / percentile / output_floor / fallback / M3）を再適用し、Track B markdown を返す。
+   - **採点した候補は全件提出する。** percentile ゲートの閾値は「提出した候補（anomaly/hollow 除外後）の上位30%点」で、提出が 6 件以下だと最高点の 1 件しか通らない（通過数が質でなく件数で決まる・F-15）。良さそうな数件に絞って出すと、ゲートが上位 1 件の選択に変わる。
+   - 出力に載せたい候補は materials を全欄 echo する（接地検証と描画に要る）。それ以外は **`id` と点数だけでよい**。点数だけの候補も分位の母数に入り、出力に載らなければ警告は 1 行にまとめられる。点数だけの候補が出力に入ったら空欄で描画されるので、材料付きで再投する。
+   - 出力は `count` で上限が掛かる。落選内訳の `not_selected(count=…)` は、ゲートを全部通ったが count で切れた候補（点数だけの候補でも1件ずつ名指しされる）なので、出力と同じ重みで読む。post-gate は決定論的検証であって採否の最終権限ではない。
 5. **（エージェント）プローズ仕上げ**: 必要なら4部構成（概要 / 関連性 / 仮説 / 注意点）をエージェントが磨く。仮説は論文固有の発見に基づき、テーマ側の具体変数に対応づける（一般化・捏造数値は禁止）。
 
 **MCP が使えない場合のみ**、`D:\dev\repos\contra` で `python -m src.cli.main`（`--gen-mode structured` ならキー無し／`--gen-mode llm` はメータ）にフォールバックする。
