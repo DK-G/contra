@@ -216,6 +216,21 @@ def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_
     return len(ids)
 
 
+def _materials_json(materials: List[Dict[str, Any]]) -> str:
+    """Candidate materials as valid JSON with one candidate field per line (F-38).
+
+    ``json.dumps`` put 60 candidates on ONE line of 190k-307k chars (2026-09-27): the harness
+    saved it to a file that Read could not page, and the caller cut it apart with Grep. One
+    field per line keeps every line about as long as the longest abstract.
+    """
+    rows = []
+    for m in materials:
+        fields = [f"{json.dumps(k, ensure_ascii=False)}: {json.dumps(v, ensure_ascii=False)}"
+                  for k, v in m.items()]
+        rows.append("{" + ",\n ".join(fields) + "}")
+    return "[\n" + ",\n".join(rows) + "\n]"
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -700,12 +715,20 @@ class StdinMcpServer:
                 )}],
                 "isError": False,
             }
-        materials = [material_from_work(w) for w in works]
+        # F-38: each candidate names its facet, and referenced_works (read only on the bridge
+        # path; 32% of a 289k-char output on 2026-09-27) is left out.
+        materials = []
+        for w in works:
+            m = material_from_work(w, include_references=False)
+            facet = (w.source_meta or {}).get("serendipity_facet")
+            materials.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
         diag = (
             facet_diag + "\n"
             f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
-            f"（semantic・ホームドメイン除外済・キー無し{hist_note}）。各候補を purpose_sim/mechanism_dist 等で"
+            f"（semantic・{'ホームドメイン除外済' if home_ids else 'ホームドメイン除外なし（F-37）'}"
+            f"・キー無し{hist_note}）。各候補の facet 欄はその候補を引いた facet（距離段）。"
+            "各候補を purpose_sim/mechanism_dist 等で"
             "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
             "★接地契約: relationship / serendipity_rationale を書く場合は、その主張が対応づける"
             "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
@@ -713,7 +736,7 @@ class StdinMcpServer:
             "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
         )
         return {
-            "content": [{"type": "text", "text": diag + "\n\n" + json.dumps(materials, ensure_ascii=False)}],
+            "content": [{"type": "text", "text": diag + "\n\n" + _materials_json(materials)}],
             "isError": False,
         }
 
@@ -1171,7 +1194,7 @@ class StdinMcpServer:
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
                 "抜粋できない主張は書かないでください——contra が決定論的に照合し、照合失敗の散文は棄却されます。"
             )
-            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + json.dumps(mats, ensure_ascii=False)
+            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + _materials_json(mats)
             return {"content": [{"type": "text", "text": body}], "isError": False}
 
         if raw_only:
@@ -1185,9 +1208,11 @@ class StdinMcpServer:
                 )
                 md = render_markdown(doc)
                 return _external_data_result(f"{diag_line}\n\n{md}")
-            lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
-            ranked = ranked_all
-            for i, w in enumerate(ranked[:max(target_count, 10)], 1):
+            # F-38: the diagnostics said "交差候補 60 件" and the list stopped at
+            # max(bridge_count, 10) — the 2026-09-27 caller saw 10 of 60. Raw means all of them.
+            lines = [f"## Bybridge 交差候補（raw・全 {len(ranked_all)} 件・構造的関連度順。"
+                     "上位 10 件は bridge ごとの偏りを抑えて並べ替え済み）", diag_line, ""]
+            for i, w in enumerate(ranked_all, 1):
                 betw = int((w.source_meta or {}).get("bridge_betweenness", 0) or 0)
                 lines.append(f"{i}. {w.title}")
                 lines.append(f"   - 共有bridge: {shared_bridge_count(w, bridges)}本 | 異分野ブリッジ: {betw} | 年: {w.year} | 掲載: {w.venue} | 被引用: {w.cited_by_count}")
