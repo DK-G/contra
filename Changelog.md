@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-27（CL-0115） 後知恵テスト由来の不具合 5 件（F-34〜F-38）
+
+### 概要
+* `src/mcp_server.py`: F-34 `scope_field` を byserendipity / byrepo / bybridge / delegate_finalize の `required` に（`_THEME_REQUIRED`）。説明文は `OPENALEX_FIELDS` から生成。F-35 `_facet_breakdown_line` を `startswith("ok")` に、収穫0の助言を原因別に。F-37 ホーム分野の解決結果の行（byserendipity・bybridge）。F-38 材料 JSON を 1 欄 1 行（`_materials_json`）、byserendipity 材料に `facet` 欄・`referenced_works` なし、bybridge raw_only は全件表示。
+* `src/openalex/client.py`: F-36 残り回数を検索単価（`SEARCH_COST_USD`＝$0.001、実行中の最大単価が高ければそれ）で数える。
+* `src/pipeline/query.py`: F-37 `home_scope_note` / `load_subfield_taxonomy_rows`。`data/openalex_subfields.json`（252 行）をコミット。
+* `src/pipeline/collect.py`: F-38 facet ごとの候補に `source_meta["serendipity_facet"]`。`src/pipeline/delegate.py`: `material_from_work(include_references=False)`。
+* **実測**: 保存済みの後知恵テスト出力 4 本で、材料が 1 行 179k〜288k 字 → 362〜611 行・124k〜196k 字。live（1 facet）で 504×3 回復の facet に収穫0警告なし・scope 行・facet 欄・「検索 1 回 $0.001 換算であと約 98 回」を確認。
+* 新規回帰 16 件（全件、旧コードで落ちることを確認）。**498 → 514 tests: 514 pass。** OpenAlex 消費 $0.0013。
+
+---
+
 ## 2026-09-25（CL-0114） F-33-S: byserendipity の facet 取得も 504 の立ち上がりを待ち切る＋回復 facet の採用数 0 表示を修正
 
 ### 概要

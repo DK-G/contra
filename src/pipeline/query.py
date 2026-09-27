@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from src.core.models import ThemeInput
 
@@ -372,6 +372,62 @@ def resolve_subfield_ids(field_name: str, vocabulary: Dict[str, str]) -> List[st
     return sorted(set(hits))
 
 
+def load_subfield_taxonomy_rows(path: Optional[Path] = None) -> List[Tuple[str, str, str]]:
+    """Cached taxonomy as ``(subfield_id, name, parent_field_id)`` rows (``[]`` when absent)."""
+    target = Path(path) if path else SUBFIELD_TAXONOMY_PATH
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [(str(r[0]), str(r[1]), str(r[2])) for r in raw
+            if isinstance(r, (list, tuple)) and len(r) >= 3]
+
+
+# F-37 (2026-09-27): home exclusion (byserendipity) and seed scoping (bybridge) key on
+# resolve_field_ids(scope.field), and an empty result switched both off without a word. The
+# hindsight test lost it twice — "Satellite navigation (GNSS positioning)" matches no Field
+# (five GNSS papers came back as far-domain candidates) and "Neurology" is a Subfield name
+# (under both Medicine and Neuroscience) — and a broad match was just as invisible:
+# "Biomedical engineering (...)" resolved to the whole Engineering Field and two of three
+# facets were rejected as home_converged. The note says what "home" was taken to mean.
+# Resolution itself is unchanged: turning a Subfield or free text into an exclusion would
+# change which candidates survive, which DIRECTION §4-3 puts behind a quality_eval run.
+_SCOPE_EFFECT = {
+    "exclusion": ("交差候補のホーム除外と home_converged 判定はこの Field 単位",
+                  "ホーム除外と home_converged 判定は行われていません（ホーム分野の論文が"
+                  "交差候補に混ざりえます）"),
+    "seed_scope": ("語彙シードの検索をこの Field に限定（F-13）",
+                   "語彙シードの field 限定は行われていません（シード名簿が別分野へ漂流しえます・"
+                   "F-13。交差候補のホーム除外はシード名簿から決まる＝F-32 の行）"),
+}
+
+
+def home_scope_note(field_text: str, field_ids: Sequence[str], *, use: str = "exclusion") -> str:
+    """One line naming what ``scope.field`` resolved to, or that it resolved to nothing."""
+    text = " ".join((field_text or "").split())
+    done, off = _SCOPE_EFFECT[use]
+    if field_ids:
+        names = " / ".join(OPENALEX_FIELDS.get(str(f), str(f)) for f in field_ids)
+        return f"ホーム分野（scope_field '{text}'）→ OpenAlex Field: {names}（{done}）"
+    rows = load_subfield_taxonomy_rows()
+    sub_ids = set(resolve_subfield_ids(text, {sid: name for sid, name, _ in rows}))
+    parents: List[str] = []
+    for sid, _name, fid in rows:
+        name = OPENALEX_FIELDS.get(fid)
+        if sid in sub_ids and name and name not in parents:
+            parents.append(name)
+    if parents:
+        hint = (f"'{text}' は Subfield 名です（親 Field: {' / '.join(parents)}）。効かせるなら "
+                "scope_field にその Field 名を指定してください。")
+    else:
+        hint = ("効かせるなら scope_field を OpenAlex の Field 名で指定してください: "
+                + " / ".join(sorted(OPENALEX_FIELDS.values())) + "。")
+    return (f"⚠ ホーム分野（scope_field '{text}'）は OpenAlex の Field に解決しませんでした → "
+            f"{off}・F-37。{hint}")
+
+
 def subfield_labels(subfield_ids: Iterable[str], vocabulary: Dict[str, str]) -> str:
     """Human-readable names for resolved Subfield ids (diagnostics label)."""
     seen: List[str] = []
@@ -428,6 +484,8 @@ __all__ = [
     "structured_query_variants",
     "resolve_field_ids",
     "resolve_subfield_ids",
+    "home_scope_note",
+    "load_subfield_taxonomy_rows",
     "subfield_labels",
     "subfield_vocabulary",
     "load_subfield_taxonomy",

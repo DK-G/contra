@@ -290,3 +290,52 @@ def test_facet_patience_can_be_turned_off(monkeypatch):
     collect_track_b_from_spec(_theme(), spec, CollectConfig(facet_gateway_patience_sec=0),
                               max_count=60, home_field_ids=["17"])
     assert client.config.gateway_patience_sec == 0
+
+
+# --- F-35 (2026-09-27): the breakdown line flagged every recovered facet as "収穫0" --------
+# F-33-S fixed the selected-count tally (startswith("ok")) but _facet_breakdown_line kept the
+# exact `status != "ok"` test, so a facet whose status carried a recovery note was listed as
+# 0-harvest while it had submitted 20. Observed on all 3 facets in 3 of 4 hindsight runs,
+# next to "facet 3 件 -> 候補 60 件".
+
+def test_breakdown_line_counts_an_annotated_ok_facet_as_harvested():
+    line = _facet_breakdown_line([
+        {"domain": "Hydrology", "status": "ok（504 を 2 回受け 29.6 秒待って回復・F-33）",
+         "returned": 50, "kept": 38, "selected": 20},
+        {"domain": "Population ecology", "status": "ok（400 のためクエリを短縮して再取得・F-16）",
+         "returned": 50, "kept": 30, "selected": 20},
+        {"domain": "Neuro", "status": "ok", "returned": 50, "kept": 30, "selected": 20},
+    ])
+    assert "収穫0" not in line
+    assert line.count("提出 20") == 3
+    assert "504 を 2 回受け" in line          # the recovery note stays visible
+
+
+def test_recovered_facets_from_the_collector_are_not_flagged(monkeypatch):
+    """The live chain: collector annotates the 504 recovery, the breakdown must not flag it."""
+    client = _WarmingClient(["N", "F", "V"])
+    _patch_collector(monkeypatch, client)
+    stats: List[Dict[str, Any]] = []
+    collect_track_b_from_spec(_theme(), _spec(), CollectConfig(), max_count=60,
+                              home_field_ids=["17"], stats_out=stats)
+    assert stats[0]["status"].startswith("ok（504")
+    assert "収穫0" not in _facet_breakdown_line(stats)
+
+
+def test_zero_harvest_advice_depends_on_the_cause():
+    """Re-sending a home_converged facet returns the same verdict (hindsight run V was told to
+    re-send two home_converged facets). Only transport failures are worth re-sending."""
+    line = _facet_breakdown_line([
+        {"domain": "geochron", "status": "取得失敗 (request failed after 14 attempts: HTTP Error 504: "
+         "Gateway Timeout（504 を 14 回・185.3 秒待って未回復・F-33）)",
+         "returned": 0, "kept": 0, "selected": 0},
+        {"domain": "batteries", "status": "棄却 (home_converged)", "returned": 50, "kept": 0, "selected": 0},
+        {"domain": "hvac", "status": "ok", "returned": 50, "kept": 0, "selected": 0},
+    ])
+    warn = [l for l in line.splitlines() if l.startswith("⚠")]
+    resend = [l for l in warn if "単独" in l]
+    assert len(resend) == 1 and "geochron" in resend[0]
+    assert "batteries" not in resend[0] and "hvac" not in resend[0]
+    revise = [l for l in warn if "batteries" in l]
+    assert len(revise) == 1 and "遠い" in revise[0] and "単独" not in revise[0]
+    assert any("hvac" in l for l in warn)

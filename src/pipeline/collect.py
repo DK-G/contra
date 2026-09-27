@@ -1056,7 +1056,7 @@ def _collect_track_b_semantic(
     client_cfg = getattr(collector.client, "config", None)
     if client_cfg is not None:
         client_cfg.gateway_patience_sec = max(0.0, cfg.facet_gateway_patience_sec)
-    for facet in spec.facets:
+    for facet_no, facet in enumerate(spec.facets, 1):
         rec: Dict[str, Any] = {"domain": facet.domain, "status": "ok",
                                "returned": 0, "kept": 0, "selected": 0}
         stats.append(rec)
@@ -1117,6 +1117,10 @@ def _collect_track_b_semantic(
                     seen_titles.add(norm_title)
                 if norm_doi:
                     seen_dois.add(norm_doi)
+                # F-38: the raw materials name the distance band each candidate came from
+                # (the 2026-09-27 caller had to infer it from the interleaved order).
+                w.source_meta = {**(w.source_meta or {}),
+                                 "serendipity_facet": f"[{facet_no}] {facet.domain}"}
                 bucket.append(w)
         rec["kept"] = len(bucket)
         buckets.append(bucket)

@@ -53,8 +53,10 @@ from src.pipeline.collect import (
 )
 from src.pipeline.theme_fit import matched_summary
 from src.pipeline.query import (
+    OPENALEX_FIELDS,
     dominant_field_ids,
     dominant_topic_ids,
+    home_scope_note,
     resolve_field_ids,
     resolve_subfield_ids,
     subfield_labels,
@@ -214,6 +216,21 @@ def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_
     return len(ids)
 
 
+def _materials_json(materials: List[Dict[str, Any]]) -> str:
+    """Candidate materials as valid JSON with one candidate field per line (F-38).
+
+    ``json.dumps`` put 60 candidates on ONE line of 190k-307k chars (2026-09-27): the harness
+    saved it to a file that Read could not page, and the caller cut it apart with Grep. One
+    field per line keeps every line about as long as the longest abstract.
+    """
+    rows = []
+    for m in materials:
+        fields = [f"{json.dumps(k, ensure_ascii=False)}: {json.dumps(v, ensure_ascii=False)}"
+                  for k, v in m.items()]
+        rows.append("{" + ",\n ".join(fields) + "}")
+    return "[\n" + ",\n".join(rows) + "\n]"
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -224,25 +241,48 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     if not stats:
         return ""
     parts: List[str] = []
-    empty: List[str] = []
+    failed: List[str] = []    # transport / not queried — re-sending the facet alone can help
+    rejected: List[str] = []  # 棄却 — a verdict on the results; re-sending returns the same
+    emptied: List[str] = []   # fetched, but nothing survived exclusion / dedup
     for i, r in enumerate(stats, 1):
         dom = r.get("domain") or f"facet{i}"
-        if r.get("status") != "ok":
-            parts.append(f"[{i}] {dom}: {r.get('status')}")
-            empty.append(dom)
+        status = str(r.get("status") or "")
+        # F-35 (2026-09-27): a recovered facet's status carries a note ("ok（504 …）" F-33,
+        # "ok（400 …）" F-16). The exact `!= "ok"` test here — the same hole F-33-S closed in
+        # the collector's tally — listed every such facet as 0-harvest next to its 20
+        # submissions (all 3 facets, 3 of 4 hindsight runs).
+        if not status.startswith("ok"):
+            parts.append(f"[{i}] {dom}: {status}")
+            (rejected if status.startswith("棄却") else failed).append(dom)
             continue
         sel = r.get("selected", 0)
+        note = status[len("ok"):]
         parts.append(
-            f"[{i}] {dom}: 返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+            f"[{i}] {dom}: " + (f"ok{note} / " if note else "")
+            + f"返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
         )
         if not sel:
-            empty.append(dom)
+            emptied.append(dom)
     line = "★facet 別内訳: " + " ・ ".join(parts)
-    if empty:
+    missing = "この距離段は今回の材料に含まれていません。"
+    if failed:
         line += (
-            "\n⚠ 収穫0の facet: " + ", ".join(empty) + "。この距離段は今回の材料に含まれていません"
-            "（A2 の3距離が実質的に潰れている状態）。その距離を確実に引くには、当該 facet を単独の"
-            "呼び出しで投げ直してください。"
+            f"\n⚠ 収穫0の facet: {', '.join(failed)}（取得失敗）。{missing}504 なら数分おいて"
+            "当該 facet を単独の呼び出しで投げ直してください（400 は pseudo_abstract を短く・"
+            "429 は時間をおく）。"
+        )
+    if rejected:
+        line += (
+            f"\n⚠ 収穫0の facet: {', '.join(rejected)}（棄却）。{missing}棄却は検索結果の性質に"
+            "対する判定なので、同じ facet を投げ直しても同じ結果になります——facet をより遠い"
+            "具体ドメインへ見直してください（home_converged ＝ 結果がホーム分野に収束。何を"
+            "ホームとしたかは scope_field の行を参照）。"
+        )
+    if emptied:
+        line += (
+            f"\n⚠ 収穫0の facet: {', '.join(emptied)}（取得は成功・ホーム除外／重複／履歴除外で"
+            f"提出 0）。{missing}facet をより遠い具体ドメインへ見直すか、履歴除外が原因なら "
+            "no_history を検討してください。"
         )
     return line
 
@@ -293,6 +333,34 @@ def _keywords_prop(label: str) -> Dict[str, Any]:
             "description": f"{label} (MAX {MAX_KEYWORDS} — more raises InputValidationError)."}
 
 
+# F-34 (2026-09-27): F-21's twin on scope_field — the validator demanded a non-empty
+# scope.field while every theme tool left it out of `required`, so the first call of each
+# hindsight run (4/4) and the seihai 2026-09-26 byrepo call failed on "scope.field is
+# required". A default was rejected: in byserendipity/bybridge the value is what home
+# exclusion and seed scoping resolve against, and an empty default would switch both off
+# silently (the F-37 failure). One list keeps the four tools' `required` from drifting apart.
+_THEME_REQUIRED = ["theme_overview", "goal", "why_problem", "assumptions", "scope_field"]
+
+
+def _scope_field_prop(use: str) -> Dict[str, Any]:
+    """``scope_field`` description; where it drives exclusion/scoping it lists the Field names."""
+    fields = " / ".join(sorted(OPENALEX_FIELDS.values()))
+    if use == "exclusion":
+        effect = ("byserendipity drops candidates filed under that Field and rejects facets "
+                  "that converge on it")
+    elif use == "seed_scope":
+        effect = "bybridge scopes its lexical seed queries to that Field (F-13)"
+    else:
+        return {"type": "string", "description": (
+            f"REQUIRED (the validator rejects an empty value). {use}")}
+    return {"type": "string", "description": (
+        "REQUIRED. The theme's home field of study. Name one of the 26 OpenAlex Fields so that "
+        f"{effect}: {fields}. Text that resolves to no Field (a Subfield name such as "
+        "'Neurology', or free text such as 'Satellite navigation') switches that off, and the "
+        "output says so (F-37); broad names resolve broadly ('Biomedical engineering' -> the "
+        "whole Engineering Field).")}
+
+
 # F-26: below this many surviving seeds, a bybridge run cannot be told apart from a healthy
 # one by its output shape, so it refuses instead. Calibrated on the observed failure (2 seeds
 # produced a full 30-candidate answer about clinical gait analysis) and on the healthy runs of
@@ -317,7 +385,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("exclusion"),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -334,7 +402,7 @@ class StdinMcpServer:
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
                         "used_dois": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed DOI exclusions, merged with the file history."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -348,7 +416,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("Core field of study; also a query/relevance token."),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -359,7 +427,7 @@ class StdinMcpServer:
                         "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface", "kaggle"]}, "description": "Practical-anchor sources to search: 'github' (repositories), 'huggingface' (Hub models + datasets), and/or 'kaggle' (datasets + notebooks; needs KAGGLE_API_TOKEN or KAGGLE_USERNAME/KAGGLE_KEY, silently skipped when unset). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface", "kaggle"]},
                         "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -385,7 +453,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string", "description": "Why this is a hard problem or bottleneck."},
                         "approach_type": _approach_type_prop(),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string", "description": "Core field of study."},
+                        "scope_field": _scope_field_prop("seed_scope"),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Include keywords (MAX 5 — more raises InputValidationError). For byrepo these drive the relevance ranking term: a keyword matching a repo's name/description/topics earns full relevance credit."},
@@ -410,7 +478,7 @@ class StdinMcpServer:
                         "seed_semantic_keep_offfield": {"type": "boolean", "description": "Keep semantic-leg seeds whose OpenAlex Field is not the home Field, ranked behind the home ones (F-27). The hard keep dropped this leg's most on-topic seeds, because OpenAlex files method-side work under Computer Science / Decision Sciences / Mathematics. false restores the pre-2026-09-12 hard keep.", "default": True},
                         "seed_semantic_text": {"type": "string", "description": "Optional English pseudo-abstract (~80 words, <=1200 chars) for the semantic seed leg — the same kind of text as byserendipity facets[].pseudo_abstract. Recommended whenever theme_overview is not in English: it replaces the theme prose as the search.semantic query. The diagnostics line 'semantic レッグ内訳' shows which text was sent and where its results were dropped."}
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions"]
+                    "required": list(_THEME_REQUIRED)
                 }
             },
             {
@@ -431,7 +499,7 @@ class StdinMcpServer:
                         "why_problem": {"type": "string"},
                         "approach_type": _approach_type_prop("experiment"),
                         "assumptions": _assumptions_prop(),
-                        "scope_field": {"type": "string"},
+                        "scope_field": _scope_field_prop("Send the same value as the collect call it finalizes."),
                         "scope_scale": _scale_prop(),
                         "scope_time_range": _time_range_prop(),
                         "keywords_include": _keywords_prop("Include keywords"),
@@ -479,7 +547,7 @@ class StdinMcpServer:
                             }
                         }
                     },
-                    "required": ["theme_overview", "goal", "why_problem", "assumptions", "candidates"]
+                    "required": _THEME_REQUIRED + ["candidates"]
                 }
             }
         ]
@@ -615,12 +683,15 @@ class StdinMcpServer:
         used_ids, used_titles, used_dois = _history_exclusions(theme, args)
         _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
         facet_stats: List[Dict[str, Any]] = []
+        home_ids = resolve_field_ids(theme.scope.field)
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
-            stats_out=facet_stats,
+            home_field_ids=home_ids, stats_out=facet_stats,
         )
-        facet_diag = _facet_breakdown_line(facet_stats)
+        # F-37: what "home" was taken to mean, stated before the facet verdicts that rely on it.
+        facet_diag = (home_scope_note(theme.scope.field, home_ids) + "\n"
+                      + _facet_breakdown_line(facet_stats))
         if not works:
             return {
                 "content": [{"type": "text", "text": (
@@ -644,12 +715,20 @@ class StdinMcpServer:
                 )}],
                 "isError": False,
             }
-        materials = [material_from_work(w) for w in works]
+        # F-38: each candidate names its facet, and referenced_works (read only on the bridge
+        # path; 32% of a 289k-char output on 2026-09-27) is left out.
+        materials = []
+        for w in works:
+            m = material_from_work(w, include_references=False)
+            facet = (w.source_meta or {}).get("serendipity_facet")
+            materials.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
         diag = (
             facet_diag + "\n"
             f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
-            f"（semantic・ホームドメイン除外済・キー無し{hist_note}）。各候補を purpose_sim/mechanism_dist 等で"
+            f"（semantic・{'ホームドメイン除外済' if home_ids else 'ホームドメイン除外なし（F-37）'}"
+            f"・キー無し{hist_note}）。各候補の facet 欄はその候補を引いた facet（距離段）。"
+            "各候補を purpose_sim/mechanism_dist 等で"
             "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
             "★接地契約: relationship / serendipity_rationale を書く場合は、その主張が対応づける"
             "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
@@ -657,7 +736,7 @@ class StdinMcpServer:
             "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
         )
         return {
-            "content": [{"type": "text", "text": diag + "\n\n" + json.dumps(materials, ensure_ascii=False)}],
+            "content": [{"type": "text", "text": diag + "\n\n" + _materials_json(materials)}],
             "isError": False,
         }
 
@@ -855,6 +934,9 @@ class StdinMcpServer:
         home_ids = resolve_field_ids(theme.scope.field)
         seed_field_scope = bool(args.get("seed_field_scope", True))
         scope_ids = home_ids if seed_field_scope else []
+        # F-37: an unresolved scope leaves the lexical seed search unscoped without a word.
+        scope_note = (home_scope_note(theme.scope.field, home_ids, use="seed_scope")
+                      if seed_field_scope else "")
         lex_seeds = collect_and_filter(
             theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True,
             home_field_ids=scope_ids,
@@ -926,6 +1008,7 @@ class StdinMcpServer:
                     f"- 言語ゲート（seed_language={seed_language!r}）で除外 {lang_dropped} 件\n"
                     f"- referenced_works が空で除外 {dead_seed_count} 件\n"
                     + (render_semantic_leg(sem_report) + "\n" if sem_report else "")
+                    + (f"- {scope_note}\n" if scope_note and not home_ids else "")
                     + "- 打ち手: (a) 言語ゲートを外す（`seed_language: null`）——日本語テーマでは"
                       "語彙シードの大半が日本語誌に落ちます。(b) 英語の擬似アブストラクトを "
                       "`seed_semantic_text` に渡して semantic レッグを効かせる。(c) キーワードを"
@@ -1070,6 +1153,8 @@ class StdinMcpServer:
                 f"- シード言語ゲート (C(iii)): 言語 '{seed_language}' 以外のレコード "
                 f"{lang_dropped} 件をシード候補から除外（seed_language:null で無効化可）\n" + diag_line
             )
+        if scope_note and (diagnostics or not home_ids):
+            diag_line = f"- {scope_note}\n" + diag_line
         if not cands:
             head = (
                 f"citation 2-hop で交差候補が見つかりませんでした"
@@ -1109,7 +1194,7 @@ class StdinMcpServer:
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
                 "抜粋できない主張は書かないでください——contra が決定論的に照合し、照合失敗の散文は棄却されます。"
             )
-            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + json.dumps(mats, ensure_ascii=False)
+            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + _materials_json(mats)
             return {"content": [{"type": "text", "text": body}], "isError": False}
 
         if raw_only:
@@ -1123,9 +1208,11 @@ class StdinMcpServer:
                 )
                 md = render_markdown(doc)
                 return _external_data_result(f"{diag_line}\n\n{md}")
-            lines = [f"## Bybridge 交差候補（raw）", diag_line, ""]
-            ranked = ranked_all
-            for i, w in enumerate(ranked[:max(target_count, 10)], 1):
+            # F-38: the diagnostics said "交差候補 60 件" and the list stopped at
+            # max(bridge_count, 10) — the 2026-09-27 caller saw 10 of 60. Raw means all of them.
+            lines = [f"## Bybridge 交差候補（raw・全 {len(ranked_all)} 件・構造的関連度順。"
+                     "上位 10 件は bridge ごとの偏りを抑えて並べ替え済み）", diag_line, ""]
+            for i, w in enumerate(ranked_all, 1):
                 betw = int((w.source_meta or {}).get("bridge_betweenness", 0) or 0)
                 lines.append(f"{i}. {w.title}")
                 lines.append(f"   - 共有bridge: {shared_bridge_count(w, bridges)}本 | 異分野ブリッジ: {betw} | 年: {w.year} | 掲載: {w.venue} | 被引用: {w.cited_by_count}")

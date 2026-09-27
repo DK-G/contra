@@ -170,3 +170,41 @@ def test_rejection_messages_name_the_allowed_set_and_the_value():
     with pytest.raises(InputValidationError) as e:
         validate_and_normalize(_v(assumptions=[]))
     assert "got 0" in str(e.value)
+
+
+# --- F-34 (2026-09-27): the schema's `required` set must be enough for the validator ------
+# F-21's twin on another key: scope_field sat outside `required` while the validator demanded
+# a non-empty scope.field. Every first call of the 2026-09-27 hindsight test (4/4, via
+# byserendipity_discover) and the seihai 2026-09-26 byrepo call failed with
+# "scope.field is required" and cost a round trip.
+
+def _minimal_value(key, prop):
+    from src.core.input_schema import MIN_OVERVIEW_CHARS
+    if key == "theme_overview":
+        return "x" * MIN_OVERVIEW_CHARS
+    if prop.get("type") == "array":
+        return ["item" + str(i) for i in range(prop.get("minItems", 0))]
+    if "enum" in prop:
+        return prop["default"]
+    return "x"
+
+
+def test_schema_required_args_alone_pass_the_validator():
+    from src.mcp_server import _build_theme_input
+    for tool in _theme_tools():
+        schema = tool["inputSchema"]
+        args = {k: _minimal_value(k, schema["properties"][k]) for k in schema["required"]}
+        try:
+            _build_theme_input(args)
+        except InputValidationError as exc:
+            raise AssertionError(f"{tool['name']}: schema-required args rejected: {exc}")
+
+
+def test_scope_field_description_names_the_openalex_fields_where_it_drives_exclusion():
+    """F-37: home exclusion keys on scope_field resolving to an OpenAlex Field, so the tools
+    that exclude/scope by it say which names resolve."""
+    for tool in _theme_tools():
+        if tool["name"] not in ("byserendipity_discover", "bybridge_collect"):
+            continue
+        desc = tool["inputSchema"]["properties"]["scope_field"]["description"]
+        assert "Neuroscience" in desc and "Engineering" in desc, tool["name"]

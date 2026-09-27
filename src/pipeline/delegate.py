@@ -184,13 +184,16 @@ def work_from_material(material: Dict[str, Any]) -> Work:
     )
 
 
-def material_from_work(work: Work) -> Dict[str, Any]:
+def material_from_work(work: Work, *, include_references: bool = True) -> Dict[str, Any]:
     """Serialize a Work into the candidate-material dict the agent scores and echoes back.
 
     The inverse of :func:`work_from_material`: contra's key-free raw collection emits these so the
     calling agent can score them and pass the scored list to :func:`finalize_delegated_document`
     (the ``delegate_finalize`` MCP tool). Carries exactly the fields ``work_from_material`` reads,
     so a round-trip preserves the Work.
+
+    ``include_references=False`` drops ``referenced_works`` (F-38): only the bridge path reads it,
+    and on the byserendipity path it was 32% of a 289k-char output nobody downstream used.
     """
     material = {
         "id": work.id,
@@ -208,6 +211,8 @@ def material_from_work(work: Work) -> Dict[str, Any]:
         "referenced_works": list(work.referenced_works or []),
         "publication_type": work.publication_type,
     }
+    if not include_references:
+        del material["referenced_works"]
     # F-19-R residue (2026-09-14 / 09-17): OpenAlex sometimes has no venue (or abstract) for a
     # work, contra emits "", the caller echoes it faithfully — and finalize then told the caller
     # it had dropped the field. Mark the gap at its source; the mark rides along in the echo.

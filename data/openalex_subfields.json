@@ -1,0 +1,1262 @@
+[
+ [
+  "1100",
+  "General Agricultural and Biological Sciences",
+  "11"
+ ],
+ [
+  "1102",
+  "Agronomy and Crop Science",
+  "11"
+ ],
+ [
+  "1103",
+  "Animal Science and Zoology",
+  "11"
+ ],
+ [
+  "1104",
+  "Aquatic Science",
+  "11"
+ ],
+ [
+  "1105",
+  "Ecology, Evolution, Behavior and Systematics",
+  "11"
+ ],
+ [
+  "1106",
+  "Food Science",
+  "11"
+ ],
+ [
+  "1107",
+  "Forestry",
+  "11"
+ ],
+ [
+  "1108",
+  "Horticulture",
+  "11"
+ ],
+ [
+  "1109",
+  "Insect Science",
+  "11"
+ ],
+ [
+  "1110",
+  "Plant Science",
+  "11"
+ ],
+ [
+  "1111",
+  "Soil Science",
+  "11"
+ ],
+ [
+  "1200",
+  "General Arts and Humanities",
+  "12"
+ ],
+ [
+  "1202",
+  "History",
+  "12"
+ ],
+ [
+  "1203",
+  "Language and Linguistics",
+  "12"
+ ],
+ [
+  "1204",
+  "Archeology",
+  "12"
+ ],
+ [
+  "1205",
+  "Classics",
+  "12"
+ ],
+ [
+  "1206",
+  "Conservation",
+  "12"
+ ],
+ [
+  "1207",
+  "History and Philosophy of Science",
+  "12"
+ ],
+ [
+  "1208",
+  "Literature and Literary Theory",
+  "12"
+ ],
+ [
+  "1209",
+  "Museology",
+  "12"
+ ],
+ [
+  "1210",
+  "Music",
+  "12"
+ ],
+ [
+  "1211",
+  "Philosophy",
+  "12"
+ ],
+ [
+  "1212",
+  "Religious studies",
+  "12"
+ ],
+ [
+  "1213",
+  "Visual Arts and Performing Arts",
+  "12"
+ ],
+ [
+  "1302",
+  "Aging",
+  "13"
+ ],
+ [
+  "1303",
+  "Biochemistry",
+  "13"
+ ],
+ [
+  "1304",
+  "Biophysics",
+  "13"
+ ],
+ [
+  "1305",
+  "Biotechnology",
+  "13"
+ ],
+ [
+  "1306",
+  "Cancer Research",
+  "13"
+ ],
+ [
+  "1307",
+  "Cell Biology",
+  "13"
+ ],
+ [
+  "1308",
+  "Clinical Biochemistry",
+  "13"
+ ],
+ [
+  "1309",
+  "Developmental Biology",
+  "13"
+ ],
+ [
+  "1310",
+  "Endocrinology",
+  "13"
+ ],
+ [
+  "1311",
+  "Genetics",
+  "13"
+ ],
+ [
+  "1312",
+  "Molecular Biology",
+  "13"
+ ],
+ [
+  "1313",
+  "Molecular Medicine",
+  "13"
+ ],
+ [
+  "1314",
+  "Physiology",
+  "13"
+ ],
+ [
+  "1315",
+  "Structural Biology",
+  "13"
+ ],
+ [
+  "1402",
+  "Accounting",
+  "14"
+ ],
+ [
+  "1403",
+  "Business and International Management",
+  "14"
+ ],
+ [
+  "1404",
+  "Management Information Systems",
+  "14"
+ ],
+ [
+  "1405",
+  "Management of Technology and Innovation",
+  "14"
+ ],
+ [
+  "1406",
+  "Marketing",
+  "14"
+ ],
+ [
+  "1407",
+  "Organizational Behavior and Human Resource Management",
+  "14"
+ ],
+ [
+  "1408",
+  "Strategy and Management",
+  "14"
+ ],
+ [
+  "1409",
+  "Tourism, Leisure and Hospitality Management",
+  "14"
+ ],
+ [
+  "1410",
+  "Industrial relations",
+  "14"
+ ],
+ [
+  "1502",
+  "Bioengineering",
+  "15"
+ ],
+ [
+  "1503",
+  "Catalysis",
+  "15"
+ ],
+ [
+  "1504",
+  "Chemical Health and Safety",
+  "15"
+ ],
+ [
+  "1506",
+  "Filtration and Separation",
+  "15"
+ ],
+ [
+  "1507",
+  "Fluid Flow and Transfer Processes",
+  "15"
+ ],
+ [
+  "1508",
+  "Process Chemistry and Technology",
+  "15"
+ ],
+ [
+  "1602",
+  "Analytical Chemistry",
+  "16"
+ ],
+ [
+  "1603",
+  "Electrochemistry",
+  "16"
+ ],
+ [
+  "1604",
+  "Inorganic Chemistry",
+  "16"
+ ],
+ [
+  "1605",
+  "Organic Chemistry",
+  "16"
+ ],
+ [
+  "1606",
+  "Physical and Theoretical Chemistry",
+  "16"
+ ],
+ [
+  "1607",
+  "Spectroscopy",
+  "16"
+ ],
+ [
+  "1702",
+  "Artificial Intelligence",
+  "17"
+ ],
+ [
+  "1703",
+  "Computational Theory and Mathematics",
+  "17"
+ ],
+ [
+  "1704",
+  "Computer Graphics and Computer-Aided Design",
+  "17"
+ ],
+ [
+  "1705",
+  "Computer Networks and Communications",
+  "17"
+ ],
+ [
+  "1706",
+  "Computer Science Applications",
+  "17"
+ ],
+ [
+  "1707",
+  "Computer Vision and Pattern Recognition",
+  "17"
+ ],
+ [
+  "1708",
+  "Hardware and Architecture",
+  "17"
+ ],
+ [
+  "1709",
+  "Human-Computer Interaction",
+  "17"
+ ],
+ [
+  "1710",
+  "Information Systems",
+  "17"
+ ],
+ [
+  "1711",
+  "Signal Processing",
+  "17"
+ ],
+ [
+  "1712",
+  "Software",
+  "17"
+ ],
+ [
+  "1800",
+  "General Decision Sciences",
+  "18"
+ ],
+ [
+  "1802",
+  "Information Systems and Management",
+  "18"
+ ],
+ [
+  "1803",
+  "Management Science and Operations Research",
+  "18"
+ ],
+ [
+  "1804",
+  "Statistics, Probability and Uncertainty",
+  "18"
+ ],
+ [
+  "1902",
+  "Atmospheric Science",
+  "19"
+ ],
+ [
+  "1904",
+  "Earth-Surface Processes",
+  "19"
+ ],
+ [
+  "1906",
+  "Geochemistry and Petrology",
+  "19"
+ ],
+ [
+  "1907",
+  "Geology",
+  "19"
+ ],
+ [
+  "1908",
+  "Geophysics",
+  "19"
+ ],
+ [
+  "1910",
+  "Oceanography",
+  "19"
+ ],
+ [
+  "1911",
+  "Paleontology",
+  "19"
+ ],
+ [
+  "1912",
+  "Space and Planetary Science",
+  "19"
+ ],
+ [
+  "2000",
+  "General Economics, Econometrics and Finance",
+  "20"
+ ],
+ [
+  "2002",
+  "Economics and Econometrics",
+  "20"
+ ],
+ [
+  "2003",
+  "Finance",
+  "20"
+ ],
+ [
+  "2100",
+  "General Energy",
+  "21"
+ ],
+ [
+  "2102",
+  "Energy Engineering and Power Technology",
+  "21"
+ ],
+ [
+  "2103",
+  "Fuel Technology",
+  "21"
+ ],
+ [
+  "2104",
+  "Nuclear Energy and Engineering",
+  "21"
+ ],
+ [
+  "2105",
+  "Renewable Energy, Sustainability and the Environment",
+  "21"
+ ],
+ [
+  "2200",
+  "General Engineering",
+  "22"
+ ],
+ [
+  "2202",
+  "Aerospace Engineering",
+  "22"
+ ],
+ [
+  "2203",
+  "Automotive Engineering",
+  "22"
+ ],
+ [
+  "2204",
+  "Biomedical Engineering",
+  "22"
+ ],
+ [
+  "2205",
+  "Civil and Structural Engineering",
+  "22"
+ ],
+ [
+  "2206",
+  "Computational Mechanics",
+  "22"
+ ],
+ [
+  "2207",
+  "Control and Systems Engineering",
+  "22"
+ ],
+ [
+  "2208",
+  "Electrical and Electronic Engineering",
+  "22"
+ ],
+ [
+  "2209",
+  "Industrial and Manufacturing Engineering",
+  "22"
+ ],
+ [
+  "2210",
+  "Mechanical Engineering",
+  "22"
+ ],
+ [
+  "2211",
+  "Mechanics of Materials",
+  "22"
+ ],
+ [
+  "2212",
+  "Ocean Engineering",
+  "22"
+ ],
+ [
+  "2213",
+  "Safety, Risk, Reliability and Quality",
+  "22"
+ ],
+ [
+  "2214",
+  "Media Technology",
+  "22"
+ ],
+ [
+  "2215",
+  "Building and Construction",
+  "22"
+ ],
+ [
+  "2216",
+  "Architecture",
+  "22"
+ ],
+ [
+  "2302",
+  "Ecological Modeling",
+  "23"
+ ],
+ [
+  "2303",
+  "Ecology",
+  "23"
+ ],
+ [
+  "2304",
+  "Environmental Chemistry",
+  "23"
+ ],
+ [
+  "2305",
+  "Environmental Engineering",
+  "23"
+ ],
+ [
+  "2306",
+  "Global and Planetary Change",
+  "23"
+ ],
+ [
+  "2307",
+  "Health, Toxicology and Mutagenesis",
+  "23"
+ ],
+ [
+  "2308",
+  "Management, Monitoring, Policy and Law",
+  "23"
+ ],
+ [
+  "2309",
+  "Nature and Landscape Conservation",
+  "23"
+ ],
+ [
+  "2310",
+  "Pollution",
+  "23"
+ ],
+ [
+  "2311",
+  "Waste Management and Disposal",
+  "23"
+ ],
+ [
+  "2312",
+  "Water Science and Technology",
+  "23"
+ ],
+ [
+  "2402",
+  "Applied Microbiology and Biotechnology",
+  "24"
+ ],
+ [
+  "2403",
+  "Immunology",
+  "24"
+ ],
+ [
+  "2404",
+  "Microbiology",
+  "24"
+ ],
+ [
+  "2405",
+  "Parasitology",
+  "24"
+ ],
+ [
+  "2406",
+  "Virology",
+  "24"
+ ],
+ [
+  "2500",
+  "General Materials Science",
+  "25"
+ ],
+ [
+  "2502",
+  "Biomaterials",
+  "25"
+ ],
+ [
+  "2503",
+  "Ceramics and Composites",
+  "25"
+ ],
+ [
+  "2504",
+  "Electronic, Optical and Magnetic Materials",
+  "25"
+ ],
+ [
+  "2505",
+  "Materials Chemistry",
+  "25"
+ ],
+ [
+  "2506",
+  "Metals and Alloys",
+  "25"
+ ],
+ [
+  "2507",
+  "Polymers and Plastics",
+  "25"
+ ],
+ [
+  "2508",
+  "Surfaces, Coatings and Films",
+  "25"
+ ],
+ [
+  "2602",
+  "Algebra and Number Theory",
+  "26"
+ ],
+ [
+  "2604",
+  "Applied Mathematics",
+  "26"
+ ],
+ [
+  "2605",
+  "Computational Mathematics",
+  "26"
+ ],
+ [
+  "2607",
+  "Discrete Mathematics and Combinatorics",
+  "26"
+ ],
+ [
+  "2608",
+  "Geometry and Topology",
+  "26"
+ ],
+ [
+  "2610",
+  "Mathematical Physics",
+  "26"
+ ],
+ [
+  "2611",
+  "Modeling and Simulation",
+  "26"
+ ],
+ [
+  "2612",
+  "Numerical Analysis",
+  "26"
+ ],
+ [
+  "2613",
+  "Statistics and Probability",
+  "26"
+ ],
+ [
+  "2614",
+  "Theoretical Computer Science",
+  "26"
+ ],
+ [
+  "2702",
+  "Anatomy",
+  "27"
+ ],
+ [
+  "2703",
+  "Anesthesiology and Pain Medicine",
+  "27"
+ ],
+ [
+  "2704",
+  "Biochemistry",
+  "27"
+ ],
+ [
+  "2705",
+  "Cardiology and Cardiovascular Medicine",
+  "27"
+ ],
+ [
+  "2706",
+  "Critical Care and Intensive Care Medicine",
+  "27"
+ ],
+ [
+  "2707",
+  "Complementary and alternative medicine",
+  "27"
+ ],
+ [
+  "2708",
+  "Dermatology",
+  "27"
+ ],
+ [
+  "2711",
+  "Emergency Medicine",
+  "27"
+ ],
+ [
+  "2712",
+  "Endocrinology, Diabetes and Metabolism",
+  "27"
+ ],
+ [
+  "2713",
+  "Epidemiology",
+  "27"
+ ],
+ [
+  "2714",
+  "Family Practice",
+  "27"
+ ],
+ [
+  "2715",
+  "Gastroenterology",
+  "27"
+ ],
+ [
+  "2716",
+  "Genetics",
+  "27"
+ ],
+ [
+  "2717",
+  "Geriatrics and Gerontology",
+  "27"
+ ],
+ [
+  "2718",
+  "Health Informatics",
+  "27"
+ ],
+ [
+  "2720",
+  "Hematology",
+  "27"
+ ],
+ [
+  "2721",
+  "Hepatology",
+  "27"
+ ],
+ [
+  "2723",
+  "Immunology and Allergy",
+  "27"
+ ],
+ [
+  "2724",
+  "Internal Medicine",
+  "27"
+ ],
+ [
+  "2725",
+  "Infectious Diseases",
+  "27"
+ ],
+ [
+  "2726",
+  "Microbiology",
+  "27"
+ ],
+ [
+  "2727",
+  "Nephrology",
+  "27"
+ ],
+ [
+  "2728",
+  "Neurology",
+  "27"
+ ],
+ [
+  "2729",
+  "Obstetrics and Gynecology",
+  "27"
+ ],
+ [
+  "2730",
+  "Oncology",
+  "27"
+ ],
+ [
+  "2731",
+  "Ophthalmology",
+  "27"
+ ],
+ [
+  "2732",
+  "Orthopedics and Sports Medicine",
+  "27"
+ ],
+ [
+  "2733",
+  "Otorhinolaryngology",
+  "27"
+ ],
+ [
+  "2734",
+  "Pathology and Forensic Medicine",
+  "27"
+ ],
+ [
+  "2735",
+  "Pediatrics, Perinatology and Child Health",
+  "27"
+ ],
+ [
+  "2736",
+  "Pharmacology",
+  "27"
+ ],
+ [
+  "2737",
+  "Physiology",
+  "27"
+ ],
+ [
+  "2738",
+  "Psychiatry and Mental health",
+  "27"
+ ],
+ [
+  "2739",
+  "Public Health, Environmental and Occupational Health",
+  "27"
+ ],
+ [
+  "2740",
+  "Pulmonary and Respiratory Medicine",
+  "27"
+ ],
+ [
+  "2741",
+  "Radiology, Nuclear Medicine and Imaging",
+  "27"
+ ],
+ [
+  "2742",
+  "Rehabilitation",
+  "27"
+ ],
+ [
+  "2743",
+  "Reproductive Medicine",
+  "27"
+ ],
+ [
+  "2745",
+  "Rheumatology",
+  "27"
+ ],
+ [
+  "2746",
+  "Surgery",
+  "27"
+ ],
+ [
+  "2747",
+  "Transplantation",
+  "27"
+ ],
+ [
+  "2748",
+  "Urology",
+  "27"
+ ],
+ [
+  "2802",
+  "Behavioral Neuroscience",
+  "28"
+ ],
+ [
+  "2803",
+  "Biological Psychiatry",
+  "28"
+ ],
+ [
+  "2804",
+  "Cellular and Molecular Neuroscience",
+  "28"
+ ],
+ [
+  "2805",
+  "Cognitive Neuroscience",
+  "28"
+ ],
+ [
+  "2806",
+  "Developmental Neuroscience",
+  "28"
+ ],
+ [
+  "2807",
+  "Endocrine and Autonomic Systems",
+  "28"
+ ],
+ [
+  "2808",
+  "Neurology",
+  "28"
+ ],
+ [
+  "2809",
+  "Sensory Systems",
+  "28"
+ ],
+ [
+  "2910",
+  "Issues, ethics and legal aspects",
+  "29"
+ ],
+ [
+  "2911",
+  "Leadership and Management",
+  "29"
+ ],
+ [
+  "2916",
+  "Nutrition and Dietetics",
+  "29"
+ ],
+ [
+  "2922",
+  "Research and Theory",
+  "29"
+ ],
+ [
+  "3002",
+  "Drug Discovery",
+  "30"
+ ],
+ [
+  "3003",
+  "Pharmaceutical Science",
+  "30"
+ ],
+ [
+  "3004",
+  "Pharmacology",
+  "30"
+ ],
+ [
+  "3005",
+  "Toxicology",
+  "30"
+ ],
+ [
+  "3102",
+  "Acoustics and Ultrasonics",
+  "31"
+ ],
+ [
+  "3103",
+  "Astronomy and Astrophysics",
+  "31"
+ ],
+ [
+  "3104",
+  "Condensed Matter Physics",
+  "31"
+ ],
+ [
+  "3105",
+  "Instrumentation",
+  "31"
+ ],
+ [
+  "3106",
+  "Nuclear and High Energy Physics",
+  "31"
+ ],
+ [
+  "3107",
+  "Atomic and Molecular Physics, and Optics",
+  "31"
+ ],
+ [
+  "3108",
+  "Radiation",
+  "31"
+ ],
+ [
+  "3109",
+  "Statistical and Nonlinear Physics",
+  "31"
+ ],
+ [
+  "3200",
+  "General Psychology",
+  "32"
+ ],
+ [
+  "3202",
+  "Applied Psychology",
+  "32"
+ ],
+ [
+  "3203",
+  "Clinical Psychology",
+  "32"
+ ],
+ [
+  "3204",
+  "Developmental and Educational Psychology",
+  "32"
+ ],
+ [
+  "3205",
+  "Experimental and Cognitive Psychology",
+  "32"
+ ],
+ [
+  "3206",
+  "Neuropsychology and Physiological Psychology",
+  "32"
+ ],
+ [
+  "3207",
+  "Social Psychology",
+  "32"
+ ],
+ [
+  "3300",
+  "General Social Sciences",
+  "33"
+ ],
+ [
+  "3302",
+  "Archeology",
+  "33"
+ ],
+ [
+  "3303",
+  "Development",
+  "33"
+ ],
+ [
+  "3304",
+  "Education",
+  "33"
+ ],
+ [
+  "3305",
+  "Geography, Planning and Development",
+  "33"
+ ],
+ [
+  "3306",
+  "Health",
+  "33"
+ ],
+ [
+  "3307",
+  "Human Factors and Ergonomics",
+  "33"
+ ],
+ [
+  "3308",
+  "Law",
+  "33"
+ ],
+ [
+  "3309",
+  "Library and Information Sciences",
+  "33"
+ ],
+ [
+  "3310",
+  "Linguistics and Language",
+  "33"
+ ],
+ [
+  "3311",
+  "Safety Research",
+  "33"
+ ],
+ [
+  "3312",
+  "Sociology and Political Science",
+  "33"
+ ],
+ [
+  "3313",
+  "Transportation",
+  "33"
+ ],
+ [
+  "3314",
+  "Anthropology",
+  "33"
+ ],
+ [
+  "3315",
+  "Communication",
+  "33"
+ ],
+ [
+  "3316",
+  "Cultural Studies",
+  "33"
+ ],
+ [
+  "3317",
+  "Demography",
+  "33"
+ ],
+ [
+  "3318",
+  "Gender Studies",
+  "33"
+ ],
+ [
+  "3319",
+  "Life-span and Life-course Studies",
+  "33"
+ ],
+ [
+  "3320",
+  "Political Science and International Relations",
+  "33"
+ ],
+ [
+  "3321",
+  "Public Administration",
+  "33"
+ ],
+ [
+  "3322",
+  "Urban Studies",
+  "33"
+ ],
+ [
+  "3402",
+  "Equine",
+  "34"
+ ],
+ [
+  "3404",
+  "Small Animals",
+  "34"
+ ],
+ [
+  "3500",
+  "General Dentistry",
+  "35"
+ ],
+ [
+  "3504",
+  "Oral Surgery",
+  "35"
+ ],
+ [
+  "3505",
+  "Orthodontics",
+  "35"
+ ],
+ [
+  "3506",
+  "Periodontics",
+  "35"
+ ],
+ [
+  "3600",
+  "General Health Professions",
+  "36"
+ ],
+ [
+  "3603",
+  "Complementary and Manual Therapy",
+  "36"
+ ],
+ [
+  "3604",
+  "Emergency Medical Services",
+  "36"
+ ],
+ [
+  "3605",
+  "Health Information Management",
+  "36"
+ ],
+ [
+  "3607",
+  "Medical Laboratory Technology",
+  "36"
+ ],
+ [
+  "3608",
+  "Medical Terminology",
+  "36"
+ ],
+ [
+  "3609",
+  "Occupational Therapy",
+  "36"
+ ],
+ [
+  "3611",
+  "Pharmacy",
+  "36"
+ ],
+ [
+  "3612",
+  "Physical Therapy, Sports Therapy and Rehabilitation",
+  "36"
+ ],
+ [
+  "3614",
+  "Radiological and Ultrasound Technology",
+  "36"
+ ],
+ [
+  "3616",
+  "Speech and Hearing",
+  "36"
+ ]
+]
