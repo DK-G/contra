@@ -7,7 +7,7 @@
   2. Track A の discussion 観測は **GitHub Discussions が REST に一覧エンドポイントを持たず GraphQL 専用**のため保留中。着手するなら GraphQL 経路の導入から（dependents も同じ理由で対象外）。
 - ★ブロッカー/外部待ち: 上記1の残5件は**全て「実 LLM API キーが必要」または「人間の質的判断が必要」**。**実装が Done 判定を追い越しており、人間が評価しない限り Phase 1 を閉じられない**のが唯一かつ最大のボトルネック。
 - 直近の重い判断: **Web 化・課金は現時点では実装しない**（必要になったら Phase 2 として再評価）。PRF は bybridge の異分野目的と衝突するため不採用とし Track A 収集へ再配置。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。判断の経緯は `DECISION_LOG.md`。
-- 2026-09-07 統合: `codex/shared-routines`（`docs/agent_rules/bynote.md`）を main へ merge。`feature/bybridge`（6 月の byrepo 拡張・main から 133 遅れ・core 9 ファイル衝突）は**不採用**として origin に残し、ローカル worktree と branch は撤去。
+- ブランチ: 09-27 に整理し、local・origin とも `main` のみ。不採用の `feature/bybridge`（6 月の byrepo 拡張 3 commit）は origin から削除し、ローカルタグ `archive/feature-bybridge` に保存。
 - 09-27: 後知恵テスト（Kaggle 4 題で勝因 0/4）→ F-34〜38 修正と生成・観測過程 facet 追加（DECISION_LOG）、main・push 済み。効果未検証・選別の弱点 F-22 は未着手。
 <!-- CURRENT-END -->
 
