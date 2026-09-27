@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-09-27（CL-0116） byserendipity に生成・観測過程 facet
+
+### 概要
+* `docs/agent_rules/byserendipity.md`: 手順1に「生成・観測過程の棚卸し」（4問）と「生成過程 facet」（3つのうち1つを割り当て・要点は `concern` へ）を追加。手順3に、生成過程 facet の候補は `concern` の文を基準に `purpose_sim` と `theme_quote` を付ける規則を追加。Output Expectations に棚卸しの記録を追加。
+* `DECISION_LOG.md`: 判断と根拠（後知恵テスト・seihai 採用台帳）を記録。
+* コード・スコア式・閾値・本数は不変。
+
+---
+
 ## 2026-09-27（CL-0115） 後知恵テスト由来の不具合 5 件（F-34〜F-38）
 
 ### 概要
