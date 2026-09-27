@@ -98,12 +98,55 @@ def test_finalize_counts_score_only_in_the_pool_and_summarises_them():
     assert "材料欄が欠けたまま" not in text
     assert "点数だけで送られた候補 8 件" in text
     assert "点数だけの候補: " in text and "B3" not in text   # counted per floor, not listed
-    # B7 (0.376) is the 3rd best of 10 = the bar itself, so it clears every gate and only
-    # loses to count=2: that one is named, because it is worth re-sending with material.
-    assert "B7" in text and "not_selected(count=2)" in text
+    # B7 (0.376) is the 3rd best of 10 = the bar itself, so it clears every gate; the two
+    # slots go to the candidates with material (F-15-U2) and B7 is named for re-sending.
+    assert "B7" in text and "not_selected(no_material)" in text
 
 
 def test_score_only_that_reaches_the_output_keeps_its_warning():
-    cands = [_bare("TOP", 0.9, 0.9), _full("F1", 0.5, 0.8), _full("F2", 0.45, 0.8)]
+    # Nothing else carries material, so the blank one stays visible (and warned about).
+    cands = [_bare("TOP", 0.9, 0.9), _bare("B2", 0.5, 0.8), _bare("B3", 0.45, 0.8)]
     text = _finalize(cands, count=3)
     assert "TOP" in text and "材料欄が欠けたまま" in text
+
+
+# --- (3) F-15-U2: score-only candidates never take an output slot from material ones ------
+# Measured 2026-09-27 (retest run-a): with count=3, MMR picked two id+scores-only candidates
+# (no concept tags -> similarity 0 -> "maximally diverse") over five higher-scoring ones with
+# material, and rendered them blank.
+
+def _tagged(wid: str, purpose: float, mech: float) -> dict:
+    m = _full(wid, purpose, mech)
+    m["concept_tags"] = [{"name": "Music information retrieval", "level": 1, "score": 0.6}]
+    return m
+
+
+def _mmr_batch():
+    mats = [_tagged(f"F{i}", 0.80 - i * 0.02, 0.8) for i in range(5)]        # 0.640 .. 0.576
+    mats += [_bare("B1", 0.70, 0.8), _bare("B2", 0.69, 0.8)]                  # 0.560, 0.552
+    mats += [_bare(f"L{i}", 0.30, 0.8) for i in range(20)]                    # 0.24: pool filler
+    return mats
+
+
+def test_mmr_output_slots_go_to_candidates_with_material():
+    works, scores, _ = normalize_agent_scores(_mmr_batch())
+    diag: dict = {}
+    entries = apply_post_gates(scores, works, count=3, diag=diag, gate=0.2, output_floor=0.35)
+    picked = [e.work.id for e in entries]
+    assert picked == ["F0", "F1", "F2"]
+    rows = {r["id"]: r["floor"] for r in diag["rejections"]}
+    assert rows["B1"] == rows["B2"] == "not_selected(no_material)"
+
+
+def test_finalize_names_material_less_qualifiers_for_resending():
+    text = _finalize(_mmr_batch(), count=3)
+    assert "B1" in text and "not_selected(no_material)" in text and "再投" in text
+
+
+def test_fallback_prefers_a_renderable_candidate():
+    # Nothing clears output_floor 0.35, so the weak single-best fallback fires; the bare one
+    # scores higher but cannot be rendered.
+    mats = [_bare("B1", 0.42, 0.8), _full("F1", 0.40, 0.8)]                    # 0.336, 0.320
+    works, scores, _ = normalize_agent_scores(mats)
+    entries = apply_post_gates(scores, works, count=1, gate=0.2, output_floor=0.35)
+    assert [e.work.id for e in entries] == ["F1"]

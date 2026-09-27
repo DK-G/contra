@@ -790,6 +790,11 @@ def _percentile_gate(scores: List[float], top_pct: float = 0.30, floor: float = 
     return max(sorted_desc[k - 1], floor)
 
 
+def _has_material(work: Optional[Work]) -> bool:
+    """True when the candidate carries a title or an abstract, i.e. can be rendered (F-15-U2)."""
+    return work is not None and bool((work.title or "").strip() or (work.abstract or "").strip())
+
+
 def _percentile_rank(n: int, top_pct: float = 0.30) -> int:
     """Rank whose score becomes the percentile bar. For n <= 6 it is 1: the bar is the best score."""
     return max(1, int(n * top_pct))
@@ -1107,6 +1112,9 @@ def _quality_gate_and_build(
         fallback_pool = sorted(
             all_scored, key=lambda x: (x[0], x[2].get("fine_rank", 0.0)), reverse=True
         )
+        # F-15-U2: the weak single-best must be renderable when any candidate is.
+        with_material = [x for x in fallback_pool if _has_material(id_to_work.get(x[1]))]
+        fallback_pool = with_material or fallback_pool
         best_list = [(s, w, d) for s, w, d in fallback_pool if s >= _FALLBACK_FLOOR][:1]
         if best_list:
             ser, wid, s = best_list[0]
@@ -1137,20 +1145,35 @@ def _quality_gate_and_build(
                      anomaly=anomaly_count, hollow=hollow_count, passed=len(passed), qualified=0)
         return []
 
+    # F-15-U2 (2026-09-27): a candidate sent as id + scores only (no title, no abstract) is in
+    # the percentile pool but cannot be rendered. MMR used to PREFER it: with no concept tags
+    # its similarity to everything is 0, so it looked maximally diverse and took an output
+    # slot as a blank entry, displacing higher-scoring candidates with material (measured:
+    # 2 blank picks over 5 full-material ones). Output slots go to renderable candidates; the
+    # material-less ones that qualified are named so the caller can re-send them with material.
+    renderable = [x for x in qualified if _has_material(id_to_work.get(x[1]))]
+    pool = renderable or qualified     # all material-less: keep them visible (F-09 warns)
     # Step 5: MMR diversity re-ranking for count > 1 (over the output-qualified set)
-    if count > 1 and len(qualified) > 1:
-        final = _mmr_rerank(qualified, id_to_work, lam=0.7, count=count)
+    if count > 1 and len(pool) > 1:
+        final = _mmr_rerank(pool, id_to_work, lam=0.7, count=count)
     else:
         # F-10 residue: the discrete anchors tie every hit at the same product (0.56);
         # fine_rank (within-band pct x mechanism) orders what the anchors cannot separate.
         final = sorted(
-            qualified, key=lambda x: (x[0], x[2].get("fine_rank", 0.0)), reverse=True
+            pool, key=lambda x: (x[0], x[2].get("fine_rank", 0.0)), reverse=True
         )[:count]
+    final_ids = {wid for _s, wid, _d in final}
     _record_rejections(
-        diag, {wid for _s, wid, _d in qualified}, {wid for _s, wid, _d in final},
+        diag, {wid for _s, wid, _d in pool}, final_ids,
         floor=f"not_selected(count={count})", threshold=count,
         value_of=ser_by_id.get, detail_of=_detail,
     )
+    if renderable:
+        _record_rejections(
+            diag, {wid for _s, wid, _d in qualified if not _has_material(id_to_work.get(wid))},
+            final_ids, floor="not_selected(no_material)", threshold=count,
+            value_of=ser_by_id.get, detail_of=_detail,
+        )
 
     # Step 6: Build OutputEntry list
     result: List[OutputEntry] = []
