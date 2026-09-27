@@ -765,6 +765,41 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-34-R〜F-38-R. 後知恵テスト（2026-09-27）の不具合 5 件 — **対処済み 2026-09-27**（branch `agent/contra-hindsight-bugfixes`・未 merge）
+
+5 件とも、再現テストを先に書き、旧コードで落ちることを確認してから直した（新規 16 件・**498 → 514 tests: 514 pass**）。1 件 1 コミット。実 API 消費は計 $0.0013（単価の probe・Subfield 分類表の取得・1 facet の live 確認）。
+
+**F-34-R. `scope_field` を全テーマ系ツールの `required` に入れる**
+- 機序: 検証器（`validate_and_normalize`）は空でない `scope.field` を要求するのに、byserendipity / byrepo / bybridge / delegate_finalize のスキーマは `required` に入れていなかった（F-21 と同じずれが別の欄で残っていた）。
+- 変えたもの: 4 ツールの `required` を `_THEME_REQUIRED` の 1 か所から作る。既定値案は不採用。byserendipity・bybridge ではこの値がホーム除外と語彙シードの Field 限定の基準で、空の既定値は両方を黙って止める（F-37 の事故）。この 2 ツールの説明文には OpenAlex の 26 Field 名を並べる（`OPENALEX_FIELDS` から生成）。
+- 検証: 「スキーマの required 欄だけで検証器を通る」回帰が、旧スキーマで `scope.field is required` として落ちることを確認。
+
+**F-35-R. 「収穫0の facet」を、候補を返した facet に出さない**
+- 機序: `_facet_breakdown_line` が `status != "ok"` の完全一致で判定していた。F-33-S（2026-09-25）が collector 側の集計で塞いだのと同じ穴が、内訳行の側に残っていた。504 から回復した facet の status は `ok（504 を N 回受け…）` なので、提出 20 件でも収穫0の一覧に入る。後知恵テストでは 3 facet がすべて 504 を受けていたので、全 facet に警告が出た。
+- 変えたもの: 判定を `startswith("ok")` にし、回復の注記は内訳に残す。助言を原因別の 3 行に分けた（取得失敗→数分おいて単独で再投／棄却→同じ判定が返るので facet を遠いドメインへ見直す／取得は成功したが提出 0→見直すか no_history）。
+- 検証: 回帰 3 件（注記つき ok を数える・collector→内訳の実際の経路・原因別の助言）が旧コードで落ちることを確認。live（1 facet・504 を 3 回受けて回復）でも警告は出なかった。
+
+**F-36-R. 残り回数を検索の単価で数える**
+- 機序: `budget_line` が「残高 ÷ 直前の応答の単価」を計算していた。OpenAlex の単価は種類ごとに違う（検索 $0.001＝10 credits。filter の一覧 $0.0001＝1 credit で、2026-09-27 の probe で `X-RateLimit-Cost-USD 0.0001 / Credits-Used 1` を確認）。bybridge は最後が filter の呼び出しなので、残り回数が 10 倍に膨らんでいた。検索の単価は同日の probe では測れなかった（検索エンドポイントが 503・Retry-After 60 を 3 回返した）ので、同日の生データ（$0.097 → 約 97 回）と F-29 の記録を根拠にした。
+- 変えたもの: 実行中に見た最大の単価（下限 $0.001）を meter に `search_cost_usd` として持ち回り、その単価で割る。文言は「検索 1 回 $0.001 換算であと約 N 回」。429 の枯渇判定（1 回分を払えるか）は、拒否されたリクエスト自身の単価のまま。
+- 検証: 回帰 2 件（検索→filter の順で $0.0838 が約 83 回になる／filter だけの実行でも検索単価で数える）が旧コードで 838・678 と出て落ちることを確認。live のメーターは「$0.0987 / $0.1（検索 1 回 $0.001 換算であと約 98 回）」。
+
+**F-37-R. `scope_field` を何に解決したかを出力で名指しする（計器のみ）**
+- 機序: `resolve_field_ids` が空を返すと、byserendipity のホーム除外と home_converged 判定、bybridge の語彙シードの Field 限定が、何も言わずに止まっていた。広く解決した場合（V の 'Biomedical engineering' → Engineering 全体）も、何をホームとしたかが出ていなかった。
+- 変えたもの: 両ツールの出力に 1 行を足す。解決したら使った Field 名。解決しなければ「行われていません」と明記し、Subfield 名なら親の Field（'Neurology' → Medicine / Neuroscience）、そうでなければ 26 Field 名を示す。Subfield 分類表 `data/openalex_subfields.json`（252 行、一覧リクエスト 2 回）をコミットした（F-13 の計器が「あれば使う」と設計していたもの）。byserendipity の材料見出しの「ホームドメイン除外済」も、除外が走ったときだけ出すようにした。
+- **残る限界（未対処）**: 解決のしかたと除外の粒度は変えていない。Subfield や自由文を除外に使うと残る候補が変わるので、DIRECTION §4-3 の quality_eval が先に要る。しかも観測 2 例はそれでも直らない。G の文言はどの Subfield 名にも一致しない。A の bybridge の混入はシード名簿由来の除外（Field 2 つまで・Topic は 2 シード以上）の粒度の問題で、主題（パーキンソン病）が複数の Field と Topic にまたがっている。V の「Field 全体をホーム扱い」も同じく粒度の問題。
+- 検証: 回帰 5 件（解決失敗の名指し・Subfield の親の案内・解決先の名指し・候補 0 件の経路・bybridge）が旧コードで落ちることを確認。live（'Satellite navigation (GNSS positioning)'）で警告行が出た。
+
+**F-38-R. 生の出力を読める形にする**
+- (a) byserendipity の各候補に `facet: "[n] <domain>"`（collector が付け、材料で id の直後に置く）。
+- (b) bybridge の raw_only は、報告した交差候補を全件並べる（旧: `max(bridge_count, 10)` で打ち切り）。見出しに「全 N 件」。
+- (c) 材料 JSON を 1 欄 1 行で出す（bybridge の materials も同じ形）。byserendipity では下流（finalize・post-gate・構造化 fill）が読まない `referenced_works` を外した（bridge の経路では使うので残す）。**保存されていた後知恵テストの出力 4 本で**: 1 行 179k〜288k 字 → 362〜611 行・124k〜196k 字（-20〜-32%）。2,000 字を超える行は長い abstract の 26 本（全 240 本中）だけで、接地照合に逐語が要るので切らない。live では 27 候補が 304 行・最長 2,368 字。
+- 検証: 回帰 4 件（facet ラベル・行の長さと referenced_works・finalize との往復・bybridge の全件表示）が旧コードで落ちることを確認（bybridge は 25 件中 10 件だけ表示、を再現）。
+
+**呼び手（seihai を含む）への申し送り**: (1) `scope_field` は必須になった。**OpenAlex の Field 名で渡す**と除外が効く（例: GNSS なら Engineering、パーキンソン病なら Medicine か Neuroscience）。出力冒頭の「ホーム分野（scope_field …）」行で、何がホーム扱いになったかを確かめる。(2) 「収穫0の facet」の助言は原因別になった。**単独での再投は「取得失敗」の行だけ**が対象。(3) 予算の残り回数は検索換算になった。以前の bybridge 後の「約 600〜800 回」は 10 倍の過大表示だった。(4) byserendipity の材料には `facet` 欄が付き、`referenced_works` は無い。echo は従来どおり全欄を返せばよい。
+
+---
+
 ### F-33-S. byserendipity — **facet 取得の 504（F-16 の 504 側）も、同じ冷えた立ち上がりを待ち切る**＋**回復した facet の採用数が 0 と表示される潜在バグ** — **対処済み 2026-09-25**
 
 **様式**: F-16 の「504 の一過性障害は未対処＝単独再投の規約が有効」の側。9/25 は facet 1・2 が 504（facet 3 のみ成功）、単独再投でも 504 が続き、**Near 距離段が当日消失**。9/15・9/17・9/21 にも facet 単位の 504。
@@ -1844,6 +1879,21 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **byserendipity**（raw_only・facet 3枚） | Near=臨床試験の treatment fidelity／Far=SRE の configuration drift／Very Far=原子力制御室の指示（弁の指令と位置） | **F-33 の再現・対処後も継続**: 3 facet 同時で全て 504（各 14 回・約 185 秒）。★**同時刻に seihai 側から独立に `curl` で search.semantic を叩くと 3 回中 2 回 200（1.9〜3.5 秒）**＝エンドポイントは応答していたのに contra の要求だけが 185 秒間 504 を受け続けた。「冷えたエンドポイントの立ち上がり待ち」だけでは説明できない（要求の形＝per-page・filter・select などの差を疑う。未検証の仮説）。単独再投: SRE facet は 504 を 11 回受け 155.8 秒後に回復（4 件）、原子力 facet は単独でも 14 回 504 で失敗 | 4 件（1 facet のみ） |
 | **delegate_finalize**（serendipity 2 回） | — | bridge 分: 採点2→通過0（fallback 1・hollow 1）。serendipity 分: 採点3→通過1（Policy Drift Detection, Zenodo 2023・0.38）・percentile_gate 0.376（固定フロア 0.2 なら2件）。接地照合失敗 0。**呼び手側の不備**: bridge 分で `cited_by_count` を echo し忘れた（警告どおり） | 通過1 |
 | **byrepo**（structured・github） | 等価性検定（TOST）・desired/actual state reconciliation・kill switch 検証の実装 | 上位2件は theme 関連度 0.4（`Lakens/TOSTER`・`ashish24142/signoff`＝モデル差し替えの等価性サインオフ）。**F-14 の7回目**: 3〜5位は README に "kill switch" が出るだけの無関係（予測市場 MM ボット・SNS 感情トレードボット・**サブスクリプション課金の解析ドラフト**）。"configuration drift"／"reconciliation" の一致は 0 件。**初回呼び出しは `scope.field is required` で失敗**（スキーマ上 required ではない＝ツール説明と検証の不一致） | 5 件中 主題適合 2 |
+
+## 2026-09-27（日・後知恵テスト＝過去 Kaggle 4 題。seihai 以外の呼び手）
+
+呼び手: 対話セッションの後知恵テスト（報告書 `D:\dev\agents\reports\contra-hindsight-test-2026-09-27.md` の「Contra の不具合・運用上の問題」節、生データ `D:\dev\agents\temp\contra-hindsight\task1〜4.json` の `errors` 欄）。テーマは V＝人工呼吸器の気道内圧予測（task1）、M＝小売の日次販売予測（task2）、G＝スマートフォン GNSS 測位（task3）、A＝パーキンソン病の重症度予測（task4）。4 回とも byserendipity（raw_only・3 facet）→ delegate_finalize → bybridge（raw_only）。seihai の常設利用とは別の呼び手だが、書式はこの文書に合わせる。
+
+| 日付 | ツール | テーマ | 失敗様式 | 実測値 | 対処状況 |
+|---|---|---|---|---|---|
+| 2026-09-27 | byserendipity / delegate_finalize / bybridge | V・M・G・A | **F-34（新）**: `scope_field` はスキーマ上任意なのに、未指定だと `InputValidationError: scope.field is required`（F-21 の同型） | **4 回とも初回が失敗**（検索前に拒否・再投 1 回ずつ）。seihai の 2026-09-26 週次節の byrepo 行でも同じ失敗 | **対処済み 2026-09-27（F-34-R）** |
+| 2026-09-27 | byserendipity | V・M・G・A | **F-35（新）**: 各 facet から候補が返っているのに、全 facet に「⚠ 収穫0の facet」が出る | M・A: 3 facet とも 20 件ずつ（計 60）なのに 3 facet とも警告。G: 候補を返した 2 facet も警告。V: 504 から回復した Hydrology も警告に並び、棄却の 2 facet には「単独で投げ直せ」と助言 | **対処済み 2026-09-27（F-35-R）** |
+| 2026-09-27 | byserendipity / bybridge | V・M・A | **F-36（新）**: 予算メーターの残り回数が矛盾 | M: $0.097 で「約 97 回」→ 直後の bybridge は $0.0838 で「約 838 回」。V: $0.094→94 回、$0.0793→792 回。A: $0.074→74 回、$0.0678→678 回 | **対処済み 2026-09-27（F-36-R）** |
+| 2026-09-27 | byserendipity / bybridge | G・A・V | **F-37（新）**: `scope_field` が OpenAlex の Field に解決しないとホーム除外が効かず、そのことが出力に出ない | G（'Satellite navigation (GNSS positioning)'＝どの Field にも不一致）: GNSS の論文 5 件が遠ドメイン候補に混入（全件 percentile で落選）。A（'Neurology'＝Subfield 名）: bybridge の 10 件すべてがパーキンソン病（除外は Field=Medicine と Topic 1 つだけ）。V（'Biomedical engineering (…)'→Engineering 全体）: 3 facet 中 2 つが home_converged で棄却 | **計器は対処済み 2026-09-27（F-37-R）。解決のしかた・除外の粒度は未対処**（F-37-R の「残る限界」） |
+| 2026-09-27 | byserendipity / bybridge | V・M・G・A | **F-38（新）**: 生の出力が採点する呼び手に読めない | (a) byserendipity の候補に facet ラベルが無い（並び順から推定）。(b) bybridge raw_only は診断で「交差候補 60 件」と言い 10 件だけ表示。(c) byserendipity の出力が 1 行 19〜31 万字（M 306,892 字）で Read で開けず、Grep で切り出した | **対処済み 2026-09-27（F-38-R）** |
+| 2026-09-27 | byserendipity / bybridge | V・M・G・A | F-33 の再現（504 の冷えた立ち上がり） | 全回で 504。G の Quaternary geochronology は 14 回・185.3 秒待っても未回復、単独再投でも同じ。9/26 seihai と同じ「待ち切っても落ちる」様式 | **未対処（本件の対象外）**。9/26 の未検証仮説（要求の形の差）が次の調べどころ |
+| 2026-09-27 | bybridge | G | F-28 の再現（2 本並行で IP の枠を共有） | 語彙シード収集中に 429（Retry-After 32 秒）。bybridge の出力なし | 未対処（資源競合そのもの） |
+| 2026-09-27 | （計器） | — | 日次予算の残りが、リセット前に戻った | 後知恵テスト終了時（16:13 頃）の残り約 $0.068 が、16:39 の単発 probe では $0.0999（X-RateLimit-Reset 58,818 秒＝翌 09:00 JST）。contra と同じ User-Agent・mailto なし | 原因未確認（IP 単位の計量なら、IPv6 一時アドレスの切り替えなどが候補。未検証） |
 
 ## 追記のしかた
 
