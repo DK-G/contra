@@ -71,6 +71,8 @@ from src.pipeline.delegate import (
     has_unverifiable_failure,
     finalize_delegated_document,
     material_from_work,
+    score_only_ids,
+    score_only_summary,
 )
 from src.pipeline.serendipity_query import spec_from_payload
 from src.pipeline.generate import GenerationConfig, fill_track_entries
@@ -366,6 +368,10 @@ def _scope_field_prop(use: str) -> Dict[str, Any]:
 # produced a full 30-candidate answer about clinical gait analysis) and on the healthy runs of
 # the same period, which seated 20/20.
 _MIN_SEEDS_DEFAULT = 5
+
+# F-15-U: below this many candidates (after anomaly/hollow) the top-30% bar is the 1st or
+# 2nd best score, so delegate_finalize says the pass count is set by the batch size.
+_THIN_PERCENTILE_BATCH = 10
 
 
 class StdinMcpServer:
@@ -1270,9 +1276,6 @@ class StdinMcpServer:
         output_floor = args.get("output_floor") if args.get("output_floor") is not None else 0.35
         emit_fallback = bool(args.get("emit_fallback", True))
         grounded_only = bool(args.get("grounded_only", True))
-        # F-09 (1): missing echoed material renders as blank fields that read like a
-        # low-quality hit — name the caller's omission explicitly instead of staying silent.
-        echo_warnings = echo_completeness_warnings(materials)
         diag: dict = {}
         try:
             doc = finalize_delegated_document(
@@ -1284,6 +1287,16 @@ class StdinMcpServer:
             return {"content": [{"type": "text", "text": f"委譲採点の検証に失敗: {exc}"}], "isError": True}
 
         entries = doc.sections[0].entries if doc.sections else []
+        rendered_ids = {str(e.work.id) for e in entries}
+        # F-09 (1): missing echoed material renders as blank fields that read like a
+        # low-quality hit — name the caller's omission explicitly instead of staying silent.
+        # F-15-U: candidates sent as id + scores only and not rendered are one summary line,
+        # not one warning each (the full-batch submission the percentile gate needs).
+        echo_warnings = echo_completeness_warnings(materials, rendered_ids=rendered_ids)
+        score_only_line = score_only_summary(materials, rendered_ids)
+        if score_only_line:
+            echo_warnings.append(score_only_line)
+        score_only = score_only_ids(materials)
         diag_line = (
             f"post-gate 診断: status={diag.get('status')} / 採点 {diag.get('scored', 0)} 件 / "
             f"anomaly {diag.get('anomaly', 0)} / hollow {diag.get('hollow', 0)} / "
@@ -1303,13 +1316,34 @@ class StdinMcpServer:
                    if diag.get("gate_is_batch_relative") and
                    diag.get("passed_at_absolute_floor", 0) > diag.get("passed", 0) else "")
             )
+            # F-15-U: in a thin batch the percentile bar is simply the k-th best score, so
+            # the pass count follows the batch size (k=1 up to 6 candidates). The gate is
+            # designed for the full scored pool; say so and name the remedy.
+            batch_n = int(diag.get("batch_size", 0) or 0)
+            if 0 < batch_n < _THIN_PERCENTILE_BATCH:
+                rank = int(diag.get("percentile_rank", 1) or 1)
+                diag_line += (
+                    f"\n  ・分位の母数が {batch_n} 件（anomaly/hollow 除外後）しかないため、"
+                    f"分位ゲートは上位 {rank} 件を通すだけです＝通過数は候補の質ではなく件数で"
+                    "決まります（F-15）。採点した候補は全件提出してください"
+                    "（描画しない候補は id と点数だけでよい・byserendipity 手順4）。"
+                )
         # F-09 (2): name every rejected candidate, the floor it hit, and the measured value —
         # the caller does its own scoring, so this is what calibrates its next run (the same
         # observability principle as bybridge's F-02 diagnostics block).
         title_by_id = {str(m.get("id")): str(m.get("title") or "") for m in materials}
         rejection_lines = []
         near_useful = []
+        score_only_rejected: Dict[str, int] = {}
         for r in diag.get("rejections", []):
+            # F-15-U: a score-only candidate (the caller chose not to render it) is counted
+            # per floor instead of listed — unless it cleared every gate and only lost to
+            # `count`, or is "near but useful": those are worth re-sending with material.
+            if (str(r["id"]) in score_only and not r.get("near_but_useful")
+                    and not str(r["floor"]).startswith("not_selected")):
+                floor_name = str(r["floor"]).split("(")[0]
+                score_only_rejected[floor_name] = score_only_rejected.get(floor_name, 0) + 1
+                continue
             label = title_by_id.get(str(r["id"]), "")
             label = f"「{label[:40]}」" if label else ""
             line = f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
@@ -1344,6 +1378,12 @@ class StdinMcpServer:
                 + f"{diag['purpose_caps'][0]['capped']} で頭打ちにし、セレンディピティ積も同率で縮小します"
                   "（ラベル「構造対応ゆるめ」と数値の矛盾を防ぐ規則）。"
                   "送信した値が高すぎたという判定ではありません。"
+            )
+        if score_only_rejected:
+            rejection_lines.append(
+                "- 点数だけの候補: "
+                + " / ".join(f"{name} {n} 件" for name, n in sorted(score_only_rejected.items()))
+                + "（個別の値は材料付きで再投すれば出ます）"
             )
         if rejection_lines:
             extra += "\n落選内訳:\n" + "\n".join(rejection_lines)
