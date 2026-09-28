@@ -103,9 +103,9 @@ def test_semantic_route_renders_search_semantic_endpoint():
 
 
 def test_semantic_route_clamps_per_page_and_composes_safe_filters_only():
-    # search.semantic is capped at 50 and composes with type/year, but 400s on a field-id
-    # negation — so per-page is clamped to 50 and only type/year render; field exclusion is
-    # deliberately dropped (handled client-side).
+    # search.semantic is capped at 50 and 400s on a field-id negation — so per-page is clamped
+    # to 50 and only the year bounds render; field exclusion is handled client-side, and so is
+    # the type since F-39 (a type filter timed the endpoint out at its 9.1 s gateway limit).
     sq = StructuredQuery(
         anchor_terms=["coupled oscillator synchronization"],
         route="semantic",
@@ -116,8 +116,9 @@ def test_semantic_route_clamps_per_page_and_composes_safe_filters_only():
     )
     params = sq.to_params(per_page=200)
     assert params["per-page"] == 50
-    assert params["filter"] == "publication_year:2015-2024,type:article"
+    assert params["filter"] == "publication_year:2015-2024"
     assert "primary_topic.field.id" not in params["filter"]
+    assert sq.work_type == "article"      # still carried, enforced by keep_semantic_types
 
 
 def test_fallback_is_recall_safe_search_twin():

@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-09-28（CL-0120） semantic の種類の絞り込みを手元へ（F-39）
+
+### 概要
+* `src/pipeline/query.py`: `_semantic_filter_string` から `type:` を外す（年は残す）。`SEMANTIC_TYPE_ALLOW`（article → article＋conference-paper）と `keep_semantic_types` を追加。
+* `src/pipeline/collect.py`: byserendipity の facet 取得と bybridge の semantic シード取得で、取得後に `keep_semantic_types` を適用。
+* `src/openalex/client.py`: F-33 の注記に F-39 の読み直しを追記（挙動の変更なし）。
+* `tests/test_semantic_type_filter.py`: 新規 3 件。`tests/test_query.py`・`tests/test_serendipity_query.py` の期待値を変更。
+* 発端: 地形照合航法の facet が再テストで 4/4 回 504。種類の絞り込みがエンドポイントを 9.1 秒の打ち切りまで遅くしていた。
+
+---
+
 ## 2026-09-28（CL-0119） 生成過程 facet の再テスト結果を記録
 
 ### 概要

@@ -210,6 +210,12 @@ class OpenAlexClient:
         # So, where the caller opts in, a 504 is re-sent every `gateway_retry_interval_sec`
         # until `gateway_patience_sec` has passed since the first attempt: it costs wall time,
         # not budget. 429 and every other status keep the bounded behaviour above.
+        # F-39 (2026-09-28): every semantic request those streaks were measured on carried
+        # `filter=type:article`. Without it the same texts passed on the first attempt in
+        # 1.8-3.9 s; with it a terrain-navigation query 504-ed on every attempt and a music query
+        # passed once in 8.0 s. The "streak that clears" is better read as a slow filtered query
+        # that passes once the endpoint has cached it. The type filter is now client-side; the
+        # patience stays as a guard for genuine gateway trouble.
         started = self._now()
         gw_504 = 0
         self.last_gateway_wait = None

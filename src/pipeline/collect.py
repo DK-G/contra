@@ -19,6 +19,7 @@ from src.pipeline.query import (
     StructuredQuery,
     dominant_field_ids,
     dominant_topic_ids,
+    keep_semantic_types,
     resolve_field_ids,
     structured_query_from_theme,
     structured_query_variants,
@@ -351,7 +352,8 @@ def collect_seeds_semantic_report(
         report["gateway_wait"] = getattr(collector.client, "last_gateway_wait", None)
         return [], report
     report["gateway_wait"] = getattr(collector.client, "last_gateway_wait", None)
-    raw = filter_retracted(normalize_results(payload))
+    # F-39: the type filter is applied here, not by the endpoint (it timed the endpoint out).
+    raw = keep_semantic_types(filter_retracted(normalize_results(payload)), sq.work_type)
     report["raw"] = len(raw)
     report["languages"] = dict(Counter(w.language or "?" for w in raw).most_common(4))
     with_abstract = filter_has_abstract(raw)
@@ -1097,7 +1099,8 @@ def _collect_track_b_semantic(
             if rec["status"] == "ok":
                 rec["status"] = (f"ok（504 を {gw['gateway_504']} 回受け {gw['waited_sec']:g} 秒"
                                  "待って回復・F-33）")
-        raw = filter_retracted(normalize_results(payload))
+        # F-39: the type filter is applied here, not by the endpoint (it timed the endpoint out).
+        raw = keep_semantic_types(filter_retracted(normalize_results(payload)), sq.work_type)
         rec["returned"] = len(raw)
         ok, reason = validate_semantic_results(raw, home_field_ids)
         if not ok:
