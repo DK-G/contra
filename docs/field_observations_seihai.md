@@ -1906,6 +1906,18 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **delegate_finalize**（serendipity・60件全件提出） | — | 通過19・出力3（JGR 2005/1992 の相対的静穏化・GRL 2014 の前震加速）。percentile_gate 0.374（固定フロア 0.2 なら60件通過＝F-15）。接地照合失敗 0 | 通過19/出力3 |
 | **bybridge**（materials・英語 seed_semantic_text 付き） | FX 日中の反転と継続・出来高/ボラショック | シード20件は主題適合（Andersen–Bollerslev・マクロニュース伝達・出来高と取引コスト）。semantic レッグは 504 を3回受け 37 秒で回復＝供給 29 件。**最頻 bridge は主題の基礎文献（Glosten–Milgrom）・上位10件占有 30%** だが、**交差候補の 25/30 件が会計開示・ガバナンス**（Glosten–Milgrom が「情報の非対称」として会計側で大量に引かれる）＝多様化したが橋の向こうが一般概念へ広がる様式。**F-38(b) の再現**: 診断は「交差候補 60 件」、materials は 30 件 | anomaly 22・通過1（fallback）・『近いが有用』1（RFS 2021 Foreign Exchange Volume＝本日の主収穫） |
 
+## 2026-09-29（火・seihai r02/F2 GP）
+
+テーマ: GP の NSGA-II 目的に再武装課金が無く、課金は最終順位の第3キーにしか無い。最終選抜だけに掛けたコストは進化が生む個体群を変えられるか。実行順は byrepo / byserendipity / bybridge を並行 → delegate_finalize ×2（bybridge は誤送信1回を含め3回）。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured・github） | GP 売買規則の進化目的に turnover/再エントリー課金を入れた実装 | **収穫ゼロ・語彙衝突（S-39 系）の再現**: 1位は 9/22 と同じ `vilkovgr/0dte-strategies`（"trading rules"/"transaction cost" の README 一致で関連度 0.4）。2〜4位は汎用の進化計算基盤（evox・DEAP・jMetalPy） | 関連度 0.4/0.3/0.4/0.2・主題一致 0/4 |
+| **byserendipity**（raw_only・facet 3枚） | Near=進化計算の制約処理／Far=育種の選抜指数／Very Far=生成化学の事後フィルタ | **正常**。3 facet とも供給（返却 42/35/15 → 提出 27/19/14）・504 なし | 60 件 |
+| **delegate_finalize**（serendipity・60件全件提出） | — | 通過18・出力3（Genetics Research 1961・Pharmacophore 2025・J Dairy Sci 1994）。percentile_gate 0.296（固定フロア 0.2 なら32件＝F-15）。接地照合失敗 0 | 通過18/出力3 |
+| **bybridge**（materials） | GP 売買規則と共通祖先を持つ分野外の「進化中のコスト」研究 | **S-26 観測**: 最頻 bridge 占有 20%（上位10件でも 20%）・通行 30 本＝旧様式ではない。**最頻 bridge が主題祖先（Brock–Lakonishok–LeBaron）なのは4回連続**。交差候補の上位は GP の工学応用（舗装・コンクリート・風力）＝bridge が**手法の祖先**を辿り、主題の問い（探索中のコスト）には届かない。「多様化したが主題適合は薄い」 | 30 件中 anomaly 20・通過3・出力1（Kashtan & Alon PNAS 2005） |
+| **delegate_finalize**（bybridge） | — | **呼び手側の誤り（contra の欠陥ではない）**: 実在しない id 1 件だけで誤送信 → `status=saturated`・anomaly 1。直後に正しい30件で再送 | — |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
