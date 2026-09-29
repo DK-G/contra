@@ -337,3 +337,50 @@ def test_filter_only_run_still_counts_searches_at_the_search_price(monkeypatch):
     _client().get({"filter": "ids.openalex:W1"})
     assert "約 67 回" in budget_line(RUN_STATS["budget"])
     reset_run_stats()
+
+
+# --- F-40 (2026-09-29): anonymous full-text search paused ---------------------------------
+
+# The body and header OpenAlex returned at 21:03 JST on 2026-09-29 for `search=` and
+# `filter=title_and_abstract.search:` (search.semantic and plain filters still answered 200).
+_PAUSED_BODY = (b'{"error":"Search temporarily unavailable","message":"Anonymous search is paused while '
+                b'the search cluster recovers from heavy load. Please retry shortly, or use a free API '
+                b'key for uninterrupted access: https://openalex.org/rest-api."}')
+
+
+def _paused_503() -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://api.openalex.org/works", 503, "Service Unavailable",
+                                  {"Retry-After": "60"}, io.BytesIO(_PAUSED_BODY))
+
+
+def test_paused_anonymous_search_is_named_not_reported_as_a_bare_503(monkeypatch):
+    calls = _patch_urlopen(monkeypatch, [_paused_503()])
+    with pytest.raises(OpenAlexError) as exc:
+        _client(max_retries=2).get({"search": "x"})
+    msg = str(exc.value)
+    assert "匿名" in msg and "全文検索" in msg and "F-40" in msg
+    assert "OPENALEX_API_KEY" in msg
+    assert "クエリや候補の問題ではありません" in msg
+    assert "Retry-After 60 秒" in msg
+    assert len(calls) == 3
+
+
+def test_other_503_keeps_the_generic_message(monkeypatch):
+    _patch_urlopen(monkeypatch, [_http_error(503)])
+    with pytest.raises(OpenAlexError) as exc:
+        _client(max_retries=1).get({})
+    assert "after 2 attempts" in str(exc.value) and "F-40" not in str(exc.value)
+
+
+def test_api_key_from_environment_is_sent(monkeypatch):
+    monkeypatch.setenv("OPENALEX_API_KEY", "k-test")
+    calls = _patch_urlopen(monkeypatch, [{"results": []}])
+    _client().get({"search": "x"})
+    assert "api_key=k-test" in calls[0].full_url
+
+
+def test_no_api_key_leaves_the_url_unchanged(monkeypatch):
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    calls = _patch_urlopen(monkeypatch, [{"results": []}])
+    _client().get({"search": "x"})
+    assert "api_key" not in calls[0].full_url

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 
@@ -149,6 +150,10 @@ def low_budget_caveat(threshold: float = 0.25) -> str:
 class OpenAlexConfig:
     base_url: str = "https://api.openalex.org/works"
     mailto: Optional[str] = None
+    # F-40 (2026-09-29): OpenAlex pauses ANONYMOUS full-text search under load and names a free
+    # API key as the way through. Read from the environment so a key, once a human has made
+    # one, reaches every by* tool without a code change; absent, the URL is exactly as before.
+    api_key: Optional[str] = field(default_factory=lambda: os.environ.get("OPENALEX_API_KEY") or None)
     timeout_sec: int = 20
     min_interval_sec: float = 0.2
     max_retries: int = 2            # extra attempts on transient failures (0 = old behaviour)
@@ -180,6 +185,9 @@ class OpenAlexClient:
         if self.config.mailto:
             params = dict(params)
             params["mailto"] = self.config.mailto
+        if self.config.api_key:
+            params = dict(params)
+            params["api_key"] = self.config.api_key
         query = urllib.parse.urlencode(params, doseq=True)
         return f"{self.config.base_url}?{query}"
 
@@ -218,6 +226,7 @@ class OpenAlexClient:
         # patience stays as a guard for genuine gateway trouble.
         started = self._now()
         gw_504 = 0
+        paused_503: Optional[str] = None  # F-40: the server's own explanation of a 503
         self.last_gateway_wait = None
         attempt = 0
         while True:
@@ -261,6 +270,11 @@ class OpenAlexClient:
                     ) from exc
                 if exc.code == 504:
                     gw_504 += 1
+                if exc.code == 503:
+                    try:
+                        paused_503 = exc.read().decode("utf-8", "replace")[:600] or paused_503
+                    except Exception:  # pragma: no cover - an unreadable body is just no body
+                        pass
                 if exc.code in _RETRY_STATUSES:
                     continue
                 raise OpenAlexError(f"request failed: {exc}") from exc
@@ -296,6 +310,22 @@ class OpenAlexClient:
                 "時間をおいて再実行してください。"
                 + (f"（{_wait_phrase(RUN_STATS['budget'].get('retry_after_sec'))}）"
                    if (RUN_STATS.get("budget") or {}).get("retry_after_sec") is not None else "")
+            ) from last_exc
+        # F-40 (docs/field_observations_seihai.md, 2026-09-29): at 21:03 JST OpenAlex answered
+        # every `search=` / `title_and_abstract.search` request with 503 + Retry-After 60 and a
+        # body saying anonymous search was paused (search.semantic and plain filters still 200).
+        # contra reported "HTTP Error 503" with a traceback, which reads like a broken query.
+        if (isinstance(last_exc, urllib.error.HTTPError) and last_exc.code == 503
+                and paused_503 and "anonymous search is paused" in paused_503.lower()):
+            retry_after = _hdr_float(getattr(last_exc, "headers", None), "Retry-After")
+            raise OpenAlexError(
+                f"OpenAlex が匿名の全文検索を一時停止しています（503・{attempt} 回とも同じ応答"
+                + (f"・{_wait_phrase(retry_after)}" if retry_after is not None else "")
+                + "）。クエリや候補の問題ではありません（F-40）。停止中も search.semantic と filter の"
+                "一覧は通ります。OpenAlex の応答によれば無料の API キーで停止を回避できます＝環境変数 "
+                "OPENALEX_API_KEY に設定すると全リクエストに付きます（キーの発行は人間の作業）"
+                + ("。キーは設定済みですが、それでも停止を受けました" if self.config.api_key else "")
+                + "。数分おいて再実行してください。"
             ) from last_exc
         raise OpenAlexError(
             f"request failed after {attempt} attempts: {last_exc}"

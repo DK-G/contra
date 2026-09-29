@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-09-29（CL-0122） 匿名の全文検索の停止を名指しし、API キーの受け口を作る（F-40）
+
+### 概要
+* `src/openalex/client.py`: 503 の本文が「anonymous search is paused」なら、停止・Retry-After・semantic と filter は通ること・API キーでの回避を名指しする。環境変数 `OPENALEX_API_KEY` があれば `api_key` を付ける（無ければ URL 不変）。
+* `tests/test_openalex_client_retry.py`: 回帰 4 件。533 pass。
+* `docs/field_observations_seihai.md`: 「対処済み」節に F-40（残る限界つき）。
+* 発端: 2026-09-29 21:03 JST、live 確認中に OpenAlex が匿名の全文検索を 503 で停止しており、bybridge が「HTTP Error 503」とトレースバックで止まった。
+
+---
+
 ## 2026-09-29（CL-0121） bybridge materials も全件を返す（F-38b-M）
 
 ### 概要

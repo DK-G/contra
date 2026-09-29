@@ -765,6 +765,14 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-40. 全 by\* 共通 — **OpenAlex が匿名の全文検索を停止すると、「HTTP Error 503」とトレースバックだけが返る**（2026-09-29 初観測・contra 側で発見） — **診断と API キーの受け口は対処済み 2026-09-29。停止そのもの（匿名利用）は未対処＝人間の判断待ち**
+
+- 観測（21:03〜21:06 JST・curl で直接）: `search=` と `filter=title_and_abstract.search:` は 503・`Retry-After: 60`・本文 `"Anonymous search is paused while the search cluster recovers from heavy load. Please retry shortly, or use a free API key for uninterrupted access"`。同時刻に `search.semantic` と `filter=cites:` は 200。予算メーターは $0.0999 残（予算の問題ではない）。
+- 影響: bybridge は語彙シードの段で例外になり、**semantic レッグが通る状態でも run 全体が止まった**（F-38b-M の live 確認がこれで止まった）。byrepo 以外の by\* の語彙経路はすべて同じ。contra のメッセージは `request failed after 3 attempts: HTTP Error 503` で、本文の説明は捨てられていた＝F-28/F-29 と同じく「上流の停止がクエリの性質に見える」穴。1 秒・2 秒のリトライは Retry-After 60 秒に対して無駄撃ち（503 は課金されないので害は無い）。
+- 変えたもの（`src/openalex/client.py`＝**共通クライアントの診断段のみ**・リトライ回数と待ちは不変）: (1) 503 の本文を読み、「anonymous search is paused」なら「匿名の全文検索の一時停止・クエリや候補の問題ではない・semantic と filter は通る・Retry-After と再開目安・API キーで回避可能（発行は人間）」と名指しする。それ以外の 503 は従来の文言。(2) 環境変数 `OPENALEX_API_KEY` があれば全リクエストに `api_key` を付ける（無ければ URL は従来と同一）。
+- 検証: 回帰 4 件（停止の名指し・他の 503 は従来文言・キーの付与・キー無しで URL 不変）のうち、停止の名指しとキーの付与が旧コードで失敗することを確認。533 pass。**live**: 停止中の実エンドポイントに対し「OpenAlex が匿名の全文検索を一時停止しています（503・3 回とも同じ応答・Retry-After 60 秒（再開目安 21:07））。クエリや候補の問題ではありません（F-40）…」を確認。
+- **残る限界（未対処）**: (a) bybridge は語彙レッグが例外になると semantic レッグだけで続行せず、run 全体が止まる（シード段の縮退の設計＝別の段なので次回以降）。(b) 停止が続く限り語彙経路は通らない。**API キーの発行と設定は人間の判断事項**（キーを作らない規則）。キーにすると予算の計量が IP 単位からキー単位に変わる可能性がある（F-28/F-29 の共有の前提。未確認）。
+
 ### F-38b-M. bybridge — **`materials` 経路も、診断の「交差候補 N 件」を全件返す**（F-38(b) の materials 側・2026-09-28 seihai r01/FJ で再現） — **対処済み 2026-09-29**
 
 - 機序: F-38-R（09-27）は `raw_only` の一覧だけを全件表示にし、`materials` 経路の `ranked_all[:30]`（08-22 の plan X 以来の打ち切り）は残っていた。診断行は `len(cands)`（最大 60）を数え、材料 JSON は 30 件で、31 位以下を切ったことはどこにも書かれていなかった。09-28 の seihai は「診断は 60 件、materials は 30 件」と記録した。
