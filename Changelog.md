@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-09-29（CL-0121） bybridge materials も全件を返す（F-38b-M）
+
+### 概要
+* `src/mcp_server.py`: bybridge `materials` 経路の `ranked_all[:30]` の打ち切りを外し、診断行の「交差候補 N 件」と同じ全件を材料にする。
+* `tests/test_raw_output_legibility.py`: 回帰 1 件（45 候補 → 材料 45 件）。旧コードで 30 件として失敗。529 pass。
+* `docs/field_observations_seihai.md`: 「対処済み」節に F-38b-M。
+* 発端: seihai 2026-09-28（r01/FJ）で「診断は 60 件、materials は 30 件」。
+
+---
+
 ## 2026-09-28（CL-0120） semantic の種類の絞り込みを手元へ（F-39）
 
 ### 概要

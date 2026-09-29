@@ -132,3 +132,24 @@ def test_bybridge_raw_only_lists_every_reported_candidate(monkeypatch, bridge_of
     listed = [l for l in text.splitlines() if re.match(r"^\d+\. cand ", l)]
     assert len(listed) == 25
     assert "全 25 件" in text
+
+
+def test_bybridge_materials_returns_every_reported_candidate(monkeypatch, bridge_offline):
+    """F-38(b) again, materials path (seihai 2026-09-28): diagnostics said "交差候補 60 件",
+    the materials JSON held 30 — ranks 31+ were cut without a word."""
+    seed = Work(id="S1", title="s", year=2024, venue="v", doi=None, cited_by_count=0,
+                abstract="a", referenced_works=["B1"])
+    cands = [Work(id=f"C{i:02d}", title=f"cand {i}", year=2024, venue="v", doi=None,
+                  cited_by_count=i, abstract="a", referenced_works=["B1"]) for i in range(45)]
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: [seed])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: cands)
+    res = mcp_mod.StdinMcpServer().handle_tool_call("bybridge_collect", {
+        "theme_overview": "t" * 200, "goal": "g", "why_problem": "w",
+        "approach_type": "application", "assumptions": ["a", "b"], "scope_field": "medicine",
+        "materials": True, "no_history": True, "min_seeds": 0, "seed_count": 2, "bridge_count": 3,
+    })
+    text = res["content"][0]["text"]
+    mats = _materials(text)
+    assert len(mats) == 45
+    assert "交差候補 45 件" in text
+    assert all("bridge_signals" in m for m in mats)

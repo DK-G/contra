@@ -765,6 +765,13 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-38b-M. bybridge — **`materials` 経路も、診断の「交差候補 N 件」を全件返す**（F-38(b) の materials 側・2026-09-28 seihai r01/FJ で再現） — **対処済み 2026-09-29**
+
+- 機序: F-38-R（09-27）は `raw_only` の一覧だけを全件表示にし、`materials` 経路の `ranked_all[:30]`（08-22 の plan X 以来の打ち切り）は残っていた。診断行は `len(cands)`（最大 60）を数え、材料 JSON は 30 件で、31 位以下を切ったことはどこにも書かれていなかった。09-28 の seihai は「診断は 60 件、materials は 30 件」と記録した。
+- 変えたもの（bybridge の**出力段のみ**・シード段／bridge 段／順位付けは不変）: 材料を `ranked_all` 全件にした。案内文の「交差候補 N 件」は材料の件数なので、診断行と一致する。byserendipity の raw 経路（60 件）と同じ量で、F-15-U（全件提出。描画しない候補は id と点数だけ）の前提にも合う。
+- 検証: 回帰 1 件（`tests/test_raw_output_legibility.py::test_bybridge_materials_returns_every_reported_candidate`・45 候補）が旧コードで `30 == 45` として落ちることを確認。528 → 529 tests: 529 pass。**live は未確認**: 同日 21:00 JST 時点で OpenAlex が匿名の全文検索（`search=` と `title_and_abstract.search`）を 503 で停止しており、bybridge は語彙シードの段で止まった（下記 F-40）。
+- **呼び手への申し送り**: bybridge `materials` は最大 60 件を返すようになった。全件を採点して提出する（描画しない分は id と点数だけ）か、上位だけ採点するなら、残りを出さなかったことを自分で記録する。
+
 ### F-34-R〜F-38-R. 後知恵テスト（2026-09-27）の不具合 5 件 — **対処済み 2026-09-27**（branch `agent/contra-hindsight-bugfixes`・main 8ed568d へ merge 済み 2026-09-27）
 
 5 件とも、再現テストを先に書き、旧コードで落ちることを確認してから直した（新規 16 件・**498 → 514 tests: 514 pass**）。1 件 1 コミット。実 API 消費は計 $0.0013（単価の probe・Subfield 分類表の取得・1 facet の live 確認）。
@@ -1905,6 +1912,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **byserendipity**（raw_only・facet 3枚） | Near=株式・先物マイクロストラクチャ／Far=地震統計の静穏化・余震／Very Far=神経の閾値下積分とバースト | **F-18 の再現（呼び手側の誤り）**: Near を同じホーム分野内で書いたため `home_converged` で棄却（F-06 再発＝呼び手の facet 設計ミス）。Far・Very Far は 504 を1回・2回受けて**待機で回復**（F-33 の対処が効いた例） | 返却 49/50 → 提出 32/28 |
 | **delegate_finalize**（serendipity・60件全件提出） | — | 通過19・出力3（JGR 2005/1992 の相対的静穏化・GRL 2014 の前震加速）。percentile_gate 0.374（固定フロア 0.2 なら60件通過＝F-15）。接地照合失敗 0 | 通過19/出力3 |
 | **bybridge**（materials・英語 seed_semantic_text 付き） | FX 日中の反転と継続・出来高/ボラショック | シード20件は主題適合（Andersen–Bollerslev・マクロニュース伝達・出来高と取引コスト）。semantic レッグは 504 を3回受け 37 秒で回復＝供給 29 件。**最頻 bridge は主題の基礎文献（Glosten–Milgrom）・上位10件占有 30%** だが、**交差候補の 25/30 件が会計開示・ガバナンス**（Glosten–Milgrom が「情報の非対称」として会計側で大量に引かれる）＝多様化したが橋の向こうが一般概念へ広がる様式。**F-38(b) の再現**: 診断は「交差候補 60 件」、materials は 30 件 | anomaly 22・通過1（fallback）・『近いが有用』1（RFS 2021 Foreign Exchange Volume＝本日の主収穫） |
+
+> **contra 側注記（2026-09-29 失敗対処デー）**: 上表 bybridge 行の「F-38(b) の再現（診断 60 件・materials 30 件）」は対処済み＝`materials` も全件を返す。「対処済み」節 **F-38b-M**。
 
 ## 2026-09-29（火・seihai r02/F2 GP）
 

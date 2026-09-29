@@ -1178,8 +1178,12 @@ class StdinMcpServer:
             # deterministic post-gate and grounding verifier do the rest. Bridge signals
             # ride along as extra keys so the agent can weigh structural linkage.
             _log("Bybridge: returning ranked candidates as delegation materials...")
+            # F-38(b) on the materials path (seihai 2026-09-28): the diagnostics said
+            # "交差候補 60 件" and this list stopped at 30 without saying so. Every reported
+            # candidate goes out, like byserendipity's 60; F-15-U asks the caller to submit
+            # them all (score-only for the ones it will not render).
             mats = []
-            for w in ranked_all[:30]:
+            for w in ranked_all:
                 m = material_from_work(w)
                 meta = w.source_meta or {}
                 m["bridge_signals"] = {
