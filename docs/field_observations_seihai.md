@@ -765,19 +765,26 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-40-B. bybridge — **語彙シードの取得が失敗しても、semantic レッグで名簿を作って続行する**（F-40 の残る限界 (a)） — **対処済み 2026-09-29**
+
+- 機序: bybridge のシード段は語彙レッグ（`collect_and_filter`）→ semantic レッグの順で、語彙レッグの `OpenAlexError` がそのまま run を終わらせていた。匿名の全文検索の停止中（F-40）は、semantic レッグが通るのに一度も問い合わせられなかった。
+- 変えたもの（bybridge の**シード段のみ**・bridge 段／順位付けは不変。同じ回の F-38b-M は出力段なので段は重ならない）: semantic レッグが有効（既定）なら、語彙レッグの `OpenAlexError` を受けて語彙シード 0 件で続行し、「⚠ 語彙シードの取得が失敗したため、名簿は semantic レッグだけで作りました（F-40）: <理由>」を**診断の有無にかかわらず**出す（F-26 の拒否文・シード 0 件の文・materials にも）。`seed_semantic:false` なら従来どおり例外。F-26 の下限は不変＝semantic だけで薄い名簿は拒否される。併せて、`materials` 経路で `diagnostics:false` のとき F-37 の「scope_field が解決しない」行も落ちていたので、同じ強制行に入れた。
+- 検証: 回帰 3 件（`tests/test_bybridge_lexical_leg_failure.py`：semantic で続行して名指し・薄い名簿は F-26 で拒否しつつ F-40 を名指し・semantic 無効なら例外）のうち 2 件が旧コードで失敗することを確認。536 pass。**live（21:19〜21:20 JST・停止中＝同時刻の curl は 503）**: 09-29 seihai r02 の GP テーマ（`seed_semantic_text` 付き）で、語彙シード 0・semantic 供給 30 → 名簿 14 件（上位トピック Evolutionary Algorithms and Applications 6 / Stock Market Forecasting Methods 6）・bridge 49 本・交差候補 60 件・最頻 bridge Brock–Lakonishok–LeBaron（上位 10 件で 60%）。**旧コードでは同じ呼び出しがトレースバックで 0 件だった**。予算消費 $0.0023。
+- 読み方の注意: semantic だけの名簿では Field 一致率の警告（14% < 50%）が出るが、F-27 の注記どおりこのレッグは分野ラベルで選ばれていない。名簿の主題適合は上位トピックの行とシード表で読む。
+
 ### F-40. 全 by\* 共通 — **OpenAlex が匿名の全文検索を停止すると、「HTTP Error 503」とトレースバックだけが返る**（2026-09-29 初観測・contra 側で発見） — **診断と API キーの受け口は対処済み 2026-09-29。停止そのもの（匿名利用）は未対処＝人間の判断待ち**
 
 - 観測（21:03〜21:06 JST・curl で直接）: `search=` と `filter=title_and_abstract.search:` は 503・`Retry-After: 60`・本文 `"Anonymous search is paused while the search cluster recovers from heavy load. Please retry shortly, or use a free API key for uninterrupted access"`。同時刻に `search.semantic` と `filter=cites:` は 200。予算メーターは $0.0999 残（予算の問題ではない）。
 - 影響: bybridge は語彙シードの段で例外になり、**semantic レッグが通る状態でも run 全体が止まった**（F-38b-M の live 確認がこれで止まった）。byrepo 以外の by\* の語彙経路はすべて同じ。contra のメッセージは `request failed after 3 attempts: HTTP Error 503` で、本文の説明は捨てられていた＝F-28/F-29 と同じく「上流の停止がクエリの性質に見える」穴。1 秒・2 秒のリトライは Retry-After 60 秒に対して無駄撃ち（503 は課金されないので害は無い）。
 - 変えたもの（`src/openalex/client.py`＝**共通クライアントの診断段のみ**・リトライ回数と待ちは不変）: (1) 503 の本文を読み、「anonymous search is paused」なら「匿名の全文検索の一時停止・クエリや候補の問題ではない・semantic と filter は通る・Retry-After と再開目安・API キーで回避可能（発行は人間）」と名指しする。それ以外の 503 は従来の文言。(2) 環境変数 `OPENALEX_API_KEY` があれば全リクエストに `api_key` を付ける（無ければ URL は従来と同一）。
 - 検証: 回帰 4 件（停止の名指し・他の 503 は従来文言・キーの付与・キー無しで URL 不変）のうち、停止の名指しとキーの付与が旧コードで失敗することを確認。533 pass。**live**: 停止中の実エンドポイントに対し「OpenAlex が匿名の全文検索を一時停止しています（503・3 回とも同じ応答・Retry-After 60 秒（再開目安 21:07））。クエリや候補の問題ではありません（F-40）…」を確認。
-- **残る限界（未対処）**: (a) bybridge は語彙レッグが例外になると semantic レッグだけで続行せず、run 全体が止まる（シード段の縮退の設計＝別の段なので次回以降）。(b) 停止が続く限り語彙経路は通らない。**API キーの発行と設定は人間の判断事項**（キーを作らない規則）。キーにすると予算の計量が IP 単位からキー単位に変わる可能性がある（F-28/F-29 の共有の前提。未確認）。
+- **残る限界**: (a) ~~bybridge は語彙レッグが例外になると run 全体が止まる~~ → **同日対処済み（F-40-B・下記）**。(b) 停止が続く限り語彙経路は通らない（byrepo 以外の by\* の語彙経路・byserendipity の lexical 補助も同じ）。**API キーの発行と設定は人間の判断事項**（キーを作らない規則）。キーにすると予算の計量が IP 単位からキー単位に変わる可能性がある（F-28/F-29 の共有の前提。未確認）。
 
 ### F-38b-M. bybridge — **`materials` 経路も、診断の「交差候補 N 件」を全件返す**（F-38(b) の materials 側・2026-09-28 seihai r01/FJ で再現） — **対処済み 2026-09-29**
 
 - 機序: F-38-R（09-27）は `raw_only` の一覧だけを全件表示にし、`materials` 経路の `ranked_all[:30]`（08-22 の plan X 以来の打ち切り）は残っていた。診断行は `len(cands)`（最大 60）を数え、材料 JSON は 30 件で、31 位以下を切ったことはどこにも書かれていなかった。09-28 の seihai は「診断は 60 件、materials は 30 件」と記録した。
 - 変えたもの（bybridge の**出力段のみ**・シード段／bridge 段／順位付けは不変）: 材料を `ranked_all` 全件にした。案内文の「交差候補 N 件」は材料の件数なので、診断行と一致する。byserendipity の raw 経路（60 件）と同じ量で、F-15-U（全件提出。描画しない候補は id と点数だけ）の前提にも合う。
-- 検証: 回帰 1 件（`tests/test_raw_output_legibility.py::test_bybridge_materials_returns_every_reported_candidate`・45 候補）が旧コードで `30 == 45` として落ちることを確認。528 → 529 tests: 529 pass。**live は未確認**: 同日 21:00 JST 時点で OpenAlex が匿名の全文検索（`search=` と `title_and_abstract.search`）を 503 で停止しており、bybridge は語彙シードの段で止まった（下記 F-40）。
+- 検証: 回帰 1 件（`tests/test_raw_output_legibility.py::test_bybridge_materials_returns_every_reported_candidate`・45 候補）が旧コードで `30 == 45` として落ちることを確認。528 → 529 tests: 529 pass。**live（21:19 JST・09-29 seihai r02 の GP テーマ・F-40-B の対処後）**: 診断「交差候補 60 件」・案内文「交差候補 60 件」・材料 JSON 60 件で一致（最初の試行は F-40 の停止で語彙シード段で止まった）。
 - **呼び手への申し送り**: bybridge `materials` は最大 60 件を返すようになった。全件を採点して提出する（描画しない分は id と点数だけ）か、上位だけ採点するなら、残りを出さなかったことを自分で記録する。
 
 ### F-34-R〜F-38-R. 後知恵テスト（2026-09-27）の不具合 5 件 — **対処済み 2026-09-27**（branch `agent/contra-hindsight-bugfixes`・main 8ed568d へ merge 済み 2026-09-27）

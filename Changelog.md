@@ -7,7 +7,17 @@
 
 ---
 
-## 2026-09-29（CL-0122） 匿名の全文検索の停止を名指しし、API キーの受け口を作る（F-40）
+## 2026-09-29（CL-0123） bybridge は語彙シードの失敗を semantic レッグで続行する（F-40-B）
+
+### 概要
+* `src/mcp_server.py`: 語彙シードの `OpenAlexError` を、semantic レッグが有効なら受けて続行し、理由を全経路で名指しする。`materials` で `diagnostics:false` のとき F-37 の未解決 scope 行も出す。
+* `tests/test_bybridge_lexical_leg_failure.py`: 新規 3 件。536 pass。
+* `docs/field_observations_seihai.md`: 「対処済み」節に F-40-B、F-38b-M に live 結果。
+* live: 匿名全文検索の停止中に GP テーマで名簿 14・交差候補 60（旧コードはトレースバック）。
+
+---
+
+ 匿名の全文検索の停止を名指しし、API キーの受け口を作る（F-40）
 
 ### 概要
 * `src/openalex/client.py`: 503 の本文が「anonymous search is paused」なら、停止・Retry-After・semantic と filter は通ること・API キーでの回避を名指しする。環境変数 `OPENALEX_API_KEY` があれば `api_key` を付ける（無ければ URL 不変）。

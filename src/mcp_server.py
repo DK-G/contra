@@ -36,7 +36,7 @@ from src.pipeline.bridges import (
     hybrid_bridge_rank_key,
     shared_bridge_count,
 )
-from src.openalex.client import low_budget_caveat, reset_run_stats, run_stats_caveat
+from src.openalex.client import OpenAlexError, low_budget_caveat, reset_run_stats, run_stats_caveat
 from src.pipeline.classify import _PURPOSE_LEVELS, select_track_b
 from src.pipeline.collect import (
     CollectConfig,
@@ -943,13 +943,30 @@ class StdinMcpServer:
         # F-37: an unresolved scope leaves the lexical seed search unscoped without a word.
         scope_note = (home_scope_note(theme.scope.field, home_ids, use="seed_scope")
                       if seed_field_scope else "")
-        lex_seeds = collect_and_filter(
-            theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True,
-            home_field_ids=scope_ids,
+        use_semantic = bool(args.get("seed_semantic", True))
+        # F-40 (2026-09-29): OpenAlex paused anonymous full-text search (503) while
+        # search.semantic kept answering, and the lexical leg's exception ended the whole run —
+        # a roster the semantic leg could have supplied was never tried. With the semantic leg
+        # on, a failed lexical leg now leaves it to carry the roster and the output says so on
+        # every path (the F-26 floor still refuses a thin roster). With it off, it raises as before.
+        lex_error = ""
+        try:
+            lex_seeds = collect_and_filter(
+                theme, CollectConfig(), max_count=seed_count * 3, require_abstract=True,
+                home_field_ids=scope_ids,
+            )
+        except OpenAlexError as exc:
+            if not use_semantic:
+                raise
+            _log(f"Bybridge: lexical seed leg failed ({exc}) — continuing on the semantic leg...")
+            lex_seeds, lex_error = [], str(exc)
+        lex_note = (
+            f"⚠ 語彙シードの取得が失敗したため、名簿は semantic レッグだけで作りました（F-40）: {lex_error}"
+            if lex_error else ""
         )
         sem_seeds: List[Any] = []
         sem_report: Optional[Dict[str, Any]] = None
-        if bool(args.get("seed_semantic", True)):
+        if use_semantic:
             # 2026-09-11: Japanese theme prose made this leg supply 0 in 4/4 probe runs (the
             # embedding endpoint returns same-language records, which the Field/abstract gates
             # drop). Non-English prose is now swapped for the English keywords, or for the
@@ -1011,7 +1028,8 @@ class StdinMcpServer:
                     f"通常の出力と同じ顔で返り、bridge 段の失敗と区別できません。**\n"
                     f"- 取得: 語彙シード {len(lex_seeds)} 件・semantic シード {len(sem_seeds)} 件"
                     f"（取得ラウンド {_seed_fetch_rounds} 回）\n"
-                    f"- 言語ゲート（seed_language={seed_language!r}）で除外 {lang_dropped} 件\n"
+                    + (f"- {lex_note}\n" if lex_note else "")
+                    + f"- 言語ゲート（seed_language={seed_language!r}）で除外 {lang_dropped} 件\n"
                     f"- referenced_works が空で除外 {dead_seed_count} 件\n"
                     + (render_semantic_leg(sem_report) + "\n" if sem_report else "")
                     + (f"- {scope_note}\n" if scope_note and not home_ids else "")
@@ -1030,7 +1048,8 @@ class StdinMcpServer:
                 if raw_seeds else ""
             )
             return {
-                "content": [{"type": "text", "text": f"近傍シード論文が見つからず、bridge プールを構築できませんでした。キーワードを見直してください。{detail}"}],
+                "content": [{"type": "text", "text": f"近傍シード論文が見つからず、bridge プールを構築できませんでした。キーワードを見直してください。{detail}"
+                                            + (f"\n- {lex_note}" if lex_note else "")}],
                 "isError": False
             }
 
@@ -1161,6 +1180,8 @@ class StdinMcpServer:
             )
         if scope_note and (diagnostics or not home_ids):
             diag_line = f"- {scope_note}\n" + diag_line
+        if lex_note:  # always: the roster was not built the way the caller asked for
+            diag_line = f"- {lex_note}\n" + diag_line
         if not cands:
             head = (
                 f"citation 2-hop で交差候補が見つかりませんでした"
@@ -1204,7 +1225,11 @@ class StdinMcpServer:
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
                 "抜粋できない主張は書かないでください——contra が決定論的に照合し、照合失敗の散文は棄却されます。"
             )
-            body = instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else "") + _materials_json(mats)
+            # Lines that must reach the caller even with diagnostics off (the raw paths print
+            # diag_line unconditionally): the F-40 lexical-leg failure and an unresolved F-37 scope.
+            forced = "".join(f"- {n}\n" for n in (lex_note, scope_note if not home_ids else "") if n)
+            body = (instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else (forced + "\n" if forced else ""))
+                    + _materials_json(mats))
             return {"content": [{"type": "text", "text": body}], "isError": False}
 
         if raw_only:
