@@ -1942,6 +1942,18 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **bybridge**（materials） | GP 売買規則と共通祖先を持つ分野外の「進化中のコスト」研究 | **S-26 観測**: 最頻 bridge 占有 20%（上位10件でも 20%）・通行 30 本＝旧様式ではない。**最頻 bridge が主題祖先（Brock–Lakonishok–LeBaron）なのは4回連続**。交差候補の上位は GP の工学応用（舗装・コンクリート・風力）＝bridge が**手法の祖先**を辿り、主題の問い（探索中のコスト）には届かない。「多様化したが主題適合は薄い」 | 30 件中 anomaly 20・通過3・出力1（Kashtan & Alon PNAS 2005） |
 | **delegate_finalize**（bybridge） | — | **呼び手側の誤り（contra の欠陥ではない）**: 実在しない id 1 件だけで誤送信 → `status=saturated`・anomaly 1。直後に正しい30件で再送 | — |
 
+## 2026-09-30（水・seihai r03/F4 解釈可能ML）
+
+テーマ: 浅い決定木のエントリ規則が4週連続で事前登録バーを全滅。木の選び方（安定性選択／Rashomon 集合の平均／コスト感応の分割・枝刈り／レジーム条件付きの葉）を変えるべきか。発行前プローブで OpenAlex 枠 `Remaining 954 / USD 0.0954`、429 は0回。実行順は byrepo → byserendipity → finalize → bybridge → finalize（直列）。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured・github） | コスト感応・安定性選択つきの決定木／規則リスト売買の実装 | **収穫ゼロ（語彙衝突 S-39 系の再現）**。1位 `eslazarev/purged-cross-validation` は主題の隣（CPCV/DSR の実装）で衝突ではないが、木の選び方は運ばない。2位 `deepentropy/tvscreener` は `forex` の語彙一致のみ、3位 `skfolio` は README 部分一致 | 関連度 0.2/0.2/0.13・主題一致 0/3 |
+| **byserendipity**（raw_only・facet 3枚） | Near=Rashomon 集合／Far=種分布モデルの転移可能性／Very Far=臨床決定規則の外部検証 | **正常**。返却 24/13/29 → 提出 14/11/20・504 なし | 45 件 |
+| **delegate_finalize**（serendipity・45件全件提出） | — | 通過2・出力2（Wenger & Olden 2012・Heikkinen 2011）。anomaly 6 / hollow 30 で分位の母数 9 → 閾値 0.354（固定フロア 0.2 なら7件＝F-15 の再現）。MOSS・R.C.(2000)・Bootstrapping rule induction は距離律速で落選。接地照合失敗 0 | 通過2/出力2 |
+| **bybridge**（materials） | 決定木売買規則と共通祖先を持つ分野外の「規則の不安定性・転移」研究 | **新しい観測（F-07 の再発ではない）: テーマに手法語（decision tree / machine learning）が入ると、手法の基礎文献が巨大ハブになって上位を占める**。最頻 bridge = Breiman「Random Forests」（被引用 133,490）が交差候補の 15%・**上位10件の 60%**。上位は汎癌免疫ゲノム・ilastik・QuPath・MissForest など RF を引用しただけの分野外文献。9/29 の「bridge は手法の祖先を辿る」の強い版。併せてシード名簿にサブフィールド一致 30%（主題ドリフト警告）・語彙レッグの主題一致 27% 警告 | 通行 bridge 15・共有 bridge 1本のみ 41/60 |
+| **delegate_finalize**（bybridge・60件全件提出） | — | anomaly 34 / hollow 21 で分位の母数 5 → `status=fallback`・出力1（Pooling of forecasts, Hendry & Clements 2004）。Surrogate Time Series は 0.29 vs 閾値 0.296 で落選 | 通過1(fallback)/出力1 |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
