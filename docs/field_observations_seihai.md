@@ -1954,6 +1954,21 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **bybridge**（materials） | 決定木売買規則と共通祖先を持つ分野外の「規則の不安定性・転移」研究 | **新しい観測（F-07 の再発ではない）: テーマに手法語（decision tree / machine learning）が入ると、手法の基礎文献が巨大ハブになって上位を占める**。最頻 bridge = Breiman「Random Forests」（被引用 133,490）が交差候補の 15%・**上位10件の 60%**。上位は汎癌免疫ゲノム・ilastik・QuPath・MissForest など RF を引用しただけの分野外文献。9/29 の「bridge は手法の祖先を辿る」の強い版。併せてシード名簿にサブフィールド一致 30%（主題ドリフト警告）・語彙レッグの主題一致 27% 警告 | 通行 bridge 15・共有 bridge 1本のみ 41/60 |
 | **delegate_finalize**（bybridge・60件全件提出） | — | anomaly 34 / hollow 21 で分位の母数 5 → `status=fallback`・出力1（Pooling of forecasts, Hendry & Clements 2004）。Surrogate Time Series は 0.29 vs 閾値 0.296 で落選 | 通過1(fallback)/出力1 |
 
+## 2026-10-01（木・seihai r04/F5 microstructure）
+
+テーマ: F5 の語彙拡張の第2軸＝「USDJPY バーストと同時刻に EURUSD（USD 脚）も励起しているか」がバーストの帰趨（減衰 vs 持続）を分けるか。実行順は byrepo・byserendipity・bybridge を並列 → finalize ×2 → byserendipity（bynote 代替の A3 接地・facet 3枚）。504・429 は 0 回。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured・github） | 多銘柄 M1 バーの整列・通貨間ボラティリティ・スピルオーバーの実装 | **収穫ゼロ（F-20／S-39 系の語彙衝突・r04 では 4 週連続）**。上位 4 件は `tradingview-scraper`／`tradingview-mcp`／`tvscreener`／`HTF_indicator`＝`forex` の語出現だけで引かれた TradingView 系ツール。多銘柄整列・スピルオーバーの実装は 0 件 | 関連度 0.27/0.2/0.2/0.4・主題一致 0/4 |
+| **byserendipity**（raw_only・facet 3枚） | Near=地震学の動的トリガ／Far=電力系統の連鎖停電／Very Far=てんかんネットワーク | **正常**。返却 35/36/40 → 提出 20/20/20 | 60 件 |
+| **delegate_finalize**（serendipity・60件全件提出） | — | 通過 16・出力 5（percentile_gate 0.396・固定フロア 0.2 なら 51）。接地照合失敗 0。`not_selected(no_material)` 11 件＝全ゲート通過だが材料無しで送った分（F-15-U2 の注記どおり） | 通過16/出力5 |
+| **bybridge**（materials・観測プロトコル継続） | 通貨間ボラ伝播・lead-lag の共通祖先から「隣の同時状態で局所過渡を分類する」分野外研究 | **新様式の継続（旧様式の再現ではない）**: 最頻 bridge＝Engle (1982) ARCH（被引用 20,923・**主題ドメインの基礎文献**）が交差候補の 25%・**上位10件の 30%**。使われた bridge 29 本・候補あたり 2.27 本。名簿は Field 一致 20/20・Subfield Finance 8/20。semantic レッグ供給 20（504 なし） | 占有率 30%・出力 1 |
+| **delegate_finalize**（bybridge・56件全件提出） | — | anomaly 27・hollow 1・通過 4・出力 1（fMRI 時変相関の推定量比較・Lindquist 2014）。近接の直接証拠（多変量 HAR の通貨間伝播 2023）は hollow（depth 0.48）で落選、temporal aggregation survey は output_floor 0.213 で落選 | 通過4/出力1 |
+| **byserendipity**（bynote 代替・A3 接地・facet 3枚） | Near=センサネットの分散異常検知／Far=水文（雨量計・流量計網）／Very Far=疫学（自生 vs 輸入症例） | **正常**。返却 49/28/26 → 提出 28/18/14。3 類推とも実文献を引き当て（W1786427715・W2322187494・W3087665469） | 60 件・接地 3/3 |
+
+**新しい観測ではない点**: byrepo の `forex` 衝突は 9/23・9/30 と同型。**bybridge**は「上位多様化・最頻 bridge は主題基礎文献・収穫は薄い」の様式が 9/24 以降続いている（seihai 側の裁定は S-67 のまま＝除外せず観測継続）。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
