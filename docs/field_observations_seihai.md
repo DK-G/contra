@@ -1969,6 +1969,22 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **新しい観測ではない点**: byrepo の `forex` 衝突は 9/23・9/30 と同型。**bybridge**は「上位多様化・最頻 bridge は主題基礎文献・収穫は薄い」の様式が 9/24 以降続いている（seihai 側の裁定は S-67 のまま＝除外せず観測継続）。
 
+## 2026-10-02（金・seihai r05/F9 LLM）
+
+テーマ: 順張りの状態述語エントリで、SL を起こした値動きが逆側のエントリ条件を同時に成立させる（stop-and-reverse のウィップソー）。ヒステリシス・不感時間・再武装条件で抑える機構と、選別時の課金。テーマ本文は英語で送った。実行順は byrepo・byserendipity・bybridge を並列 → finalize ×2。bynote 代替の A3 接地は同じ raw 取得の 3 facet から引き当てた（追加の呼び出しなし）。504・429 は 0 回。
+
+| ツール | テーマ側の狙い | 失敗様式／観測 | 数値 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 30） | ウィップソー抑制（ヒステリシス帯・SL 後の再武装条件）の実装 | **収穫ゼロ（F-14 系）**。`keywords_include` 5 語のうち主題の核 `whipsaw`・`hysteresis` に一致したリポジトリは 0 件。上位 4 件（`TrendFollowingSystems`／`superior-skills`／`QuantInvestStrats`／`AlphaSuite`）は `trend-following`・`backtesting` の一致だけで上がった汎用基盤。語彙衝突の警告は出ていない＝**関連度 0.33〜0.43 は「一般語 2 語の一致」で作られた値**で、核の語が 1 つも当たっていないことは順位スコアからは読めない | 関連度 0.40/0.43/0.33/0.37・核の語一致 0/4 |
+| **byserendipity**（raw_only・facet 3枚） | Near=制御工学（切替系のチャタリング）／Far=電力系統保護（自動再閉路）／Very Far=システム生物学（遺伝子トグルスイッチ） | **正常**。返却 44/45/36 → ホーム除外・重複後 30/41/26 → 提出 20/20/20。同一論文の版違い（会議版と別版）が 2 組、スペイン語版の重複が 1 件あった | 60 件 |
+| **delegate_finalize**（serendipity・60件全件提出・材料 echo は 5 件） | — | 通過 18・出力 5（percentile_gate 0.396・固定フロア 0.2 なら 60）。**接地照合失敗 0**。`not_selected(no_material)` 13 件。venue 空の材料 3 件は contra 側で「echo 漏れではない」と注記された（F-31 系の表示は正常） | 通過18/出力5 |
+| **bybridge**（materials・英文 `seed_semantic_text` 398 字） | 移動平均ルールの共通祖先から、切替コスト・ヒステリシスを扱う分野外研究 | **名簿は主題に合致・交差候補は主題に届かない**。名簿: Field 一致 20/20・Subfield Finance 15/20・semantic レッグ供給 21（504 なし）・名簿に *Trading to Stops*／*Adjustable-band moving average* など主題の近傍が入った。最頻 bridge＝Brock ほか (1992)（被引用 2,267・**主題ドメインの基礎文献**）が交差候補の 40%・**上位10件の 70%**。使われた bridge 26 本・候補あたり 3.47 本。交差候補 60 件の内訳（呼び手の分類）: 同主題が兄弟 Field に分類されたもの（テクニカルルールの収益性検定・データスヌーピング）27、株価予測の機械学習 19、**無関係な経営学の巨大ハブ 13**（ソーシャルメディア 被引用 17,884・企業評判・M&A・会計基準など）、主題に接したもの 1 | 占有率 70%・主題接触 1/60 |
+| **delegate_finalize**（bybridge・60件全件提出） | — | **anomaly 29・通過 0・fallback 出力 1**（Directional Change＋強化学習・IEEE Access 2021・スコア 0.12・律速は距離）。F-10 上限の書き換え 1 件（0.46→0.45）は注記どおり | 通過0/出力1(fallback) |
+
+**新しい観測**: (1) bybridge で**上位 10 件占有率が 70% に戻った**（9/23 0%・10/01 30%）。吸着先は分野外ハブではなく主題の基礎文献なので旧様式（F-07）の再現ではないが、「上位窓多様化済み」の表示と占有率 70% は並んで出ている。(2) F-32 のホーム除外（Field＋名簿が 2 件以上占める Topic）を通った後も、**同主題が Computer Science／Decision Sciences に分類された候補が 46/60 を占めた**＝除外した Topic は 2 つ（Financial Markets and Investment Strategies・Complex Systems and Time Series Analysis）で、Stock Market Forecasting 系の Topic は名簿に 2 件無かったため残った。(3) 経営学の巨大ハブ 13 件は `bridge_strength` 6〜10 で上位に並んだ（Brock ほかを引用する会計・経営の実証研究経由と推定・未検証）。
+
+**新しい観測ではない点**: byrepo の「一般語だけ一致して核の語が当たらない」は F-14 の再現。byserendipity の委譲フローは 9/28 以降 5 営業日連続で正常。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
