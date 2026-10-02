@@ -669,6 +669,7 @@ def repository_to_work(repo: GitRepository) -> Work:
             "theme_fit_score": repo.theme_fit_score,
             "theme_fit_matched": repo.theme_fit_matched,
             "theme_fit_keywords": repo.theme_fit_keywords,
+            "readme_fetch_error": repo.readme_fetch_error,
             "activity_score": repo.activity_score,
             "adoption_score": repo.adoption_score,
             "license_score": repo.license_score,
@@ -692,6 +693,16 @@ def repository_to_work(repo: GitRepository) -> Work:
             "non_owner_issue_reporters": repo.non_owner_issue_reporters,
         },
     )
+
+
+def _short_fetch_error(exc: Exception) -> str:
+    """Status + cause in a few words. GitHub's rate-limit body names the caller's IP address,
+    which has no business in a tool output, so the body is not passed through."""
+    text = " ".join(str(exc).split())
+    head = text.split(":", 1)[0][:20]
+    if "rate limit" in text.lower():
+        return f"{head}: rate limit exceeded"
+    return head
 
 
 def _fetch_readme_text(client: GitHubClient, full_name: str) -> str:
@@ -784,14 +795,20 @@ def collect_track_a_git_repos(
     repos: List[GitRepository] = []
     for item in items:
         readme_text = ""
+        readme_fetch_error = ""
         issue_score = 0
         issue_signal_summary = ""
         if cfg.include_readme and item.get("full_name"):
             try:
                 readme_text = _fetch_readme_text(gh, str(item["full_name"]))
-            except Exception:
+            except Exception as exc:
                 readme_text = ""
+                # 404 = the repository has no README; anything else (403 rate limit, network)
+                # means a README that exists was not read (F-41).
+                if "http 404" not in str(exc):
+                    readme_fetch_error = _short_fetch_error(exc)
         repo = _normalize_repo(item, readme_text=readme_text)
+        repo.readme_fetch_error = readme_fetch_error
         issue_open_count = 0
         issue_closed_count = 0
         non_owner_reporters = 0

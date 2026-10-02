@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-10-02（CL-0124） byrepo はプールの中身をキーワード別に申告する（F-41・計器）
+
+### 概要
+* `src/pipeline/theme_fit.py`: `pool_keyword_breakdown` / `pool_summary` を追加。取得したプール全体について、キーワードごとの一致件数（名前/説明/topics・README）、名前/説明/topics に 1 件も現れないキーワードの名指し、README・issue の取得失敗件数を返す。
+* `src/pipeline/git_collect.py` / `src/core/models.py`: README の取得失敗（404 以外）を `readme_fetch_error` として運ぶ。レート制限の本文は呼び手の IP を含むので通さない。
+* `src/mcp_server.py`: byrepo の両経路（structured・LLM）で、`track_a_count` への切り詰めの前に測った内訳をアンカーの前に出す。順位・検索は不変。
+* `tests/test_byrepo_pool_summary.py`: 新規 9 件。545 pass。`scripts/byrepo_pool_probe.py`: 応答をディスクに置く再演プローブ。
+* live（seihai 2026-10-02 r05 の呼び出しを再演・プール 30）: whipsaw 1（0・1）/ hysteresis 1（0・1）/ trend-following 15（1・14）/ regime-filter 5（0・5）/ backtesting 26（18・8）。レート枯渇下の pool 35 で「README 5 件・issue 5 件の取得失敗」を初めて表示。
+* このエントリと併せて、CL-0123 のコミットで欠けた CL-0122 と DECISION_LOG（F-40）の見出しを git 履歴の原文へ戻した。
+
+---
+
 ## 2026-09-29（CL-0123） bybridge は語彙シードの失敗を semantic レッグで続行する（F-40-B）
 
 ### 概要
@@ -17,7 +29,7 @@
 
 ---
 
- 匿名の全文検索の停止を名指しし、API キーの受け口を作る（F-40）
+## 2026-09-29（CL-0122） 匿名の全文検索の停止を名指しし、API キーの受け口を作る（F-40）
 
 ### 概要
 * `src/openalex/client.py`: 503 の本文が「anonymous search is paused」なら、停止・Retry-After・semantic と filter は通ること・API キーでの回避を名指しする。環境変数 `OPENALEX_API_KEY` があれば `api_key` を付ける（無ければ URL 不変）。

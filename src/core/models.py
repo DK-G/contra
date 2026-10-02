@@ -84,6 +84,9 @@ class GitRepository:
     pushed_at: str = ""
     topics: List[str] = field(default_factory=list)
     readme_text: str = ""
+    # F-41: why the README is empty when the fetch failed for a reason other than "no README"
+    # (404). A rate-limited fetch used to be indistinguishable from a repository without one.
+    readme_fetch_error: str = ""
     reliability_score: int = 0
     theme_fit_score: int = 0
     # F-14/F-20: which of the caller's keywords actually matched, and where. The score

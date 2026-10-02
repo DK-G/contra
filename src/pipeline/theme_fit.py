@@ -123,6 +123,76 @@ def matched_summary(matched: Sequence[Dict[str, Any]], keywords: int) -> str:
     return f"一致キーワード {len(matched)}/{keywords}: " + " / ".join(parts)
 
 
+# --- F-41: what the POOL contains, per keyword ---------------------------------------------
+#
+# seihai 2026-10-02: five keywords, two of them the subject's core (`whipsaw`, `hysteresis`).
+# The four returned anchors read relevance 0.33-0.43 — every point of it earned by the two
+# general keywords (`trend-following`, `backtesting`). Replayed the same day: of the 30 pooled
+# repositories 26 matched `backtesting` and ONE matched `whipsaw` (a partial README mention).
+# The per-anchor line (`matched_summary`) says what each returned anchor matched; nothing said
+# what the pool never contained, so "the ranking buried the subject" and "the search never
+# fetched it" looked the same from the output. This is the pool-level half of that answer.
+
+_WHERE_STRONG = "name/description/topics"
+_ISSUE_FETCH_FAILED = "issue取得失敗"
+
+
+def pool_keyword_breakdown(
+    include: Sequence[str], pool_matched: Sequence[Sequence[Dict[str, Any]]]
+) -> List[Dict[str, Any]]:
+    """Per include keyword: how many pooled anchors matched it, split by surface."""
+    rows: List[Dict[str, Any]] = []
+    for term in (t for t in (str(x or "").strip() for x in include) if t):
+        strong = readme = 0
+        for matched in pool_matched:
+            hit = next((m for m in matched or [] if m.get("keyword") == term), None)
+            if hit is None:
+                continue
+            if hit.get("where") == _WHERE_STRONG:
+                strong += 1
+            else:
+                readme += 1
+        rows.append({"keyword": term, "strong": strong, "readme": readme, "total": strong + readme})
+    return rows
+
+
+def pool_summary(include: Sequence[str], pool_metas: Sequence[Dict[str, Any]]) -> str:
+    """The pool-level lines printed above the anchors: per-keyword counts, the keywords no
+    pooled anchor carries on its identity surface, and what could not be measured."""
+    measured = [m for m in pool_metas if "theme_fit_matched" in (m or {})]
+    rows = pool_keyword_breakdown(include, [m.get("theme_fit_matched") for m in measured])
+    if not measured or not rows:
+        return ""
+    lines = [
+        f"プール内訳（取得 {len(measured)} 件のうち各キーワードに一致した件数。括弧内は "
+        "名前/説明/topics・README）: "
+        + " / ".join(f"{r['keyword']} {r['total']}（{r['strong']}・{r['readme']}）" for r in rows)
+    ]
+    absent = [r for r in rows if r["strong"] == 0]
+    if absent:
+        names = " / ".join(
+            r["keyword"] + ("（README を含め 0 件）" if r["total"] == 0 else f"（README の言及のみ {r['readme']} 件）")
+            for r in absent
+        )
+        lines.append(
+            f"⚠ 名前/説明/topics に一致したものがプールに 1 件も無いキーワード: {names} — "
+            "これらを主題に掲げるリポジトリは検索段でプールに入っていません。下の theme 関連度は"
+            "残りのキーワードの一致で作られた値で、順位を入れ替えてもこの欠落は埋まりません。"
+        )
+    readme_failed = sum(1 for m in measured if m.get("readme_fetch_error"))
+    issue_failed = sum(1 for m in measured if m.get("issue_signal_summary") == _ISSUE_FETCH_FAILED)
+    if readme_failed or issue_failed:
+        first = next((m["readme_fetch_error"] for m in measured if m.get("readme_fetch_error")), "")
+        lines.append(
+            f"⚠ 取得失敗: README {readme_failed} 件・issue {issue_failed} 件"
+            + (f"（{first}）" if first else "")
+            + " — README を読めなかったリポジトリは名前/説明/topics だけで採点され、issue を読めなかった"
+            "ものは Reliability の community 点が欠けています。未認証の GitHub API は 60 回/時で、"
+            "プール 1 件につき 2 回使います。"
+        )
+    return "\n".join(lines) + "\n\n"
+
+
 __all__ = [
     "README_MIN_LEN",
     "README_DENSITY_UNIT",
@@ -131,4 +201,6 @@ __all__ = [
     "normalize",
     "phrase_count",
     "phrase_in",
+    "pool_keyword_breakdown",
+    "pool_summary",
 ]

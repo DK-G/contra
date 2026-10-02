@@ -765,6 +765,16 @@ S-26 が記録を指示している2項目:
 
 ## 対処済み
 
+### F-41-I. byrepo — **プールが何を含んでいたかを、キーワード別に申告する**（F-14 系「一般語だけ一致して核の語が当たらない」の計器） — **対処済み 2026-10-02（計器のみ）**
+
+- 発端: seihai 2026-10-02（r05）。`keywords_include: whipsaw, hysteresis, trend-following, regime-filter, backtesting`・pool 30 で、返った 4 件の関連度 0.33〜0.43 はすべて `trend-following`・`backtesting` の一致で作られ、核の `whipsaw`・`hysteresis` に一致したものは 0 件。seihai の記録どおり「核の語が 1 つも当たっていないことは順位スコアからは読めない」。
+- 機序（同日の再演で確定・`scripts/byrepo_pool_probe.py`）: 順位の問題ではなく**取得の問題**。プール 30 件のキーワード別一致は whipsaw 1（README の部分一致のみ）／hysteresis 1（同）／trend-following 15／regime-filter 5／**backtesting 26**。検索は全キーワードを 1 本の OR クエリで投げており（該当 483,226 件）、GitHub の best-match の上位 30 件は該当の多い一般語で埋まる。単独で引くと `whipsaw` は 1,762 件・`backtesting` は 167,043 件。⇒ 核の語を主題に掲げるリポジトリはプールに入っておらず、並べ替えでは出てこない。
+- 併せて見つけた沈黙（contra 側で発見）: README の取得失敗は握りつぶされ、README の無いリポジトリと同じ扱いだった。MCP は未認証で動いており（`GITHUB_TOKEN` 未設定）、GitHub の core 枠は **60 回/時**・プール 1 件につき 2 回（README・issue）。⇒ **プール 31 件目以降、または 1 時間以内の 2 回目の byrepo 呼び出しでは、README も issue も読めていない**。09-18 の seihai（pool 40）はこの条件に当たる（当日の出力では確認できない）。
+- 変えたもの（byrepo の**出力段のみ**・検索と順位は不変）: アンカーの前に (1) 「プール内訳」＝取得件数と、キーワードごとの一致件数（名前/説明/topics・README）、(2) 名前/説明/topics に 1 件も現れないキーワードの名指し（README の言及のみ n 件／README を含め 0 件）、(3) README・issue の取得失敗件数と理由（レート制限の本文は IP を含むので通さない）。内訳は `track_a_count` への切り詰めの**前**のプールで測る。
+- 検証: 回帰 9 件（`tests/test_byrepo_pool_summary.py`。較正ケースは 10/02 の再演プールの件数そのもの）。旧コードでは全件失敗。536 → 545 pass。**live（21:06 JST・実 GitHub API・未認証）**: 10/02 の呼び出しの再演で、上位 3 件は seihai の観測と同じ（`TrendFollowingSystems` 0.40／`superior-skills` 0.43／`QuantInvestStrats` 0.33）。出力の冒頭に「whipsaw 1（0・1） / hysteresis 1（0・1） / trend-following 15（1・14） / regime-filter 5（0・5） / backtesting 26（18・8）」と、whipsaw・hysteresis・regime-filter の名指しが出た。続けて core 枠が 0 の状態で pool 35 を投げ、「取得失敗: README 5 件・issue 5 件（http 403: rate limit exceeded）」を確認（旧コードでは何も出ない。この 5 件はどのキーワードにも一致 0 で数えられていた）。
+- **読み方（呼び手へ）**: 名指しされたキーワードがあるとき、関連度は残りの語で作られている。順位を疑う前に、その語を主題に掲げるリポジトリがそもそもプールに無いと読む。取得失敗の行が出たら、その件数ぶんの関連度と Reliability は欠けた入力で計算されている。
+- **残る限界**: 計器であって処方ではない（1 本の OR クエリが一般語でプールを埋める取得の偏りそのものは未対処）。HF・Kaggle の本文取得の失敗は数えていない。未認証の 60 回/時そのものは未対処（`GITHUB_TOKEN` の設定は人間の判断事項）。
+
 ### F-40-B. bybridge — **語彙シードの取得が失敗しても、semantic レッグで名簿を作って続行する**（F-40 の残る限界 (a)） — **対処済み 2026-09-29**
 
 - 機序: bybridge のシード段は語彙レッグ（`collect_and_filter`）→ semantic レッグの順で、語彙レッグの `OpenAlexError` がそのまま run を終わらせていた。匿名の全文検索の停止中（F-40）は、semantic レッグが通るのに一度も問い合わせられなかった。
@@ -1984,6 +1994,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 **新しい観測**: (1) bybridge で**上位 10 件占有率が 70% に戻った**（9/23 0%・10/01 30%）。吸着先は分野外ハブではなく主題の基礎文献なので旧様式（F-07）の再現ではないが、「上位窓多様化済み」の表示と占有率 70% は並んで出ている。(2) F-32 のホーム除外（Field＋名簿が 2 件以上占める Topic）を通った後も、**同主題が Computer Science／Decision Sciences に分類された候補が 46/60 を占めた**＝除外した Topic は 2 つ（Financial Markets and Investment Strategies・Complex Systems and Time Series Analysis）で、Stock Market Forecasting 系の Topic は名簿に 2 件無かったため残った。(3) 経営学の巨大ハブ 13 件は `bridge_strength` 6〜10 で上位に並んだ（Brock ほかを引用する会計・経営の実証研究経由と推定・未検証）。
 
 **新しい観測ではない点**: byrepo の「一般語だけ一致して核の語が当たらない」は F-14 の再現。byserendipity の委譲フローは 9/28 以降 5 営業日連続で正常。
+
+> **contra 側注記（2026-10-02 失敗対処デー）**: 上表 byrepo 行の「核の語が当たっていないことは順位スコアからは読めない」は計器を入れた＝出力の冒頭にキーワード別のプール内訳が出る。再演の結果、核の語はプールに入っていなかった（順位ではなく取得の問題）。「対処済み」節 **F-41-I**。
 
 ## 追記のしかた
 

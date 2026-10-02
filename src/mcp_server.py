@@ -51,7 +51,7 @@ from src.pipeline.collect import (
     collect_track_b_from_spec,
     merge_seed_pools,
 )
-from src.pipeline.theme_fit import matched_summary
+from src.pipeline.theme_fit import matched_summary, pool_summary
 from src.pipeline.query import (
     OPENALEX_FIELDS,
     dominant_field_ids,
@@ -794,6 +794,10 @@ class StdinMcpServer:
                 "isError": False
             }
 
+        # F-41: what the whole pool contains per keyword, read BEFORE the cut to target_count —
+        # a keyword no pooled repository carries cannot be recovered by any re-ranking.
+        pool_note = pool_summary(theme.keywords.include, [w.source_meta or {} for w in works])
+
         # Select & rank: reliability x relevance multiplier (F-03 — relevance must
         # actually move the ranking, not just appear as a label).
         works = sorted(works, key=anchor_rank_key, reverse=True)[:target_count]
@@ -814,7 +818,7 @@ class StdinMcpServer:
             # 4-part prose is structured-filled. See docs/research/mcp_subscription_delegation.md.
             _log("Byrepo: key-free structured assembly (no LLM)...")
             doc = assemble_keyless_track_a_document(theme, works, count=target_count)
-            return _external_data_result(low_rel_warning + render_markdown(doc))
+            return _external_data_result(low_rel_warning + pool_note + render_markdown(doc))
 
         # Convert to entries / fill text
         from src.pipeline.classify import classify_track_a
@@ -850,7 +854,7 @@ class StdinMcpServer:
             lines.append(f"4) 注意点: {entry.caution}")
             lines.append("")
 
-        return _external_data_result(low_rel_warning + "\n".join(lines))
+        return _external_data_result(low_rel_warning + pool_note + "\n".join(lines))
 
     def _execute_bynote(self, args: Dict[str, Any]) -> Dict[str, Any]:
         note = args.get("note_content")
