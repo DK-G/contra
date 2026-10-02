@@ -64,11 +64,13 @@ def collect_track_a_works(
     hf_client: Optional[Any] = None,
     kaggle_client: Optional[Any] = None,
     on_error: Optional[Callable[[str, Exception], None]] = None,
+    git_search_stats: Optional[List[dict]] = None,
 ) -> List[Work]:
     """Collect Track A anchors from the requested sources, merged and ranked.
 
     ``on_error(source_name, exc)`` is invoked when a source fails (default: swallow),
-    letting callers log without aborting the whole collection.
+    letting callers log without aborting the whole collection. ``git_search_stats``, when
+    given, receives one record per GitHub search leg (F-41).
     """
     selected = normalize_sources(sources)
     works: List[Work] = []
@@ -76,7 +78,8 @@ def collect_track_a_works(
     if SOURCE_GITHUB in selected:
         try:
             works.extend(
-                collect_track_a_git_works(theme, config=git_config, client=github_client)
+                collect_track_a_git_works(theme, config=git_config, client=github_client,
+                                          stats_out=git_search_stats)
             )
         except Exception as exc:  # network/HTTP/parse — isolate this source
             if on_error:

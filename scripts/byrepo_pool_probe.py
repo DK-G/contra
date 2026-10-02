@@ -4,7 +4,7 @@ Every GitHub response is cached on disk (``--cache DIR``), so the pool is fetche
 re-ranked offline afterwards (unauthenticated core quota is 60 req/h and a pool of 30 costs
 60: README + issues per repository). Only GitHub is contacted (no OpenAlex quota is used).
 
-Usage: python scripts/byrepo_pool_probe.py --cache <dir> [--offline] [--mcp] [--pool 30] [--count 4]
+Usage: python scripts/byrepo_pool_probe.py --cache <dir> [--offline] [--mcp] [--fair-share] [--list] [--pool 30] [--count 4]
 """
 from __future__ import annotations
 
@@ -77,6 +77,9 @@ def main() -> None:
     ap.add_argument("--count", type=int, default=4)
     ap.add_argument("--mcp", action="store_true", help="print the byrepo MCP output itself")
     ap.add_argument("--chars", type=int, default=2500)
+    ap.add_argument("--fair-share", action="store_true",
+                    help="F-41-R: also search the crowded-out keywords on their own (opt-in)")
+    ap.add_argument("--list", action="store_true", help="print every pooled repository")
     ns = ap.parse_args()
 
     theme = _build_theme_input(ARGS)
@@ -88,16 +91,23 @@ def main() -> None:
         git_collect.GitHubClient = lambda *a, **k: gh
         result = StdinMcpServer()._execute_byrepo(
             {**ARGS, "structured": True, "sources": ["github"],
-             "track_a_count": ns.count, "track_a_pool_size": ns.pool})
+             "track_a_count": ns.count, "track_a_pool_size": ns.pool,
+             "keyword_fair_share": ns.fair_share})
         print(f"live_calls={gh.live_calls}  cache_hits={gh.cache_hits}  failures={gh.failures}\n")
         print(result["content"][0]["text"][:ns.chars])
         return
+    legs: list = []
     works = collect_track_a_works(
         theme, sources=["github"],
-        git_config=GitCollectConfig(per_page=ns.pool, max_repos=ns.pool),
-        github_client=gh, on_error=lambda s, e: print(f"[error] {s}: {e}"))
+        git_config=GitCollectConfig(per_page=ns.pool, max_repos=ns.pool,
+                                    keyword_fair_share=ns.fair_share),
+        github_client=gh, on_error=lambda s, e: print(f"[error] {s}: {e}"),
+        git_search_stats=legs)
     ranked = sorted(works, key=anchor_rank_key, reverse=True)
     print(f"pool={len(works)}  live_calls={gh.live_calls}  cache_hits={gh.cache_hits}  failures={gh.failures}")
+    for leg in legs:
+        print(f"  leg {leg['label']}: total={leg['total_count']} returned={leg['returned']} "
+              f"seated={leg['seated']} {leg['error']}")
     for kw in ARGS["keywords_include"]:
         hit = [w for w in works if any(m.get("keyword") == kw for m in w.source_meta.get("theme_fit_matched") or [])]
         strong = sum(1 for w in hit if any(m.get("keyword") == kw and m.get("where") != "readme"
@@ -108,7 +118,16 @@ def main() -> None:
         m = w.source_meta
         kws = ",".join(x["keyword"] for x in m.get("theme_fit_matched") or [])
         print(f"{i}. {w.title}  rel={m.get('relevance')}  Rel={m.get('reliability_score')}"
-              f"  score={m.get('anchor_rank_score')}  matched=[{kws}]")
+              f"  score={m.get('anchor_rank_score')}  matched=[{kws}]  leg={m.get('search_leg')}")
+    if ns.list:
+        print()
+        print("== pool (ranked) ==")
+        for i, w in enumerate(ranked, 1):
+            m = w.source_meta
+            kws = ",".join(f"{x['keyword']}:{x['credit']}" for x in m.get("theme_fit_matched") or [])
+            desc = " ".join((w.abstract or "").split())[:70]
+            print(f"{i:>2}. [{m.get('search_leg')}] {w.title} *{w.cited_by_count} rel={m.get('relevance')} "
+                  f"Rel={m.get('reliability_score')} score={m.get('anchor_rank_score')} [{kws}] :: {desc}")
 
 
 if __name__ == "__main__":

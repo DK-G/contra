@@ -156,14 +156,54 @@ def pool_keyword_breakdown(
     return rows
 
 
-def pool_summary(include: Sequence[str], pool_metas: Sequence[Dict[str, Any]]) -> str:
-    """The pool-level lines printed above the anchors: per-keyword counts, the keywords no
-    pooled anchor carries on its identity surface, and what could not be measured."""
+def search_legs_summary(search_legs: Sequence[Dict[str, Any]]) -> List[str]:
+    """How the GitHub pool was fetched: one record per search, and the searches that failed.
+
+    Silent for a single search (the pre-F-41 shape) unless it failed.
+    """
+    legs = list(search_legs or [])
+    failed = [leg for leg in legs if leg.get("error")]
+    if len(legs) < 2 and not failed:
+        return []
+
+    def _count(leg: Dict[str, Any]) -> str:
+        total = leg.get("total_count")
+        return "該当件数 不明" if total is None else f"該当 {int(total):,} 件"
+
+    def _seated(leg: Dict[str, Any]) -> str:
+        if leg.get("served_by_or"):
+            return "→全語 OR に含めて取得"
+        return f"→{leg.get('seated', 0)} 件"
+
+    lines = [
+        "検索の内訳（GitHub・該当は GitHub 全体の件数、→ の右はプールに入れた件数。全語 OR の"
+        "該当をキーワード数で割った件数より少ない語は、OR では埋もれるので単独でも検索する）: "
+        + " / ".join(f"{leg['label']} {_count(leg)}{_seated(leg)}"
+                     for leg in legs if not leg.get("error"))
+    ]
+    if failed:
+        lines.append(
+            "⚠ 検索に失敗したキーワード: "
+            + " / ".join(f"{leg['label']}（{leg['error']}）" for leg in failed)
+            + " — この語の単独検索は行われておらず、その分のプールは他の検索で埋まっています。"
+            "未認証の GitHub 検索は 10 回/分です。"
+        )
+    return lines
+
+
+def pool_summary(
+    include: Sequence[str],
+    pool_metas: Sequence[Dict[str, Any]],
+    search_legs: Sequence[Dict[str, Any]] = (),
+) -> str:
+    """The pool-level lines printed above the anchors: how the pool was fetched, per-keyword
+    counts, the keywords no pooled anchor carries on its identity surface, and what could not
+    be measured."""
     measured = [m for m in pool_metas if "theme_fit_matched" in (m or {})]
     rows = pool_keyword_breakdown(include, [m.get("theme_fit_matched") for m in measured])
     if not measured or not rows:
         return ""
-    lines = [
+    lines = search_legs_summary(search_legs) + [
         f"プール内訳（取得 {len(measured)} 件のうち各キーワードに一致した件数。括弧内は "
         "名前/説明/topics・README）: "
         + " / ".join(f"{r['keyword']} {r['total']}（{r['strong']}・{r['readme']}）" for r in rows)
@@ -203,4 +243,5 @@ __all__ = [
     "phrase_in",
     "pool_keyword_breakdown",
     "pool_summary",
+    "search_legs_summary",
 ]

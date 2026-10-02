@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-02（CL-0125） byrepo の稀なキーワードの単独検索を opt-in で入れる（F-41-R・実測して既定にしなかった）
+
+### 概要
+* `src/pipeline/git_collect.py`: `_search_pool` / `_assign_leg_turns` / `build_track_a_git_search_legs`。全語 OR に加えてキーワードごとに検索し、OR の該当÷キーワード数より稀な語だけ単独検索から等分で着席させる。`GitCollectConfig.keyword_fair_share`（既定 False＝従来の 1 本の OR）。各アンカーに `search_leg` を記録。
+* `src/mcp_server.py`: byrepo の引数 `keyword_fair_share`（既定 false）。`src/pipeline/theme_fit.py`: 有効時に「検索の内訳」（各検索の該当件数と着席件数、失敗した検索の名指し）を出す。`src/pipeline/track_a.py`: `git_search_stats` の受け渡し。
+* `tests/test_git_search_fair_share.py`: 新規 14 件。559 pass。
+* live（seihai 2026-10-02 r05 の再演・pool 30）: プール内の whipsaw 一致 1 → 6 件、主題の実装 3 件がプールに入ったが順位は 5・8・17 位で、返る上位 4 件には 0 件。OR の取り分が 30 → 12 に減り before の 1・2 位がプールから消えた。⇒ 既定にしない。
+* `docs/field_observations_seihai.md`: 「未対処」節に F-41-R（実測表・棄却した別案）、F-43（関連度が全キーワード等重み＝順位側の半分）、F-42（ハイフン語が検索で 2 語に割れる）を起票。
+
+---
+
 ## 2026-10-02（CL-0124） byrepo はプールの中身をキーワード別に申告する（F-41・計器）
 
 ### 概要

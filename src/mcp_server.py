@@ -431,7 +431,8 @@ class StdinMcpServer:
                         "track_a_count": {"type": "integer", "description": "Maximum number of practical anchors to return.", "default": 3},
                         "track_a_pool_size": {"type": "integer", "description": "Candidate pool size per source (search per_page/limit + pre-score cap), independent of track_a_count. Omit/0 to auto-derive as track_a_count*2 (old linked behaviour). Set explicitly to widen/narrow the search net without changing how many final anchors are returned (larger values cost more GitHub/HF/Kaggle API calls per source)."},
                         "sources": {"type": "array", "items": {"type": "string", "enum": ["github", "huggingface", "kaggle"]}, "description": "Practical-anchor sources to search: 'github' (repositories), 'huggingface' (Hub models + datasets), and/or 'kaggle' (datasets + notebooks; needs KAGGLE_API_TOKEN or KAGGLE_USERNAME/KAGGLE_KEY, silently skipped when unset). Anchors from all sources merge and rank by reliability score.", "default": ["github", "huggingface", "kaggle"]},
-                        "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False}
+                        "structured": {"type": "boolean", "description": "Key-free (no LLM): rank by the deterministic reliability score and emit the structured 4-part Track A document. byrepo selection is already deterministic; the agent can refine the prose afterward.", "default": False},
+                        "keyword_fair_share": {"type": "boolean", "description": "GitHub only, opt-in (F-41-R): besides the OR query, search on its own each include keyword the OR query crowds out (rarer than an equal share of the OR query's matches) and seat the pool by equal keyword shares. Brings repositories for the rare keywords into the pool; measured 2026-10-02, the current ranking still kept them out of the returned top 4, so raise track_a_count when using it. Costs one extra GitHub search per keyword.", "default": False}
                     },
                     "required": list(_THEME_REQUIRED)
                 }
@@ -750,7 +751,8 @@ class StdinMcpServer:
         theme = _build_theme_input(args)
         target_count = args.get("track_a_count") or 3
         pool_size = args.get("track_a_pool_size") or max(target_count * 2, 10)
-        git_config = GitCollectConfig(per_page=pool_size, max_repos=pool_size)
+        git_config = GitCollectConfig(per_page=pool_size, max_repos=pool_size,
+                                      keyword_fair_share=bool(args.get("keyword_fair_share")))
         hf_config = HFCollectConfig(limit=pool_size, max_works=pool_size)
         sources = normalize_sources(args.get("sources"))
 
@@ -761,12 +763,14 @@ class StdinMcpServer:
             failures[src] = str(exc)
             _log(f"Byrepo: source '{src}' failed: {exc}")
 
+        git_search_stats: List[Dict[str, Any]] = []
         works = collect_track_a_works(
             theme,
             sources=sources,
             git_config=git_config,
             hf_config=hf_config,
             on_error=_on_src_error,
+            git_search_stats=git_search_stats,
         )
 
         if not works:
@@ -796,7 +800,8 @@ class StdinMcpServer:
 
         # F-41: what the whole pool contains per keyword, read BEFORE the cut to target_count —
         # a keyword no pooled repository carries cannot be recovered by any re-ranking.
-        pool_note = pool_summary(theme.keywords.include, [w.source_meta or {} for w in works])
+        pool_note = pool_summary(theme.keywords.include, [w.source_meta or {} for w in works],
+                                 git_search_stats)
 
         # Select & rank: reliability x relevance multiplier (F-03 — relevance must
         # actually move the ranking, not just appear as a label).

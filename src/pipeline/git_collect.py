@@ -54,6 +54,11 @@ class GitCollectConfig:
     # "stars" restores the legacy popularity sort (F-03: stars-sorting guaranteed
     # popularity-dominated pools).
     sort: Optional[str] = None
+    # F-41-R: besides the OR query, search on its own each include keyword the OR query crowds
+    # out, and seat the pool by equal keyword shares. OFF by default: measured 2026-10-02, it
+    # brought the subject's repositories into the pool but, under the current ranking, none of
+    # them into the returned top 4 (see the block above _search_pool).
+    keyword_fair_share: bool = False
 
 
 def _clean_token(token: str) -> str:
@@ -76,6 +81,37 @@ def _pushed_qualifier() -> str:
     return f"pushed:>{cutoff.isoformat()}"
 
 
+def _include_terms(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> List[str]:
+    """Cleaned, de-duplicated include keywords, trimmed to GitHub's operator and length caps."""
+    include_terms: List[str] = []
+    seen = set()
+    for token in list(theme.keywords.include) + list(extra_terms or []):
+        cleaned = _clean_token(token or "")
+        if cleaned and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            include_terms.append(cleaned)  # _clean_token already quotes multi-word terms
+    # Operator budget: (n-1) ORs; trim from the tail if over budget or over length.
+    while len(include_terms) - 1 > _GH_MAX_OPERATORS:
+        include_terms.pop()
+    while len(include_terms) > 1 and sum(len(t) for t in include_terms) > _GH_MAX_QUERY_CHARS:
+        include_terms.pop()
+    return include_terms
+
+
+def _keyword_query(include_terms: Sequence[str], exclude: Sequence[str]) -> str:
+    parts = [" OR ".join(include_terms), "in:name,description,readme"]
+    budget = _GH_MAX_OPERATORS - (len(include_terms) - 1)
+    for token in exclude:
+        if budget <= 0:
+            break
+        cleaned = _clean_token(token.strip()) if token.strip() else ""
+        if cleaned:
+            parts.append(f"NOT {cleaned}")
+            budget -= 1
+    parts.append(_pushed_qualifier())
+    return " ".join(parts)
+
+
 def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> str:
     """OR-join the include keywords and let GitHub's best-match ranking work.
 
@@ -88,23 +124,9 @@ def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[st
     e-processes") at #1. Excludes spend the leftover operator budget (NOT counts
     toward the same 5-operator cap as OR).
     """
-    include_terms: List[str] = []
-    seen = set()
-    for token in list(theme.keywords.include) + list(extra_terms or []):
-        cleaned = _clean_token(token or "")
-        if cleaned and cleaned.lower() not in seen:
-            seen.add(cleaned.lower())
-            include_terms.append(cleaned)  # _clean_token already quotes multi-word terms
-
+    include_terms = _include_terms(theme, extra_terms)
     if include_terms:
-        # Operator budget: (n-1) ORs; trim from the tail if over budget or over length.
-        while len(include_terms) - 1 > _GH_MAX_OPERATORS:
-            include_terms.pop()
-        while len(include_terms) > 1 and sum(len(t) for t in include_terms) > _GH_MAX_QUERY_CHARS:
-            include_terms.pop()
-        head = " OR ".join(include_terms)
-        parts = [head, "in:name,description,readme"]
-        budget = _GH_MAX_OPERATORS - (len(include_terms) - 1)
+        return _keyword_query(include_terms, theme.keywords.exclude)
     else:
         # Legacy fallback (no keywords): field/goal AND terms + demo scoping.
         tokens: List[str] = []
@@ -134,6 +156,131 @@ def build_track_a_git_query(theme: ThemeInput, extra_terms: Optional[Sequence[st
     return " ".join(parts)
 
 
+# --- F-41-R: a keyword the OR query crowds out is searched on its own (OPT-IN) ----------------
+#
+# MEASURED 2026-10-02 AND NOT ADOPTED AS THE DEFAULT. On the theme below the pool went from one
+# `whipsaw` match (a partial README mention) to six, three of them implementations of the subject
+# ("configurable cooldown to prevent whipsaw overtrading", "consolidation detection (whipsaw
+# protection)"), and the returned top 4 still held none of them: the ranking weighs every keyword
+# equally and lets Reliability decide among matching anchors, so a repository matching the rare
+# keyword plus one general keyword (relevance 0.4, Reliability 66) loses to one matching two
+# general keywords (0.33, Reliability 84). Meanwhile the OR query's share shrank from 30 to 12
+# and two of its former top 4 left the pool. Retrieval and ranking bind together; this half is
+# kept behind ``GitCollectConfig.keyword_fair_share`` until the ranking half exists.
+#
+# The single OR query hands the pool to whichever keyword GitHub has the most of. seihai
+# 2026-10-02: `whipsaw OR hysteresis OR trend-following OR regime-filter OR backtesting`
+# matched 483,226 repositories and its best-match top 30 held 26 `backtesting` matches and
+# one `whipsaw` (a partial README mention) -- searched alone, `whipsaw` has 1,762 matches and
+# `backtesting` 167,043. No re-ranking recovers a repository the pool never held; the share
+# has to be made where the pool is fetched (the same lesson as bybridge F-23/24 and the
+# byserendipity facet fair share).
+#
+# Every keyword owns an equal share of the pool. A keyword at least as frequent as an equal
+# share of the OR query (its own count >= OR count / number of keywords) is already what the OR
+# query returns, so its share stays with the OR leg; a rarer keyword seats its share from a
+# search of its own. Giving the frequent keywords their own searches too was measured the same
+# day and not kept: `backtesting` alone returns the most popular generic repositories (freqtrade,
+# TradingAgents), which displaced the OR query's two-keyword matches from the top.
+# The OR query stays the first leg, so a failed keyword search degrades to the previous
+# behaviour rather than to an empty pool.
+
+SEARCH_LEG_ALL = "全語 OR"
+
+
+def build_track_a_git_search_legs(theme: ThemeInput) -> List[tuple]:
+    """``[(label, query)]``: the OR query, then one query per include keyword (two or more)."""
+    legs = [(SEARCH_LEG_ALL, build_track_a_git_query(theme))]
+    terms = _include_terms(theme)
+    if len(terms) >= 2:
+        legs += [(term.strip('"'), _keyword_query([term], theme.keywords.exclude)) for term in terms]
+    return legs
+
+
+def _assign_leg_turns(stats: Sequence[Dict[str, Any]]) -> List[int]:
+    """Seats per round for each leg; marks the keywords the OR leg stands in for.
+
+    ``stats[0]`` is the OR leg. A keyword leg keeps one turn when it is rarer than an equal
+    share of the OR query; otherwise (or when its search failed) its turn goes to the OR leg.
+    """
+    keyword_stats = list(stats[1:])
+    if not keyword_stats:
+        return [1]
+    or_total = stats[0].get("total_count")
+    if not or_total:  # no yardstick: every leg takes its own turn
+        return [1] * len(stats)
+    equal_share = or_total / len(keyword_stats)
+    turns = [0]
+    for stat in keyword_stats:
+        total = stat.get("total_count")
+        own = total is not None and total < equal_share
+        stat["served_by_or"] = total is not None and not own
+        turns.append(1 if own else 0)
+    turns[0] = max(1, len(keyword_stats) - sum(turns))
+    return turns
+
+
+def _search_pool(
+    gh: GitHubClient,
+    theme: ThemeInput,
+    cfg: "GitCollectConfig",
+    stats_out: Optional[List[Dict[str, Any]]] = None,
+) -> List[tuple]:
+    """Search every leg, then seat the pool round-robin by each leg's turns.
+
+    Returns ``[(item, leg_label)]`` capped at ``cfg.max_repos``. Only the OR leg's failure
+    propagates; a failed keyword leg is recorded in ``stats_out`` and its share goes to the OR leg.
+    """
+    legs = (build_track_a_git_search_legs(theme) if cfg.keyword_fair_share
+            else [(SEARCH_LEG_ALL, build_track_a_git_query(theme))])
+    fetched: List[tuple] = []
+    for index, (label, query) in enumerate(legs):
+        # Best-match (relevance) ranking is GitHub's DEFAULT; `sort=stars` was overriding it
+        # and guaranteed popularity-dominated pools (F-03: an 80k-star agent harness topped a
+        # sequential-testing theme for weeks). cfg.sort restores an explicit sort if wanted.
+        search_params: Dict[str, Any] = {"q": query, "per_page": cfg.per_page}
+        if cfg.sort:
+            search_params.update({"sort": cfg.sort, "order": "desc"})
+        stat: Dict[str, Any] = {"label": label, "query": query, "total_count": None,
+                                "returned": 0, "seated": 0, "error": "", "served_by_or": False}
+        try:
+            payload = gh.get("/search/repositories", search_params)
+        except Exception as exc:
+            if index == 0:
+                raise
+            stat["error"] = _short_fetch_error(exc)
+            items: List[dict] = []
+        else:
+            items = payload.get("items") or []
+            stat["total_count"] = payload.get("total_count")
+            stat["returned"] = len(items)
+        fetched.append((stat, items))
+
+    turns = _assign_leg_turns([stat for stat, _ in fetched])
+    pool: List[tuple] = []
+    seen = set()
+    cursors = [0] * len(fetched)
+    progressed = True
+    while progressed and len(pool) < cfg.max_repos:
+        progressed = False
+        for index, (stat, items) in enumerate(fetched):
+            for _ in range(turns[index]):
+                if len(pool) >= cfg.max_repos:
+                    break
+                while cursors[index] < len(items):
+                    item = items[cursors[index]]
+                    cursors[index] += 1
+                    key = str(item.get("full_name") or "") or id(item)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    pool.append((item, stat["label"]))
+                    stat["seated"] += 1
+                    progressed = True
+                    break
+    if stats_out is not None:
+        stats_out.extend(stat for stat, _ in fetched)
+    return pool
 
 
 def _decode_readme(payload: dict) -> str:
@@ -670,6 +817,7 @@ def repository_to_work(repo: GitRepository) -> Work:
             "theme_fit_matched": repo.theme_fit_matched,
             "theme_fit_keywords": repo.theme_fit_keywords,
             "readme_fetch_error": repo.readme_fetch_error,
+            "search_leg": repo.search_leg,
             "activity_score": repo.activity_score,
             "adoption_score": repo.adoption_score,
             "license_score": repo.license_score,
@@ -779,21 +927,13 @@ def collect_track_a_git_repos(
     theme: ThemeInput,
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
+    stats_out: Optional[List[Dict[str, Any]]] = None,
 ) -> List[GitRepository]:
     cfg = config or GitCollectConfig()
     gh = client or GitHubClient()
     include_rich = _resolve_rich_signals(cfg, gh)
-    query = build_track_a_git_query(theme)
-    # Best-match (relevance) ranking is GitHub's DEFAULT; `sort=stars` was overriding it
-    # and guaranteed popularity-dominated pools (F-03: an 80k-star agent harness topped a
-    # sequential-testing theme for weeks). cfg.sort restores an explicit sort if wanted.
-    search_params: Dict[str, Any] = {"q": query, "per_page": cfg.per_page}
-    if cfg.sort:
-        search_params.update({"sort": cfg.sort, "order": "desc"})
-    payload = gh.get("/search/repositories", search_params)
-    items = payload.get("items") or []
     repos: List[GitRepository] = []
-    for item in items:
+    for item, search_leg in _search_pool(gh, theme, cfg, stats_out):
         readme_text = ""
         readme_fetch_error = ""
         issue_score = 0
@@ -809,6 +949,7 @@ def collect_track_a_git_repos(
                     readme_fetch_error = _short_fetch_error(exc)
         repo = _normalize_repo(item, readme_text=readme_text)
         repo.readme_fetch_error = readme_fetch_error
+        repo.search_leg = search_leg
         issue_open_count = 0
         issue_closed_count = 0
         non_owner_reporters = 0
@@ -833,8 +974,6 @@ def collect_track_a_git_repos(
         if include_rich and repo.full_name:
             _attach_rich_signals(gh, repo, cfg.rich_sample_size)
         repos.append(_apply_reliability(theme, repo))
-        if len(repos) >= cfg.max_repos:
-            break
     if cfg.pool_relative_lma:
         _apply_pool_relative_lma(repos)
     repos.sort(key=lambda repo: repo.reliability_score, reverse=True)
@@ -845,6 +984,7 @@ def collect_track_a_git_works(
     theme: ThemeInput,
     config: Optional[GitCollectConfig] = None,
     client: Optional[GitHubClient] = None,
+    stats_out: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Work]:
-    repos = collect_track_a_git_repos(theme, config=config, client=client)
+    repos = collect_track_a_git_repos(theme, config=config, client=client, stats_out=stats_out)
     return [repository_to_work(repo) for repo in repos]
