@@ -2052,6 +2052,22 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 >
 > 新しい観測 (1)（「上位窓多様化済み」の表示と占有率 70% が並ぶ）は表示を実測値に置き換えた＝「対処済み」節 **F-25-L**。(2) は機序を実測して起票した（主題の Topic `Stock Market Forecasting Methods` が 25/60 を占め、名簿に 0 件なので除外を素通りする）＝「未対処」節 **F-44**。(3) は未対処。
 
+## 2026-10-03（土・週次指針）の観測
+
+テーマ: 測定の再現幅より小さい差で決まる順位と、死んだ基準との比較（選別器の無関心帯・現職バーの資格）。scope_field=Economics, Econometrics and Finance。
+
+| ツール | 呼び方 | 結果 | 失敗様式 |
+|---|---|---|---|
+| **byserendipity** | raw_only・facet 3（Decision Sciences／Agricultural／Engineering）・pseudo_abstract 約 90 語 | **全 facet `HTTP Error 400: Bad Request`**・候補 0 | **★新様式 F-45** |
+| **byserendipity**（接地用・2回目） | raw_only・facet 3（Psychology×2／Medicine）・約 60 語 | 全 facet 400 | F-45 |
+| **byserendipity**（短縮再投） | 同テーマ・pseudo_abstract 約 45 語・structure 2 文 | 全 facet 400 | F-45 |
+| **byserendipity**（最小 probe） | facet 1・**35 語**・structure 1 文・theme 約 330 字 | **400** | F-45＝**クエリ長では説明がつかない** |
+| **bybridge** | materials・seed_semantic_text 524 字 | semantic レッグ **400**（供給 0）。語彙シード 20 件は "strategy selection" の同形異義で経済成長・スポーツ・炭素排出・政治学へ漂流（Subfield 一致 25%・警告表示あり）。最頻 bridge＝Fama–French "Common risk factors"（主題の基礎文献）**上位10件占有 60%**・使用 bridge 11 本。交差候補 60 件のうち主題に接したもの 2（RDD の僅差＝ランダム／少数研究の分散の事前分布） | semantic 断は F-45。シード漂流は F-13 系（semantic 0 のとき語彙だけで名簿が組まれる・9/26 と同型） |
+| **delegate_finalize**（bybridge・60 件全件提出） | 2 件に材料 echo・58 件は点数のみ | anomaly 54・percentile 0.374（母数 6）・通過 1（Flammer 2015・0.37）・落選 1（Turner 2014・0.29 構造律速） | 正常（F-15 の母数問題は全件提出で回避できず＝anomaly 除外後 6 件しか残らないため） |
+| **byrepo** | structured・github・pool 12 | 新計器（F-41-I）のプール内訳: "racing algorithm"・"indifference zone" は README 含め **0 件**、"best-arm identification" は README 2 件のみ。上位は mlr3hyperband／goptuna（successive halving 一致） | F-14 の 8 回目（核の語がプールに入らない。計器はそれを見せた） |
+
+**新しい観測（F-45）**: OpenAlex `search.semantic` が **同一セッションの 4 呼び出し・7 facet 全てで 400** を返した。契機は 09:00 JST 直前〜直後（日次予算 $0.0716 → $0.0573 の間）。35 語の facet でも 400 なので、contra の「400＝クエリ長超過」という案内は本件には当たらない。seihai 側は独立の HTTP 検証をしていない（先週 9/26 は 504 で、seihai の `curl` は 3 回中 2 回 200 だった）。**処方の候補（contra 側で検証）**: (1) 400 の応答本文を診断行に出す（現状は status code だけで、query 長なのかパラメータなのか認証なのか読めない）、(2) 400 を「クエリ長」と決め打ちする案内文を、応答本文を見てから分岐させる。seihai 側は本日の遠距離接地を Consensus／alphaXiv で代替した。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
