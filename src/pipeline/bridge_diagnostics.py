@@ -171,6 +171,32 @@ def bridge_concentration(
     return conc
 
 
+# --- F-25-L: the head-window label is a measurement, not a claim -----------------------------
+#
+# The materials path said "上位窓多様化済み" and the raw path "bridge ごとの偏りを抑えて並べ替え
+# 済み" on every run, whatever the re-ordering had achieved. seihai 2026-10-02: that label sat
+# next to "最頻 bridge が上位 10 件の 70%" (3.47 bridges per candidate). F-25 already explains
+# why — the quota defers a candidate only when EVERY bridge it cites is full — and the strict
+# quota was measured and refused (it demotes on-topic candidates), so the behaviour stays and
+# the label states what was measured.
+
+def head_window_note(conc: BridgeConcentration, *, per_bridge_cap: int = 2) -> str:
+    """What the head-window re-ordering achieved, from the same meter the diagnostics print."""
+    if not conc.candidates or not conc.top_n or not conc.top_bridge_id:
+        return "上位窓の並べ替えは対象なし"
+    share = f"{conc.top_n_share * 100:.0f}%"
+    quota = f"上位 {conc.top_n} 件を 1 bridge あたり {per_bridge_cap} 件までの枠で並べ替え"
+    if conc.top_n_share <= per_bridge_cap / conc.top_n + 1e-9:
+        return f"{quota}済み・最頻 bridge の占有 {share}"
+    if conc.mean_shared_bridges > 1.0:
+        why = (f"候補あたり平均 {conc.mean_shared_bridges:.2f} 本の bridge を引用しており、枠は引用する "
+               "bridge がすべて満杯の候補しか後回しにしない・F-25")
+    else:
+        why = "候補のほとんどが同じ bridge 1 本だけを引用しており、枠の外から埋め戻した"
+    return (f"{quota}たが、最頻 bridge が上位 {conc.top_n} 件の {share} を占める＝上位窓は多様化していない"
+            f"（{why}。占有率は上位の質の指標ではないので、中身は候補の題で判断すること）")
+
+
 def resolve_work_labels(
     work_ids: Sequence[str],
     client: Any = None,
@@ -786,4 +812,5 @@ __all__ = [
     "resolve_ids_batched",
     "filter_live_bridges",
     "render_diagnostics",
+    "head_window_note",
 ]

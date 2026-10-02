@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-02（CL-0126） bybridge の「上位窓多様化済み」を実測の表示にする（F-25-L）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `head_window_note`。上位窓の並べ替えの結果を `bridge_concentration` の実測値から文にする（枠の上限以内なら「並べ替え済み・占有 N%」、超えたら「多様化していない」と理由）。
+* `src/mcp_server.py`: `materials` の案内文と `raw_only` の見出しの固定文字列を、この表示に置き換え。並べ替え・順位・取得は不変。
+* `tests/test_bridge_head_window_note.py`: 新規 8 件。567 pass。
+* live（実 OpenAlex・10/02 のテーマ）: 最頻 bridge が上位 10 件の 80%・候補あたり 2.98 本で、案内文が「上位窓は多様化していない」と名指し（旧コードは「上位窓多様化済み」）。
+
+---
+
 ## 2026-10-02（CL-0125） byrepo の稀なキーワードの単独検索を opt-in で入れる（F-41-R・実測して既定にしなかった）
 
 ### 概要

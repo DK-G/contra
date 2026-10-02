@@ -26,6 +26,7 @@ from src.pipeline.bridge_diagnostics import (
     seed_domain_alignment,
     bridge_concentration,
     bridge_usage,
+    head_window_note,
     filter_live_bridges,
     render_diagnostics,
     resolve_work_labels,
@@ -1100,6 +1101,8 @@ class StdinMcpServer:
         annotate_hybrid_rank(cands, theme, seeds=seeds, bridges=bridges)
         ranked_all = sorted(cands, key=hybrid_bridge_rank_key, reverse=True) if cands else []
         ranked_all = diversify_head_by_bridge(ranked_all, bridges) if ranked_all else []
+        # F-25-L: what that re-ordering achieved, measured on the order the caller will see.
+        head_note = head_window_note(bridge_concentration(cands, bridges, ranked=ranked_all))
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
         if diagnostics:
             # F-13 instrument: always reported, not only on warning — a roster that LOOKS fine
@@ -1226,7 +1229,7 @@ class StdinMcpServer:
                 }
                 mats.append(m)
             instruction = (
-                f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順・上位窓多様化済み）。"
+                f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順。{head_note}）。"
                 "各候補を purpose_sim/mechanism_dist（2桁小数・格子値回避）等で採点し、同じ材料を echo して "
                 "delegate_finalize へ渡してください。bridge_signals.bridge_strength はその候補が通る bridge を"
                 "引用するシード数＝構造的テーマ結合の強さです。"
@@ -1255,7 +1258,7 @@ class StdinMcpServer:
             # F-38: the diagnostics said "交差候補 60 件" and the list stopped at
             # max(bridge_count, 10) — the 2026-09-27 caller saw 10 of 60. Raw means all of them.
             lines = [f"## Bybridge 交差候補（raw・全 {len(ranked_all)} 件・構造的関連度順。"
-                     "上位 10 件は bridge ごとの偏りを抑えて並べ替え済み）", diag_line, ""]
+                     f"{head_note}）", diag_line, ""]
             for i, w in enumerate(ranked_all, 1):
                 betw = int((w.source_meta or {}).get("bridge_betweenness", 0) or 0)
                 lines.append(f"{i}. {w.title}")
