@@ -2082,6 +2082,20 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **新しい様式は無い。** 再現 2 件（F-14 の 9 回目・bybridge の会計開示漂流）と、F-45 が再現しなかったという 1 点。bybridge は「シードは主題どおり・交差候補は主題外」が 2 回続いた＝seihai 側の収穫はシード表から取っている。
 
+## 2026-10-06（火・seihai r02/F2 GP）の観測
+
+テーマ: 現職も対照も無いとき、240 本の雑音のある採点の最上位（勝者の呪い）をどう割り引き、着席後の再判定をどう設計するか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github・include 5 語 | 上位 4 件は主題の隣（purged CV／DSR／PBO の実装・関連度 0.33〜0.40）。プール内訳の計器が **"winner's curse" は README 言及 1 件のみ・"post-selection inference" は README 含め 0 件・"reality check" は README 言及 2 件**と申告。主題（選抜後の縮小・試用の見切り）の実装は 0 件 | F-14 の 10 回目（核の語がプールに入らない。計器は見せた）。ただし先週までの「主題外が 1 位」ではなく、隣接主題が並んだ |
+| **byserendipity** | raw_only・facet 3（統計遺伝学／腫瘍学の第 II 相設計／人事選考）・各約 70 語 | semantic 応答あり。返却 36/33/32 → 提出 21/21/18＝60 件。3 facet とも pseudo-abstract の主題どおり | 正常 |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 0・hollow 14・percentile 0.501（母数 46）・通過 13・出力 4（0.61／0.60／0.58／0.58）・接地検証失敗 0。`not_selected(no_material)` 7 件を名指し | 正常 |
+| **bybridge** | materials・include 5 語（data snooping／backtest overfitting／technical trading rules／multiple testing／genetic programming） | 計器が **語彙レッグの主題一致 0/10 = 0%** を警告（アノマリー研究へ衝突）。semantic 由来シード 10 件は主題どおり（ranking & selection・Screening Dominance 等）だが bridge 寄与 0〜5 本。**factor zoo 系シード 2 本（Harvey–Liu–Zhu・Navigating the factor zoo）が bridge 寄与 27 本・26 本**。最頻 bridge＝Fama–French 1993・上位10件占有 30%・全体 42%・使用 bridge 23 本。交差候補 60 件の約 45 件が ESG・企業統治・会計（Business 系 Field でホーム除外を通過） | 9/28・10/05 と同じ「橋の向こうが企業金融」の 3 回目。**新しい見え方**: 占有率（bridge 1 本あたり）は 42% だが、**bridge プールの供給元がシード 2 本に集中**している（53/約 100 寄与）。bridge 単位の集中度の計器ではこの偏りは見えない |
+| **delegate_finalize**（bybridge・60 件全件提出） | 2 件に材料 echo・58 件は点数のみ | anomaly 49・hollow 6・percentile 0.256（母数 5）・通過 1・`status=fallback`（Romano–Wolf 2005・0.19・距離律速）・接地検証失敗 0 | 正常（主題に合う 4 件は全て金融計量＝ホームそのもので、距離で落ちるのは正しい） |
+
+**新しい様式の候補（番号は contra 側で判断）**: bybridge の**シード単位の bridge 寄与の集中**。語彙レッグが主題外の高被引用シードを 1〜2 本拾うと、そのシードの参照リストが bridge プールの過半を占め、semantic レッグの主題どおりのシード（参照が少ない・寄与 0〜5 本）が埋もれる。処方の候補（未検証）: シード 1 本あたりの bridge 寄与に上限を置く／語彙レッグの主題一致が閾値未満のとき語彙由来シードの寄与を落とす。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
