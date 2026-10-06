@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-06（CL-0128） bybridge は bridge と候補を取得レッグ別に数える（F-46-I）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `seed_routes` / `candidate_route` / `render_seed_routes`。プールの bridge と交差候補を「語彙由来シードだけ／semantic 由来シードだけ／両方」に分け、各レッグの寄与上位シードを出す。警告は F-13-L の判定を再利用し、どちらの側を読めとは書かない。
+* `src/mcp_server.py`: 診断に「bridge の供給元 (F-46)」のブロック、`materials` の各候補に `bridge_signals.seed_route`。取得・プール・順位は不変。
+* `tests/test_bridge_seed_routes.py`: 新規 12 件。588 pass。
+* 実測（実 OpenAlex 2 回）: 10/06 の再演で bridge 30／15／0 本・候補 39／21／0 件（完全に割れている）。10/05 相当のテーマで 17／5／25 本・5／0／55 件（割れていない＝会計開示への漂流は別の様式）。
+* `docs/field_observations_seihai.md`: F-46（割れの機序・処方候補を入れなかった理由）、F-47（F-13-L の警告文が外れた側を断定する）を起票。
+
+---
+
 ## 2026-10-06（CL-0127） OpenAlex が 400 で断った理由をエラー文に載せる（F-45-I）
 
 ### 概要

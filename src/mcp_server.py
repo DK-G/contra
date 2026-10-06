@@ -27,6 +27,9 @@ from src.pipeline.bridge_diagnostics import (
     bridge_concentration,
     bridge_usage,
     head_window_note,
+    candidate_route,
+    render_seed_routes,
+    seed_routes,
     filter_live_bridges,
     render_diagnostics,
     resolve_work_labels,
@@ -1110,6 +1113,10 @@ class StdinMcpServer:
         # F-25-L: what that re-ordering achieved, measured on the order the caller will see.
         head_note = head_window_note(bridge_concentration(cands, bridges, ranked=ranked_all))
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
+        # F-46: which seed leg each pooled bridge (and so each candidate) came through. Needs
+        # the semantic leg to have run; without it there is one leg and nothing to split.
+        routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})
+                  if sem_report is not None else None)
         if diagnostics:
             # F-13 instrument: always reported, not only on warning — a roster that LOOKS fine
             # must still show where it landed (the drifted rosters were only ever caught by a
@@ -1139,7 +1146,14 @@ class StdinMcpServer:
                    "分母に入れて読まないこと・F-27）" if sem_seeds else "")
                 + ("・field 限定あり" if scope_ids else "・field 限定なし")
                 + (("\n" + render_semantic_leg(sem_report)) if sem_report else "")
-                + "\n" + diag_line
+                + "\n" + (
+                    # F-46: the consequence of the roster lines above, counted on the pool and
+                    # the candidates. Placed under them because it reuses their F-13-L verdict.
+                    render_seed_routes(
+                        routes,
+                        lexical_topic_fraction=(align.get("legs") or {}).get("lexical_topic_fraction"),
+                    ) + "\n" if routes is not None else "")
+                + diag_line
             )
         if diagnostics:
             # F-23/F-24 instrument: the concentration meter above cannot tell the caller
@@ -1233,12 +1247,18 @@ class StdinMcpServer:
                     "bridge_strength": meta.get("bridge_strength", 0),
                     "bridge_hybrid_score": meta.get("bridge_hybrid_score", 0.0),
                 }
+                if routes is not None:
+                    m["bridge_signals"]["seed_route"] = candidate_route(w, routes.bridge_route)
                 mats.append(m)
             instruction = (
                 f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順。{head_note}）。"
                 "各候補を purpose_sim/mechanism_dist（2桁小数・格子値回避）等で採点し、同じ材料を echo して "
                 "delegate_finalize へ渡してください。bridge_signals.bridge_strength はその候補が通る bridge を"
                 "引用するシード数＝構造的テーマ結合の強さです。"
+                + ("bridge_signals.seed_route は、その候補が通る bridge を引用したシードの取得レッグです"
+                   "（lexical＝キーワード検索のシードだけ／semantic＝テーマ本文の検索のシードだけ／both・F-46）。"
+                   if routes is not None else "")
+                +
                 "★接地契約: relationship / serendipity_rationale を書く場合は、テーマ側の逐語抜粋を theme_quote に、"
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
                 "抜粋できない主張は書かないでください——contra が決定論的に照合し、照合失敗の散文は棄却されます。"

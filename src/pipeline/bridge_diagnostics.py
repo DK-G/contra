@@ -726,6 +726,125 @@ def render_semantic_leg(report: Optional[Dict[str, Any]]) -> str:
     return line
 
 
+# --- F-46: which seed leg a bridge, and a candidate, came from ---------------------------------
+#
+# seihai 2026-10-06: the per-bridge meter read a calm 42% / 30%, the roster line warned "lexical
+# topic agreement 0/10", and about 45 of the 60 candidates were corporate finance. What tied the
+# two together was missing: two off-topic lexical seeds (factor-zoo surveys) cited 27 and 26 of
+# the 50 pooled bridges while the on-topic semantic seeds cited 0-5 each. Replayed the same day
+# (45 live bridges, 60 candidates): 30 bridges were cited by lexical-origin seeds ONLY and 15 by
+# semantic-origin seeds only, none by both; 39 candidates arrived through the first group alone
+# and 21 through the second. The pool was two disjoint ancestries, and the per-bridge meter
+# cannot see that because no single bridge is large.
+#
+# The replay also showed why this reports the split and does NOT say which side to read. Its
+# theme prose ("noisy scores", "top-ranked", "seated") pulled the SEMANTIC leg into voting
+# theory and rank aggregation, while the subject's own papers (Romano-Wolf, Hansen's SPA test)
+# arrived through the lexical side, next to the corporate-finance ones. The F-13-L line treats
+# the semantic leg as the reference; on that run the reference itself had drifted. So each side
+# is shown with its largest contributing seeds and the caller judges by their titles.
+
+ROUTE_LEXICAL = "lexical"
+ROUTE_SEMANTIC = "semantic"
+ROUTE_BOTH = "both"
+ROUTE_NONE = "none"
+_ROUTES = (ROUTE_LEXICAL, ROUTE_SEMANTIC, ROUTE_BOTH, ROUTE_NONE)
+_ROUTE_TOP_SEEDS = 2
+
+
+@dataclass
+class SeedRoutes:
+    """Bridge pool and candidates split by the seed leg whose seeds cite the bridge."""
+    pool: int
+    bridges: Dict[str, int]              # route -> pooled bridges
+    candidates: Dict[str, int]           # route -> candidates
+    bridge_route: Dict[str, str]         # bridge id -> route (bridges no seed cites are absent)
+    total_contribution: int              # sum over seeds of the pooled bridges each cites
+    top_seeds: Dict[str, List[SeedRow]]  # leg -> its largest contributors (contribution > 0)
+
+
+def seed_routes(
+    seeds: Sequence[Work],
+    candidates: Sequence[Work],
+    bridges: Iterable[str],
+    semantic_ids: Iterable[str],
+) -> SeedRoutes:
+    """Split the pool by which leg's seeds cite each bridge, and the candidates by which side
+    of that split they arrived through. A seed present in both retrievals counts as semantic
+    (the same rule as the F-13-L cross-leg check)."""
+    bset = _as_set(bridges)
+    sem = {str(i) for i in semantic_ids}
+    seed_list = list(seeds or [])
+    seed_leg = [ROUTE_SEMANTIC if str(s.id) in sem else ROUTE_LEXICAL for s in seed_list]
+    legs: Dict[str, Set[str]] = {}
+    for s, leg in zip(seed_list, seed_leg):
+        for b in set(s.referenced_works or []) & bset:
+            legs.setdefault(b, set()).add(leg)
+    bridge_route = {b: (ROUTE_BOTH if len(v) > 1 else next(iter(v))) for b, v in legs.items()}
+    bridge_counts = {r: 0 for r in _ROUTES}
+    for b in bset:
+        bridge_counts[bridge_route.get(b, ROUTE_NONE)] += 1
+    cand_counts = {r: 0 for r in _ROUTES}
+    for c in candidates or []:
+        cand_counts[candidate_route(c, bridge_route)] += 1
+    rows = seed_rows(seed_list, bset)
+    top: Dict[str, List[SeedRow]] = {}
+    for leg in (ROUTE_LEXICAL, ROUTE_SEMANTIC):
+        mine = [r for r, l in zip(rows, seed_leg) if l == leg and r.bridge_contribution]
+        top[leg] = sorted(mine, key=lambda r: -r.bridge_contribution)[:_ROUTE_TOP_SEEDS]
+    return SeedRoutes(
+        pool=len(bset), bridges=bridge_counts, candidates=cand_counts, bridge_route=bridge_route,
+        total_contribution=sum(r.bridge_contribution for r in rows), top_seeds=top,
+    )
+
+
+def candidate_route(work: Work, bridge_route: Dict[str, str]) -> str:
+    """lexical / semantic: every pooled bridge the candidate cites is cited by that leg's seeds
+    only. both: it cites bridges of both sides (or one that both legs cite). none: it cites no
+    pooled bridge that a seed cites."""
+    sides = {bridge_route[b] for b in set(work.referenced_works or []) if b in bridge_route}
+    if not sides:
+        return ROUTE_NONE
+    return next(iter(sides)) if len(sides) == 1 else ROUTE_BOTH
+
+
+def render_seed_routes(routes: SeedRoutes, *, lexical_topic_fraction: Optional[float] = None) -> str:
+    """The F-46 lines. The warning has no threshold of its own: it fires when the F-13-L line
+    already found the two legs' Topics apart AND candidates arrived through one leg's bridges
+    alone. It names both sides and leaves the choice to the caller (see the block comment)."""
+    b, c = routes.bridges, routes.candidates
+    line = (
+        f"- bridge の供給元 (F-46): bridge プール {routes.pool} 本＝語彙由来シードだけが引用 "
+        f"{b[ROUTE_LEXICAL]} 本／semantic 由来シードだけ {b[ROUTE_SEMANTIC]} 本／両方 {b[ROUTE_BOTH]} 本"
+        + (f"／どのシードも引用しない {b[ROUTE_NONE]} 本" if b[ROUTE_NONE] else "")
+        + f"。交差候補 {sum(c.values())} 件＝語彙側の bridge だけを経由 {c[ROUTE_LEXICAL]} 件／"
+        f"semantic 側だけ {c[ROUTE_SEMANTIC]} 件／両方 {c[ROUTE_BOTH]} 件"
+        + (f"／経路不明 {c[ROUTE_NONE]} 件" if c[ROUTE_NONE] else "")
+        + "（候補ごとの経路は materials の bridge_signals.seed_route）"
+    )
+    for leg, label in ((ROUTE_LEXICAL, "語彙側"), (ROUTE_SEMANTIC, "semantic 側")):
+        top = routes.top_seeds.get(leg) or []
+        if top and routes.total_contribution:
+            share = sum(r.bridge_contribution for r in top) / routes.total_contribution
+            line += (
+                f"\n  ・{label}で bridge 寄与の大きいシード: "
+                + "／".join(f"{r.title[:60]}（{r.bridge_contribution} 本）" for r in top)
+                + f"＝全シードの延べ寄与 {routes.total_contribution} 本の {share * 100:.0f}%"
+            )
+    one_sided = c[ROUTE_LEXICAL] + c[ROUTE_SEMANTIC]
+    if (lexical_topic_fraction is not None and lexical_topic_fraction < SEED_LEG_TOPIC_WARN_BELOW
+            and one_sided):
+        line += (
+            f"\n  ⚠ 2 つのレッグのシードはトピックが重なっておらず（上の F-13-L）、交差候補のうち "
+            f"{one_sided} 件は片方のレッグの祖先文献だけを経由しています（語彙側 {c[ROUTE_LEXICAL]}・"
+            f"semantic 側 {c[ROUTE_SEMANTIC]}）＝交差候補は別々の系統の寄せ集めで、少なくとも片方は"
+            "主題の祖先を通っていません。どちらが主題かは上の寄与の大きいシードの題で判断し、"
+            "その側の候補（seed_route）から読んでください。キーワードの同形異義で語彙側が外れることも、"
+            "テーマ本文の言い回しに引かれて semantic 側が外れることもあります。"
+        )
+    return line
+
+
 def _fmt_int(n: Optional[int]) -> str:
     return f"{int(n):,}" if isinstance(n, int) else "?"
 
@@ -812,5 +931,8 @@ __all__ = [
     "resolve_ids_batched",
     "filter_live_bridges",
     "render_diagnostics",
+    "seed_routes",
+    "candidate_route",
+    "render_seed_routes",
     "head_window_note",
 ]
