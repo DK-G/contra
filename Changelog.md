@@ -11,7 +11,7 @@
 
 ### 概要
 * `src/pipeline/git_collect.py`: `_clean_token(…, quote_hyphen)`。`build_track_a_git_search_legs` のキーワード単独検索（opt-in の `keyword_fair_share`）だけ、ハイフン入りの語を引用符つきで送る。全語 OR のクエリと既定の出力は不変。
-* `tests/test_git_query_hyphen.py`: 新規 18 件（既定の綴り・全語 OR が不変であることを含む）。605 pass。
+* `tests/test_git_query_hyphen.py`: 新規 17 件（既定の綴り・全語 OR が不変であることを含む）。605 pass。
 * 実測（実 GitHub）: 単独検索では 5 語中 4 語で上位 30 件の句一致が増加（trend-following 4→9 ほか）。全語 OR に入れると該当が 488,601→204,154 件に減り、プールは引用されない一般語の側へ寄って（backtesting 26→28）、返る上位 4 件の主題の実装は 0 件のまま＝不採用。
 * `scripts/byrepo_hyphen_probe.py`（検索のみの計測）・`scripts/byrepo_rank_whatif.py`（キャッシュ済みプールを別の順位規則に掛ける）を追加。`byrepo_pool_probe.py` に `--legacy-hyphen`。
 * `docs/field_observations_seihai.md`: F-42 の実測と判断、F-43-M（稀さ重み付けの 3 テーマ再生＝1 改善・2 変化なし〜微減で既定にしない）。
