@@ -1,0 +1,8 @@
+{
+  "theme_overview": "A weekly population of 240 genetic-programming trading rules is scored with noise and the top one is seated when it clears an absolute bar, with no incumbent and no concurrent control. The maximum of noisy scores is biased upward (winner's curse). Looking for implementations that shrink the selected estimate and that design the re-evaluation after seating.",
+  "goal": "implementation anchors for post-selection shrinkage of the top-ranked backtest and probation rules",
+  "why_problem": "the best of 240 noisy scores overstates its true value and nothing discounts it",
+  "keywords_include": ["deflated sharpe ratio", "backtest overfitting", "winner's curse", "post-selection inference", "reality check"],
+  "assumptions": ["scores are noisy and candidates are closely related", "there is no incumbent to compare against"],
+  "scope_field": "quantitative finance"
+}

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 from src.core.models import ThemeInput, Work
-from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError
+from src.openalex.client import OpenAlexClient, OpenAlexConfig, OpenAlexError, refused_for_length
 from src.openalex.parser import normalize_results
 from src.pipeline.filter import filter_retracted, filter_has_abstract, limit_count
 from src.pipeline.bridges import annotate_bridge_signals
@@ -1016,6 +1016,12 @@ def collect_track_b_from_spec(
     )
 
 
+def _is_400(exc: Exception) -> bool:
+    """HTTP 400 by the client's own status; the message test covers errors raised without one."""
+    status = getattr(exc, "status", None)
+    return status == 400 if status is not None else "400" in str(exc)
+
+
 def _collect_track_b_semantic(
     theme: ThemeInput,
     collector: "Collector",
@@ -1074,7 +1080,10 @@ def _collect_track_b_semantic(
             # F-16: a 400 here is payload-dependent — the caller's manual fix was always "same
             # domain words, shorter text", verified twice (2026-08-31 single facet, 2026-09-04
             # all three). Retry ONCE with a shorter query before reporting the facet as empty.
-            if "400" in str(exc):
+            # F-45: when the 400 says it is NOT about length (10/03: every facet, down to 35
+            # words), a shorter query is the same refused request -- skip the retry and let the
+            # status carry the server's reason. A 400 that gives no reason keeps the retry.
+            if _is_400(exc) and refused_for_length(exc) is not False:
                 try:
                     short = build_semantic_query(spec.structure, facet.pseudo_abstract,
                                                  max_chars=SEMANTIC_QUERY_RETRY_CHARS)

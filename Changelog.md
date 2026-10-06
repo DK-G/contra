@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-10-06（CL-0127） OpenAlex が 400 で断った理由をエラー文に載せる（F-45-I）
+
+### 概要
+* `src/openalex/client.py`: `error_reason` / `refused_for_length`。再試行しない 4xx の応答本文（`error`・`message`）を読んで `OpenAlexError` の文言と `status`・`reason` に載せる（240 字で切る）。
+* `src/pipeline/collect.py`: facet の 400 に対する短縮再取得（F-16-R）は、理由が長さ以外と分かっているときは行わない。
+* `src/mcp_server.py`: 「400＝クエリ長超過が最有力」の案内文 2 か所を、応答の理由を読んで分岐する文に置き換え。
+* `tests/test_openalex_refusal_reason.py`: 新規 9 件。576 pass。
+* live（実 OpenAlex・課金 $0）: 長すぎるクエリと綴りを誤った filter で、それぞれの理由がエラー文に出ることを確認。
+* `scripts/byrepo_pool_probe.py`: `--theme-file`（別の呼び出しの再演）と `--as-of`（`pushed:>` を固定＝日をまたいだキャッシュを読める）。`scripts/byrepo_probe_themes/` に 10/03・10/06 の呼び出しを置いた。
+
+---
+
 ## 2026-10-02（CL-0126） bybridge の「上位窓多様化済み」を実測の表示にする（F-25-L）
 
 ### 概要

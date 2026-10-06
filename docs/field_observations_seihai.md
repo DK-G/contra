@@ -810,6 +810,18 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ## 対処済み
 
+### F-45-I. 全 by\* 共通 — **OpenAlex が 400 で断った理由を、エラー文と案内文に載せる**（seihai 2026-10-03 の F-45） — **対処済み 2026-10-06（計器のみ）**
+
+- 発端: seihai 2026-10-03（週次指針）。`search.semantic` が 4 呼び出し・7 facet すべてで 400 を返し、35 語まで短くしても 400 だった。contra の表示は `HTTP Error 400: Bad Request` だけで、案内文は「クエリ長超過が最有力・短くして投げ直す」と決め打ちしていた。呼び手は 3 回短縮して投げ直した。
+- 機序（contra 側で確認）: OpenAlex は 400 の理由を応答本文に JSON で返しているが、クライアントは本文を読まずに捨てていた（503 だけは F-40 で読んでいた）。2026-10-06 21:05 JST の実測（故意に不正な 3 リクエスト・いずれも課金 $0）: 長すぎるクエリ → `{"error":"Search query too long","message":"Your search is too long (2820 characters; the limit is 1500)…"}`／綴りを誤った filter → `{"error":"Invalid query parameters error.","message":"primary_topic.field.idd is not a valid field. Valid fields are …"}`（数千字の一覧が続く）。
+- 変えたもの（**OpenAlex クライアントの失敗時の文言**と、byserendipity の facet 取得の 400 再試行の条件。検索・順位・採点は不変）:
+  1. `src/openalex/client.py`: 再試行しない 4xx の応答本文から `error`／`message` を読み、`request failed: HTTP Error 400: Bad Request — OpenAlex の応答: <理由>` と書く（240 字で切る）。例外に `status` と `reason` を持たせた。本文が空・JSON でないときは従来の文言のまま。
+  2. `src/pipeline/collect.py`: facet の 400 に対する「短縮して 1 回だけ再取得」（F-16-R）は、理由が長さ以外と分かっているときは行わない。理由が付いていない 400 は従来どおり再取得する。
+  3. `src/mcp_server.py`: 候補 0 件の案内文と facet 内訳の注記から「400＝クエリ長超過が最有力」を外し、「同じ行の『OpenAlex の応答』を読む。`Search query too long` なら短くする。それ以外は短くしても直らない」に置き換えた。
+  - bybridge の semantic シードレッグは失敗文をそのまま診断に出しているので、同じ理由が出る（コード変更なし）。
+- 検証: 回帰 9 件（`tests/test_openalex_refusal_reason.py`。本文は上の実測の 2 種。旧コードでは全件失敗）。567 → 576 pass。**live（21:07 JST・実 OpenAlex・課金 $0）**: 実クライアントで長すぎるクエリを送ると「…OpenAlex の応答: Search query too long — Your search is too long (2820 characters; the limit is 1500)…」、綴りを誤った filter では「…Invalid query parameters error. — primary_topic.field.idd is not a valid field…」。旧コードはどちらも `request failed: HTTP Error 400: Bad Request`。
+- **残る限界**: 10/03 の 400 そのものの原因は分かっていない（10/05・10/06 は再現せず、今夜の probe でも正常な semantic クエリは通る）。この計器は**次に起きたときに理由が出る**ようにしただけで、再発を防がない。OpenAlex が理由を返さない 400 には何も足せない。
+
 ### F-25-L. bybridge — **「上位窓多様化済み」の表示を、実測した占有率に置き換える**（F-25 の表示側・seihai 2026-10-02 の観測 (1)） — **対処済み 2026-10-02（計器のみ）**
 
 - 発端: seihai 2026-10-02（r05）。最頻 bridge が上位 10 件の 70% を占める診断行と、「上位窓多様化済み」の表示が並んで出た。
@@ -2067,6 +2079,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **byrepo** | structured・github・pool 12 | 新計器（F-41-I）のプール内訳: "racing algorithm"・"indifference zone" は README 含め **0 件**、"best-arm identification" は README 2 件のみ。上位は mlr3hyperband／goptuna（successive halving 一致） | F-14 の 8 回目（核の語がプールに入らない。計器はそれを見せた） |
 
 **新しい観測（F-45）**: OpenAlex `search.semantic` が **同一セッションの 4 呼び出し・7 facet 全てで 400** を返した。契機は 09:00 JST 直前〜直後（日次予算 $0.0716 → $0.0573 の間）。35 語の facet でも 400 なので、contra の「400＝クエリ長超過」という案内は本件には当たらない。seihai 側は独立の HTTP 検証をしていない（先週 9/26 は 504 で、seihai の `curl` は 3 回中 2 回 200 だった）。**処方の候補（contra 側で検証）**: (1) 400 の応答本文を診断行に出す（現状は status code だけで、query 長なのかパラメータなのか認証なのか読めない）、(2) 400 を「クエリ長」と決め打ちする案内文を、応答本文を見てから分岐させる。seihai 側は本日の遠距離接地を Consensus／alphaXiv で代替した。
+
+> **contra 側注記（2026-10-06 失敗対処デー）**: 処方の候補 (1)(2) を両方入れた＝「対処済み」節 **F-45-I**。400 の理由（OpenAlex の応答本文）がエラー文に出て、案内文は理由を読んでから分岐する。10/03 の 400 の原因そのものは再現せず未特定。
 
 ## 2026-10-05（月・seihai r01/FJ）の観測
 

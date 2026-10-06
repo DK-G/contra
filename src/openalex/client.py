@@ -13,7 +13,51 @@ from typing import Any, Dict, Optional
 
 
 class OpenAlexError(RuntimeError):
-    pass
+    """``status`` is the HTTP status of a refused request and ``reason`` the server's own
+    explanation of it (F-45); both stay None for every other failure."""
+
+    status: Optional[int] = None
+    reason: str = ""
+
+
+# --- F-45 (2026-10-03): a refused request carries the server's reason ---------------------
+#
+# seihai 2026-10-03: `search.semantic` answered 400 on 7 facets in 4 calls, down to a 35-word
+# query. contra reported "HTTP Error 400: Bad Request" and its guidance said "most likely the
+# query is too long", so the caller shortened three times for nothing. OpenAlex says why in the
+# body -- probed 2026-10-06: an over-long query returns {"error": "Search query too long",
+# "message": "... (2820 characters; the limit is 1500) ..."}, a bad parameter returns
+# {"error": "Invalid query parameters error.", "message": "<name> is not a valid field. Valid
+# fields are ..."} (a list of several thousand characters, hence the cut).
+ERROR_REASON_MAX_CHARS = 240
+
+
+def error_reason(exc: Any) -> str:
+    """The server's explanation from an HTTPError body, one line, cut to a readable length."""
+    try:
+        raw = exc.read().decode("utf-8", "replace")
+    except Exception:  # an unreadable body is just no reason
+        return ""
+    text = raw.strip()
+    try:
+        body = json.loads(text)
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        parts = [str(body.get(k) or "").strip() for k in ("error", "message")]
+        text = " — ".join(p for p in parts if p)
+    text = " ".join(text.split())
+    if len(text) > ERROR_REASON_MAX_CHARS:
+        text = text[:ERROR_REASON_MAX_CHARS].rstrip() + "…"
+    return text
+
+
+def refused_for_length(exc: Any) -> Optional[bool]:
+    """True/False when a 400 names (or does not name) query length; None when it gave no reason."""
+    reason = str(getattr(exc, "reason", "") or "")
+    if getattr(exc, "status", None) != 400 or not reason:
+        return None
+    return "too long" in reason.lower()
 
 
 # Transient statuses worth one more try (F-11): 429 = shared-pool rate limit (observed
@@ -277,7 +321,11 @@ class OpenAlexClient:
                         pass
                 if exc.code in _RETRY_STATUSES:
                     continue
-                raise OpenAlexError(f"request failed: {exc}") from exc
+                reason = error_reason(exc)
+                refused = OpenAlexError(
+                    f"request failed: {exc}" + (f" — OpenAlex の応答: {reason}" if reason else ""))
+                refused.status, refused.reason = exc.code, reason
+                raise refused from exc
             except Exception as exc:  # pragma: no cover - network errors
                 last_exc = exc       # timeouts / connection resets are transient too
                 continue
@@ -341,6 +389,8 @@ __all__ = [
     "RUN_STATS",
     "SEARCH_COST_USD",
     "budget_exhausted",
+    "error_reason",
+    "refused_for_length",
     "budget_line",
     "low_budget_caveat",
     "read_budget",

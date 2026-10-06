@@ -5,6 +5,11 @@ re-ranked offline afterwards (unauthenticated core quota is 60 req/h and a pool 
 60: README + issues per repository). Only GitHub is contacted (no OpenAlex quota is used).
 
 Usage: python scripts/byrepo_pool_probe.py --cache <dir> [--offline] [--mcp] [--fair-share] [--list] [--pool 30] [--count 4]
+                                             [--theme-file scripts/byrepo_probe_themes/<name>.json] [--as-of YYYY-MM-DD]
+
+``--theme-file`` replays another call (a JSON object of byrepo arguments; the default is the
+2026-10-02 call below). ``--as-of`` freezes the ``pushed:>`` qualifier to the day the cache was
+taken: the qualifier is relative to today, so without it a cache goes stale overnight.
 """
 from __future__ import annotations
 
@@ -80,7 +85,18 @@ def main() -> None:
     ap.add_argument("--fair-share", action="store_true",
                     help="F-41-R: also search the crowded-out keywords on their own (opt-in)")
     ap.add_argument("--list", action="store_true", help="print every pooled repository")
+    ap.add_argument("--theme-file", help="JSON object of byrepo arguments to replay instead of ARGS")
+    ap.add_argument("--as-of", help="YYYY-MM-DD the cache was taken (freezes the pushed:> qualifier)")
     ns = ap.parse_args()
+
+    if ns.theme_file:
+        ARGS.clear()
+        ARGS.update(json.loads(Path(ns.theme_file).read_text(encoding="utf-8")))
+    if ns.as_of:
+        import src.pipeline.git_collect as _gc
+        from datetime import date, timedelta
+        cutoff = date.fromisoformat(ns.as_of) - timedelta(days=_gc._GH_PUSHED_WITHIN_DAYS)
+        _gc._pushed_qualifier = lambda: f"pushed:>{cutoff.isoformat()}"
 
     theme = _build_theme_input(ARGS)
     gh = CachingGitHubClient(Path(ns.cache), offline=ns.offline)

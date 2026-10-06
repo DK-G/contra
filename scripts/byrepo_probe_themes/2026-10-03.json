@@ -1,0 +1,8 @@
+{
+  "theme_overview": "A selector ranks candidates by a measured score whose differences are smaller than the replication spread of the measurement, and compares challengers against a dead baseline. Looking for implementations of indifference zones in selection and of racing procedures that stop when a difference is not resolvable.",
+  "goal": "implementation anchors for indifference-zone selection and racing under measurement noise",
+  "why_problem": "rank order is decided by differences smaller than the measurement noise",
+  "keywords_include": ["racing algorithm", "indifference zone", "best-arm identification", "successive halving", "ranking and selection"],
+  "assumptions": ["the replication spread of the score is known", "the baseline may be dead"],
+  "scope_field": "quantitative finance"
+}
