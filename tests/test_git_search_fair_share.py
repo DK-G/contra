@@ -68,6 +68,7 @@ class _PerKeywordClient:
         if " OR " in head:
             return {"total_count": OR_TOTAL,
                     "items": [_item(f"or/bt{i}", "backtesting toolkit") for i in range(30)]}
+        head = head.strip('"')         # F-42: hyphenated keywords are sent quoted
         if head in self.fail:
             raise GitHubError('http 403: {"message":"API rate limit exceeded for 203.0.113.7."}')
         items = [_item(f"{head}/r{i}", f"{head} implementation") for i in range(30)]

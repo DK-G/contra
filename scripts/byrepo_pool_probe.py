@@ -87,11 +87,17 @@ def main() -> None:
     ap.add_argument("--list", action="store_true", help="print every pooled repository")
     ap.add_argument("--theme-file", help="JSON object of byrepo arguments to replay instead of ARGS")
     ap.add_argument("--as-of", help="YYYY-MM-DD the cache was taken (freezes the pushed:> qualifier)")
+    ap.add_argument("--legacy-hyphen", action="store_true",
+                    help="F-42 before: send hyphenated keywords unquoted, as byrepo did until 2026-10-06")
     ns = ap.parse_args()
 
     if ns.theme_file:
         ARGS.clear()
         ARGS.update(json.loads(Path(ns.theme_file).read_text(encoding="utf-8")))
+    if ns.legacy_hyphen:
+        import src.pipeline.git_collect as _gc0
+        _quote = _gc0._clean_token
+        _gc0._clean_token = lambda t: (_quote(t) if " " in t.strip().strip('"') else _quote(t).strip('"'))
     if ns.as_of:
         import src.pipeline.git_collect as _gc
         from datetime import date, timedelta

@@ -61,10 +61,20 @@ class GitCollectConfig:
     keyword_fair_share: bool = False
 
 
-def _clean_token(token: str) -> str:
+def _clean_token(token: str, quote_hyphen: bool = False) -> str:
     text = token.strip().strip('"').strip("'")
     if ":" in text or ">" in text or "<" in text:
         return text
+    # F-42 (quote_hyphen): GitHub splits an unquoted hyphenated keyword into separate words,
+    # while the relevance matcher (theme_fit.normalize) reads it as a phrase. Measured
+    # 2026-10-06, each keyword searched alone (matches; top-30 results carrying the phrase in
+    # name/description/topics): trend-following 280,891 -> 10,204 quoted (4 -> 9), novelty-search
+    # 18,454 -> 675 (0 -> 4), walk-forward 143,856 -> 49,565 (0 -> 4), regime-filter 37,302 ->
+    # 3,528, mean-reversion 26,203 -> 25,249 (4 -> 4). Quoting with the hyphen and with a space
+    # return the same set. Used by the per-keyword searches only: in the OR query the same
+    # quoting was measured and NOT adopted (see build_track_a_git_search_legs).
+    if quote_hyphen and "-" in text.strip("-"):
+        return f'"{text}"'
     return f'"{text}"' if " " in text else text
 
 
@@ -81,12 +91,13 @@ def _pushed_qualifier() -> str:
     return f"pushed:>{cutoff.isoformat()}"
 
 
-def _include_terms(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None) -> List[str]:
+def _include_terms(theme: ThemeInput, extra_terms: Optional[Sequence[str]] = None,
+                   quote_hyphen: bool = False) -> List[str]:
     """Cleaned, de-duplicated include keywords, trimmed to GitHub's operator and length caps."""
     include_terms: List[str] = []
     seen = set()
     for token in list(theme.keywords.include) + list(extra_terms or []):
-        cleaned = _clean_token(token or "")
+        cleaned = _clean_token(token or "", quote_hyphen)
         if cleaned and cleaned.lower() not in seen:
             seen.add(cleaned.lower())
             include_terms.append(cleaned)  # _clean_token already quotes multi-word terms
@@ -191,7 +202,13 @@ SEARCH_LEG_ALL = "全語 OR"
 def build_track_a_git_search_legs(theme: ThemeInput) -> List[tuple]:
     """``[(label, query)]``: the OR query, then one query per include keyword (two or more)."""
     legs = [(SEARCH_LEG_ALL, build_track_a_git_query(theme))]
-    terms = _include_terms(theme)
+    # F-42: a keyword searched on its own is sent as a phrase when hyphenated. The OR query is
+    # left as it was. Measured 2026-10-06 on the 10/02 theme, same day, pool 30: quoting the two
+    # hyphenated keywords in the OR query halved its matches (488,601 -> 204,154) and handed the
+    # freed share to the one unquoted general keyword -- `backtesting` matches in the pool went
+    # 26 -> 28 and freqtrade / TradingAgents / Lean entered -- while the returned top 4 held no
+    # implementation of the subject before or after.
+    terms = _include_terms(theme, quote_hyphen=True)
     if len(terms) >= 2:
         legs += [(term.strip('"'), _keyword_query([term], theme.keywords.exclude)) for term in terms]
     return legs

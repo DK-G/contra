@@ -792,12 +792,44 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 処方候補: 網羅率を稀さで重み付けする（重みは F-41-R の単独検索が返す該当件数から作れる＝追加の core 枠は不要、検索はキーワード数ぶん増える）。F-41-R のオフライン計算では、和集合プール上で上位 2 件が主題の実装に入れ替わった。
 - **今日実装しなかった理由**: byrepo の全順位を変える（F-29 後半と同じ扱い＝実テーマ複数本の before/after が要る）。未認証の core 枠は 60 回/時でプール 30 の再演は 1 時間に 1 テーマしか取れず、今夜は 1 テーマぶんの証拠しかない。**F-41-R（取得）と一緒に既定化するのが筋**なので、次回は複数テーマのプールをキャッシュしてから判断する（`scripts/byrepo_pool_probe.py` が応答をディスクに置く）。
 
-### F-42. byrepo — **ハイフン入りのキーワードが、GitHub の検索では 2 語に割れる**（2026-10-02 起票・contra 側で発見）
+### F-43-M. byrepo — **稀さで重み付けした関連度を 3 テーマで再生した。1 テーマで改善・2 テーマで変化なし〜微減で、既定にする根拠に届かない**（F-43 の追試・2026-10-06・**コードは変えていない**）
+
+- 方法: `scripts/byrepo_rank_whatif.py`（新規）。`byrepo_pool_probe.py` がキャッシュしたプールを、ネットワークなしで別の順位規則に掛ける。規則は A＝既定プール×現行順位（今の byrepo）／B＝単独検索つきプール×現行順位（F-41-R）／D＝単独検索つきプール×稀さ重み付き網羅率（F-43 の処方）／E＝D で、1 語しか一致しないアンカーは等重みのまま。重みは log(OR の該当 ÷ その語の該当) を正規化。プールは seihai の実際の pool サイズで取った（10/02＝30・10/03＝12・10/06＝10。10/03 と 10/06 の呼び出しは seihai の記録にある語から contra 側で組んだもので、当日の引数そのものではない＝`scripts/byrepo_probe_themes/`）。
+- 結果（返る上位 4 件）:
+
+  | テーマ | A（現行） | D（F-41-R＋F-43） | 読み |
+  |---|---|---|---|
+  | 10/02 ウィップソー抑制（pool 30） | TrendFollowingSystems／superior-skills／QuantInvestStrats／Vibe-Trading＝主題の実装 0 | **darwinia／hyperliquid-momentum-bot**／Vibe-Trading／matlab-simulink-energy-lab（バッテリーの hysteresis）＝主題の実装 2・分野外 1 | 改善。ただし稀な語の同形異義（F-20 型）が 1 件上がる。E では分野外は消えるが go-trader（backtesting のみ）が 2 位 |
+  | 10/06 選抜後の縮小（pool 10） | purged-cross-validation／ml4t/diagnostic／machine-learning-for-trading／pypbo | purged-cross-validation／machine-learning-for-trading／pypbo／nepse-quant-terminal | **微減**。重み付けは順位をほぼ変えず、単独検索で OR の取り分が 10 → 2 件に減って `ml4t/diagnostic`（DSR＋reality check）がプールから消えた。稀な語の単独検索が連れてきたのは GWAS の入門・罰則つき回帰の R パッケージ・神経科学の次元削減＝金融の実装ではない（GitHub にこの主題の実装がそもそも見当たらない） |
+  | 10/03 無関心帯と racing（pool 12） | mlr3hyperband／mlr3tuning／goptuna／compose-cl | mlr3hyperband／mlr3tuning／goptuna／**ssutil**（無関心帯つき順位選択の標本サイズ・R） | 4 位が 1 件入れ替わる（主題側）。`racing algorithm` の単独検索はドローンレースとレーシングゲームの環境（関連度 0.0）を 2 件プールに入れた |
+
+- 3 テーマに共通していたこと: **順位を決めているのは関連度より Reliability の掛け算**（床 0.35＝F-29 の後半）。10/03 の D で `mlr3tuning`（重み付き関連度 0.08・Reliability 91）が `ssutil`（0.38・55）の上に残る。10/02 でも `Vibe-Trading`（0.10・94）が 3 位に残る。稀さの重みを入れても、一致の薄い高品質リポジトリは床で残る。
+- **判断**: F-41-R・F-43 を既定にしない。改善が見えたのは 1 テーマで、小さい pool では単独検索が OR の取り分を削って既存の良いアンカーを落とす（10/06）。10/02 の「取得と順位の同時成立」は確認できたが、3 テーマでは**床（F-29 後半）がもう 1 つの同時成立の相手**として見えた。
+- **次の一手（次回の担当か人間の判断）**: (i) 単独検索つきプールで、OR の取り分に下限を置く（小さい pool で 2 件まで減らさない）。(ii) F-29 後半（床 0.35）と F-43 を同じ what-if に掛ける＝`byrepo_rank_whatif.py` に床を引数で足せば、今あるキャッシュ 3 テーマで API なしに回せる。(iii) キャッシュは `output/byrepo_pool_cache/`（git 管理外）に 3 テーマ分ある。`--as-of` で取得日の `pushed:>` を固定すれば日をまたいで読める（10/02 の分は今夜これで読めた）。
+
+### F-42. byrepo — **ハイフン入りのキーワードが、GitHub の検索では 2 語に割れる**（2026-10-02 起票・contra 側で発見） → **2026-10-06 に実測。単独検索（opt-in の `keyword_fair_share`）にだけ適用し、全語 OR（既定の経路）は変えなかった＝下の「2026-10-06 の実測」**
 
 - 観測（検索のみ・同日）: `trend-following` は該当 279,586 件で上位に `apache/tvm`・`d60/twikit`（"trend" と "following" が別々に出るだけ）が入る。句として `"trend following"` と送ると **10,142 件**で、上位 30 件のうち名前/説明/topics に一致するものが 4 → 9 件。`regime-filter` は 36,645 件（上位に RL フレームワーク・DSGE ツールボックス）→ `"regime filter"` で **3,502 件**（上位は regime filter を持つ売買ボット）。F-41-R の試行 2 でも `regime-filter` の単独検索 6 件中 4 件が関連度 0.0 だった。
 - 機序: `_clean_token` は空白を含む語だけを引用符で囲む。一方、関連度の照合（`theme_fit.normalize`）はハイフンを空白に畳んで**句として**照合する。⇒ 検索と照合でキーワードの意味が食い違っている。seihai は `novelty-search`・`trend-following` のようにハイフンで送ることが多い。
 - 処方候補: ハイフンを含む語は、ハイフンを空白にして引用符で囲んで検索へ送る。
 - **今日実装しなかった理由**: F-41-R と同じ検索段（1 回の実行で同じ段を 2 件変えない）。全語 OR のクエリが変わるので既定の出力が動く＝次回、単独で before/after を取る。
+- **2026-10-06 の実測（byrepo の検索段）**:
+  - **語を単独で検索したとき（検索のみ・`scripts/byrepo_hyphen_probe.py`・21:18 JST）**: 該当件数と、上位 30 件のうち名前/説明/topics にその句を持つ件数。
+
+    | キーワード | そのまま | 引用符つき | 上位 30 件の句一致 |
+    |---|---|---|---|
+    | trend-following | 280,891 | 10,204 | 4 → 9 |
+    | regime-filter | 37,302 | 3,528 | 0 → 0〜2（同じ該当件数で 2 回測って順位が揺れた） |
+    | novelty-search | 18,454 | 675 | 0 → 4 |
+    | walk-forward | 143,856 | 49,565 | 0 → 4 |
+    | mean-reversion | 26,203 | 25,249 | 4 → 4 |
+
+    ハイフンのまま引用しても空白にして引用しても、該当件数と上位は同じ。5 語中 4 語で句一致が増え、減った語は無い。
+  - **全語 OR に入れたとき（10/02 のテーマ・同じ日の同じ時刻に before／after・pool 30・README 込み・22:04 JST）**: OR の該当 488,601 → 204,154 件。プール内の一致は trend-following 15 → 14（名前/説明/topics では 1 → 3）、**backtesting 26 → 28**。引用で 2 語ぶんの該当が減ったぶん、引用されない一般語 `backtesting` の取り分が増え、`freqtrade`・`TradingAgents`・`QuantConnect/Lean`・`Kronos`・`ai-hedge-fund` がプールに入った（上位 30 件の入れ替わり 18 件）。返る上位 4 件は before＝TrendFollowingSystems／superior-skills／QuantInvestStrats／Vibe-Trading、after＝ai-trading-agent／TrendFollowingSystems／Vibe-Trading／tradingview-mcp。**主題（ウィップソー抑制）の実装は before も after も 0 件**。
+  - **判断**: 全語 OR には入れない。検索と照合の意味は揃うが、返る中身は良くならず、プールは一般語の側へ寄る（F-41-R と同じ判断基準＝指標でなく返る上位で決める）。**単独検索にだけ入れた**（`build_track_a_git_search_legs`）: そこでは上の表のとおり句一致が増え、他の語と取り分を奪い合わない。
+  - **単独検索に入れた後の opt-in 経路（同テーマ・`keyword_fair_share: true`・pool 30・22:10 JST・実 GitHub）**: `trend-following`（10,207 件）と `regime-filter`（3,528 件）が OR の等分（97,720 件）を下回るので、単独検索から各 6 件が着席するようになった（10/02 は OR 任せ）。プール内の trend-following の名前/説明/topics 一致 5 件。返る上位 4 件は ai-trading-agent（0.53×85）／TrendFollowingSystems（0.40×89）／tradingstrategy-ai/getting-started（0.40×71）／nepse-quant-terminal（0.40×68）＝10/02 の試行 2（QuantInvestStrats／Vibe-Trading／go-trader／awesome-quant-ai）にいた一般語だけの巨大リポジトリは 0 件になった。**ただし主題の実装（darwinia・hyperliquid-momentum-bot）は 7 位・8 位で、上位 4 件には入らない**（10/02 は 5 位・8 位）。OR の取り分は 12 → 6 件に減った。
+  - 検証: 回帰 18 件（`tests/test_git_query_hyphen.py`。既定の綴りと全語 OR のクエリが不変であることを含む）。588 → 605 pass（`byrepo` 既定経路の出力はキャッシュ再演で before と同一）。
+  - **残る限界**: 既定の経路は何も変わっていない＝seihai の byrepo の出力は今日の変更で動かない。opt-in 経路でも主題の実装は上位 4 件に届かない（順位側＝下記 F-43-M）。
 
 ### F-44. bybridge — **同主題が兄弟 Field の Topic に分類されると、その Topic が名簿に 1 件も無くてもホーム除外を素通りする**（seihai 2026-10-02 の観測 (2)。F-32-R の「残る限界」を実測で具体化・2026-10-02 起票・**実装していない**）
 
@@ -2139,7 +2171,7 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **新しい様式の候補（番号は contra 側で判断）**: bybridge の**シード単位の bridge 寄与の集中**。語彙レッグが主題外の高被引用シードを 1〜2 本拾うと、そのシードの参照リストが bridge プールの過半を占め、semantic レッグの主題どおりのシード（参照が少ない・寄与 0〜5 本）が埋もれる。処方の候補（未検証）: シード 1 本あたりの bridge 寄与に上限を置く／語彙レッグの主題一致が閾値未満のとき語彙由来シードの寄与を落とす。
 
-> **contra 側注記（2026-10-06 失敗対処デー）**: この様式に **F-46** を採番した。同夜の再演で、bridge プールが取得レッグごとに完全に割れている（語彙だけ 30 本／semantic だけ 15 本／両方 0 本）ことを実測し、その内訳と候補ごとの経路（`bridge_signals.seed_route`）を出す計器を入れた＝「対処済み」節 **F-46-I**。処方の候補 2 つは入れていない: シード単位の上限は所有者単位で既にあって効いておらず（割れは系統単位）、語彙シードを落とす案は、再演では外れていたのが semantic 側だったので主題の側を捨てる＝「未対処」節 **F-46・F-47**。
+> **contra 側注記（2026-10-06 失敗対処デー）**: この様式に **F-46** を採番した。同夜の再演で、bridge プールが取得レッグごとに完全に割れている（語彙だけ 30 本／semantic だけ 15 本／両方 0 本）ことを実測し、その内訳と候補ごとの経路（`bridge_signals.seed_route`）を出す計器を入れた＝「対処済み」節 **F-46-I**。処方の候補 2 つは入れていない: シード単位の上限は所有者単位で既にあって効いておらず（割れは系統単位）、語彙シードを落とす案は、再演では外れていたのが semantic 側だったので主題の側を捨てる＝「未対処」節 **F-46・F-47**。byrepo 行（F-14 の 10 回目）は、この呼び出しを再演して取得と順位の処方を掛けたが、上位 4 件は良くならなかった（GitHub にこの主題の金融側の実装が見当たらない）＝「未対処」節 **F-43-M**。
 
 ## 追記のしかた
 
