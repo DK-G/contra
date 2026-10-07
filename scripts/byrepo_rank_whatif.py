@@ -12,8 +12,12 @@ any number of ranking comparisons. For each theme it prints the returned top N u
 Rarity weight of keyword k = log(OR total / k's own total), floored at a small positive value and
 normalised to sum 1 (the totals are the ones GitHub returns for the F-41-R keyword searches).
 
-Usage: python scripts/byrepo_rank_whatif.py <name>:<pool>[:<as-of>] ...
-  e.g. python scripts/byrepo_rank_whatif.py 2026-10-02:30:2026-10-02 2026-10-06:10 2026-10-03:12
+With ``--floors`` it prints instead the floor grid (F-29, second half): the relevance floor in
+rank = Reliability x (floor + (1 - floor) x relevance), today 0.35, crossed with the pool
+(default / fair-share) and the relevance rule (equal coverage / rarity-weighted).
+
+Usage: python scripts/byrepo_rank_whatif.py [--floors 0.35,0.2,0.1,0] <name>:<pool>[:<as-of>] ...
+  e.g. python scripts/byrepo_rank_whatif.py 2026-10-02:30:2026-10-06 2026-10-06:10:2026-10-06
   <name> selects output/byrepo_pool_cache/<name> and scripts/byrepo_probe_themes/<name>.json
   (2026-10-02 uses the probe's built-in arguments).
 """
@@ -72,13 +76,28 @@ def weighted_relevance(work, weights: Dict[str, float], *, lone_equal: bool) -> 
     return sum(weights.get(k, 0.0) * c for k, c in credits.items())
 
 
-def _rank(works, relevance) -> list:
+def _rank(works, relevance, floor: float = _RANK_RELEVANCE_FLOOR) -> list:
     def key(w):
         rel = relevance(w)
-        score = (w.source_meta.get("reliability_score", 0) or 0) * (
-            _RANK_RELEVANCE_FLOOR + (1 - _RANK_RELEVANCE_FLOOR) * rel)
+        score = (w.source_meta.get("reliability_score", 0) or 0) * (floor + (1 - floor) * rel)
         return (1 if rel > 0 else 0, score)
     return sorted(works, key=key, reverse=True)
+
+
+def _equal(work) -> float:
+    return float(work.source_meta.get("relevance") or 0.0)
+
+
+def _floor_grid(default, fair, weights, floors) -> None:
+    w_all = lambda w: weighted_relevance(w, weights, lone_equal=False)   # noqa: E731
+    for pool_label, pool in (("default pool", default), ("fair-share pool", fair)):
+        for rule_label, rule in (("equal coverage", _equal), ("rarity-weighted", w_all)):
+            print(f"  {pool_label} x {rule_label}")
+            for floor in floors:
+                top = _rank(pool, rule, floor)[:TOP]
+                print(f"    floor {floor:<4g}: " + " / ".join(
+                    f"{w.title.split('/')[-1]} ({rule(w):.2f}x{w.source_meta.get('reliability_score')})"
+                    for w in top))
 
 
 def _show(label: str, ranked, relevance=None) -> None:
@@ -92,7 +111,12 @@ def _show(label: str, ranked, relevance=None) -> None:
 
 
 def main() -> None:
-    for spec in sys.argv[1:]:
+    argv = sys.argv[1:]
+    floors = None
+    if argv and argv[0] == "--floors":
+        floors = [float(x) for x in argv[1].split(",")]
+        argv = argv[2:]
+    for spec in argv:
         name, pool, *rest = spec.split(":")
         as_of = rest[0] if rest else None
         theme_file = ROOT / "scripts" / "byrepo_probe_themes" / f"{name}.json"
@@ -117,6 +141,9 @@ def main() -> None:
             f"{k} {weights[k]:.2f} ({next(l['total_count'] for l in legs if l['label'] == k):,})"
             for k in keywords) + f" | OR {legs[0]['total_count']:,}")
         print("   fair-share seats: " + " / ".join(f"{l['label']} {l['seated']}" for l in legs))
+        if floors:
+            _floor_grid(default, fair, weights, floors)
+            continue
         w_all = lambda w: weighted_relevance(w, weights, lone_equal=False)   # noqa: E731
         w_lone = lambda w: weighted_relevance(w, weights, lone_equal=True)   # noqa: E731
         _show("A default x current", sorted(default, key=anchor_rank_key, reverse=True))
