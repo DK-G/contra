@@ -2173,6 +2173,20 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-06 失敗対処デー）**: この様式に **F-46** を採番した。同夜の再演で、bridge プールが取得レッグごとに完全に割れている（語彙だけ 30 本／semantic だけ 15 本／両方 0 本）ことを実測し、その内訳と候補ごとの経路（`bridge_signals.seed_route`）を出す計器を入れた＝「対処済み」節 **F-46-I**。処方の候補 2 つは入れていない: シード単位の上限は所有者単位で既にあって効いておらず（割れは系統単位）、語彙シードを落とす案は、再演では外れていたのが semantic 側だったので主題の側を捨てる＝「未対処」節 **F-46・F-47**。byrepo 行（F-14 の 10 回目）は、この呼び出しを再演して取得と順位の処方を掛けたが、上位 4 件は良くならなかった（GitHub にこの主題の金融側の実装が見当たらない）＝「未対処」節 **F-43-M**。
 
+## 2026-10-07（水・seihai r03/F4 解釈可能ML）の観測
+
+テーマ: 毎週の候補生成が 5 週全滅。生成器を投票型に替えても 0 なら、探索をやめる規則（futility）をどう置くか。検出力不足と効果の不在の見分け。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github・include 5 語（meta-labeling／triple-barrier／bagging／decision-tree／trading） | プール 10 件。計器が **`meta-labeling` は README 含め 0 件・`triple-barrier` と `bagging` は README 言及のみ**と申告。上位 4 件（PPO の金取引ボット／hummingbot／書籍コード／DecisionTree.jl）は `trading`・`decision-tree` の語彙一致で、主題（打ち切り規則・摩擦込み枝刈り付き投票）の実装は 0 件 | 収穫ゼロ（様式 (iii)・関連度最大 0.4）。欠落はツール自身が名指しした |
+| **byserendipity** | raw_only・facet 3（臨床試験の逐次デザイン／創薬 HTS／石油・鉱物探査）・`scope_time_range: no_limit` | 返却 34/29/38 → 提出 21/19/20＝60 件。3 facet とも pseudo-abstract の主題どおり（futility 停止・Z-factor・探査の最適停止） | 正常 |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 20・hollow 31・**percentile 0.589（母数 9）**・通過 2・出力 2（0.59／0.59）・接地検証失敗 0。`venue` 欠落の警告 6 件（呼び手が echo から落とした） | **F-15 の再現**: 全件提出しても、呼び手が低く採点した 51 件が anomaly/hollow で母数から抜け、分位の母数は 9 件に戻った。固定フロア 0.2 なら 9 件通過と計器が併記。落選 4 件（Gittins 0.554・Z' 0.485・後ろ向き futility 監査 0.429＝F-22・conditional assurance 0.386）はいずれも処方に使えた |
+| **bybridge** | materials・include 5 語（technical trading rules／transaction costs／data snooping／intraday predictability／foreign exchange）・`seed_semantic_text` を 490 字で供給 | シード 20 が**全て 1 トピック**（Financial Markets and Investment Strategies）。語彙レッグの主題一致 10/10。bridge プール 48（語彙のみ 9／semantic のみ 1／両方 38）。**最頻 bridge = Brock–Lakonishok–LeBaron 1992（主題ドメインの基礎文献）**・交差候補の 25%・上位 10 件の 30% | 正常。9/30 の「手法語がテーマに入ると手法ハブ（Breiman RF）に吸着」は、テーマから手法語を外し semantic 文を主題側で書いたら出なかった（上位 10 件占有 60% → 30%）。10/06 の F-46（レッグごとにプールが割れる）も出ていない（両方 38 本） |
+| **delegate_finalize**（bybridge・60 件全件提出） | 5 件に材料 echo・55 件は点数のみ | anomaly 18・hollow 29・percentile 0.294（母数 13）・通過 3・出力 1（p-curve・0.51）・接地検証失敗 0。主題直撃の Dempster et al. 2001（日中 FX・同じ指標で 4 学習器・現実的コストで全滅）は 0.242 で落選＝F-22 を計器が名指し。SPA（0.32）と MCS（0.294）は `output_floor 0.35` で落選 | 正常（近い文献が距離で落ちるのは設計どおり）。呼び手は落選分も採用した |
+
+**新しい様式は無い。** F-15 の観測を 1 点足す: 「全件提出」は母数を増やさない場合がある（母数に入るのは anomaly/hollow を越えた件数で、それは呼び手の採点の分布で決まる）。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
