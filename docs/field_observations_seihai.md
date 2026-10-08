@@ -2218,6 +2218,18 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **新しい様式の候補（番号は contra 側で判断）**: 問いが「A か B かを分ける方法」と「分けた先で介入の成績がどちらに振れるか」の 2 段になっているとき、3 距離とも前段（検出器の誤警報を減らす）の文献だけが返り、後段に答える文献は 0 件だった。呼び手が `structure` 欄に検出器の構造だけを書いたことが主因とみられる（後段を構造語で書いていない）。seihai 側の実測では後段の答えが前段の直感と逆向きだった（誤警報とされる側で逆張りの成績が良い）ので、前段だけの収穫は設計判断を誤らせうる。
 
+## 2026-10-09（金・seihai r05/F9 LLM）の観測
+
+テーマ: 着席 2 週で負けている戦略の損失を、同じ期間を再生したバックテストとの差（腕に固有の残差）と、再生自体の不振（地合い）に分ける。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github のみ・pool 30・include 5 語（backtest／live-trading／reconciliation／paper-trading／slippage） | 上位 4 件は汎用の売買基盤（theme 関連度 0.67〜1.00）。プール内訳の計器: `reconciliation` は名前・説明・topics の一致 0（README 6）、`slippage` も 0（README 14）。関連度 1.00 の 1 件は README に 5 語が全部出るグリッド売買ボット | F-14 の再現（核の語を主題に掲げるリポジトリがプールに無い）。README 一致だけで関連度 1.00 になる |
+| **byserendipity** | raw_only・facet 3（故障検出の解析的冗長性／風力タービンの性能監視／作物の収量ギャップ） | 返却 36/39/37 → 提出 22/21/17＝60 件。3 facet とも pseudo-abstract の主題どおり | 正常 |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 2・hollow 12・percentile 0.465（母数 46）・通過 13・出力 5（0.67／0.63／0.60／0.56／0.52）・接地検証失敗 0。`not_selected(no_material)` 8 件を名指し | 正常 |
+| **bybridge** | materials・include 5 語（backtest overfitting／out-of-sample performance／implementation shortfall／trading strategy／performance attribution）・`seed_semantic_text` 511 字 | semantic レッグ供給 15 件は主題どおり。**語彙レッグの主題一致 1/11＝9%**（外れ先: ボラティリティモデル 5・グリーンボンド 2 ほか）と警告が出た。bridge プール 46（語彙のみ 21／semantic のみ 21／両方 4）。最頻 bridge 占有 15%（上位 10 件 10%）＝主題ドメインの基礎文献（被引用 2,188） | F-46（プールが取得レッグで割れる）の再現。上位の多様化は有効 |
+| **delegate_finalize**（bybridge・60 件全件提出） | 2 件に材料 echo・58 件は点数のみ | anomaly 37・通過 3（固定フロア 0.2 でも 3）・fallback 出力 1（Surrogate Time Series・0.24）。交差候補の約 35 件は兄弟 Field に分類された同主題（データスヌーピング・ポートフォリオ最適化）、約 12 件は ESG・企業財務のハブ | 多様化したが収穫ゼロ（旧様式の再現ではない）。echo した 1 件は `venue` が上流で空で、欠落の警告が出た（材料に venue が無い候補） |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
