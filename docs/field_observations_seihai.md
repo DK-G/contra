@@ -879,6 +879,40 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 実測: 上記 F-46 の再演。語彙由来 0/11 = 0% で警告が出たが、外れていたのは semantic レッグ（投票理論）で、語彙由来 11 件のうち少なくとも 2 件（`A Bayesian Approach to Measurement of Backtest Overfitting`・`Data‐Snooping, Technical Trading Rule Performance, …`）は主題そのもの。計器が測っているのは「2 つのレッグのトピックが重ならない」ことで、どちらが外れたかではない。
 - 処方候補: 警告文を「2 つのレッグのトピックが重なっていない＝少なくとも片方が外れている」に改め、判断材料として各レッグの上位トピックを並べる。F-46-I の行は最初からこの読み方で書いた。
 - **今日実装しなかった理由**: 同じ段（bybridge の診断出力）に今日 F-46-I を入れた（1 回の実行で同じ段を 2 件変えない）。
+- **2026-10-09 も見送り**: 同じ段に F-44-I を入れた（同じ規則）。seihai 2026-10-09 の実行ではこの警告（1/11＝9%）が出て、そのときは語彙側が外れていた（ボラティリティモデル・グリーンボンド）＝警告の断定が当たった例。外れる側が実行ごとに違う点は変わらない。次回の bybridge 出力段の第一候補。
+
+### F-48. byrepo — **README にしか出ないキーワードが、名前/説明/topics の一致と同じ満点を取る。満点を抑えても返る上位はほぼ変わらない**（seihai 2026-10-09「README 一致だけで関連度 1.00 になる」・what-if のみ・**コードは変えていない**）
+
+- 機序（`src/pipeline/theme_fit.py::keyword_fit`）: README の一致は「出現数 ÷（README の長さ ÷ 1 万字）」を 1.0 で打ち切る。README が 1 万字未満なら 1 回の言及で 1.0 になり、名前/説明/topics の一致（1.0）と区別が無い。10/09 のプール 30 件（今夜の再取得）では、返る上位 4 件のうち 3 件（futu_algo・investing-algorithm-framework・grid_trading_bot）は **5 語のどれも名前/説明/topics に持たず**、関連度 0.73／0.80／1.00 が全部 README の言及で作られていた。
+- 方法: `scripts/byrepo_rank_whatif.py --readme-caps 1,0.5,0.25,0`（今夜追加）。README だけの一致の満点を 1.0（現行）→ 0.5 → 0.25 → 0 に抑え、既定プール・現行の床 0.35 で並べ直す。ネットワークなし。4 テーマ（10/02 pool 30・10/03 pool 12・10/06 pool 10 は 10/06 夜のキャッシュ、10/09 pool 30 は今夜 21 時台に取得。10/09 の呼び出しは seihai の記録にある 5 語から contra 側で組んだもので、当日の引数そのものではない＝`scripts/byrepo_probe_themes/2026-10-09.json`）。
+- 結果（返る上位 4 件の顔ぶれ。満点 1.0 → 0.5 で入れ替わった件数）:
+
+  | テーマ | 入れ替わり | 中身 |
+  |---|---|---|
+  | 10/09 実運用の損失の切り分け | 1 件 | grid_trading_bot（README だけで 5/5）→ go-trader（`live trading`・`paper trading` を説明に掲げる）。どちらも汎用の売買ボットで、主題（実約定と再生の突き合わせ）の実装ではない |
+  | 10/02 ウィップソー抑制 | 1 件 | QuantInvestStrats → Vibe-Trading。どちらも一般語だけの一致 |
+  | 10/03 無関心帯と racing | 0 件 | — |
+  | 10/06 選抜後の縮小 | 1 件 | pypbo → quantskills/skill-backtest-overfit（`deflated sharpe ratio`・`backtest overfitting` を名前/説明に掲げる）。0.25 では 2 位まで上がる |
+
+  16 枠中 3 枠。主題の実装が増えたテーマは無い。満点を 0 にすると 10/06 では、seihai が「主題の隣」と読んだ 2 件（README にしか語が無い）のうち ml4t/diagnostic が上位 4 件から消え、purged-cross-validation は 1 位から 4 位に下がる。
+- **判断**: README の満点は動かさない。README だけの一致は「主題外」の印にならない（10/06 の良い 2 件がそれ）し、動かしても返る中身は良くならない（F-41-R・F-42・F-29-W と同じ基準）。10/09 の収穫ゼロの原因は順位ではなく、`reconciliation`・`slippage` を主題に掲げるリポジトリがプールに 0 件であること（F-41-I の計器がその場で名指ししている）。
+- 呼び手が読めるもの: アンカーごとの「一致キーワード」行は、語ごとに `README`／`名前/説明/topics` を書いている。関連度 1.00 でも全語が `README` なら、そのリポジトリは主題を掲げていない。
+
+### F-49. byserendipity(raw_only) — **二段の問い（A と B を分ける → 分けた先で介入の成績がどちらに振れるか）は、後段を `structure` と pseudo-abstract に書き足しても後段の文献が返らない。後段だけを書いた facet なら返る**（seihai 2026-10-08 の「新しい様式の候補」に採番・2026-10-09 に実測・**コードは変えていない**）
+
+- seihai の見立て: 「呼び手が `structure` 欄に検出器の構造だけを書いたことが主因とみられる」。
+- 実測（21:10 JST・実 OpenAlex `search.semantic`・10/08 のテーマを contra 側で英文化・facet は地震学と公衆衛生サーベイランスの 2 枚・履歴は読まず書かず・`output/byserendipity_replay/two_stage_probe*.py`）:
+
+  | 腕 | `structure` と pseudo-abstract | 候補 | 題が後段（対応・介入の帰結・費用・意思決定）に触れるもの |
+  |---|---|---|---|
+  | A | 前段だけ（検出器と基準線） | 60 | 0（正規表現の一致 1 件は「Response Spectra」＝無関係） |
+  | B | A の両方の末尾に後段の文を書き足す | 60（A と 37 件が共通・23 件入れ替わり） | **0** |
+  | C | 後段だけを書いた facet 2 枚（`structure` も後段だけ） | 44 | **14**（`Characterizing Public Health Actions in Response to Syndromic Surveillance Alerts`／`Optimizing the response to surveillance alerts in automated surveillance systems`／`Triggering Interventions for Influenza: The ALERT Algorithm`／`Alarms for Monitoring: A Decision-Theoretic Framework`／`AN ANALYSIS OF EMERGENCY RESPONSE COSTS DUE TO FALSE ALARM SYSTEM` ほか） |
+
+- 読み: **見立ては半分だけ当たっていた**。後段を書かなければ返らないのは正しいが、書き足すだけでは足りない。1 本のクエリ（`structure`＋pseudo-abstract）に前段と後段を並べると、埋め込みは前段の語彙（検出器・ノイズ・基準線）の側に寄り、入れ替わった 23 件も全部検出器の文献だった。後段は**別のクエリ**にして初めて返る。
+- 副次的に見えたこと: 腕 C の「Seismology」facet は地震学ではなく火災・防犯・病院のアラーム研究を返した（15 件）。`domain` 欄は検索に使われず、pseudo-abstract の語彙がすべてを決める（後段の文に地震学の語がほとんど無かった）。距離段を保ちたいなら、後段の pseudo-abstract もその分野の語で書く必要がある。
+- **contra 側で変えなかった理由**: 直すべき欠陥が contra の中に無い（1 クエリ 1 問は埋め込み検索の性質）。スキーマの説明文に「1 facet 1 問」と書く案はあるが、facet は 3 枚までで、seihai はそれを A2 の 3 距離に使っている。後段に 1 枚回すと距離段が 1 つ減るので、**facet を割くか、後段だけの 2 回目の呼び出しにするかは呼び手のプロトコルの判断**（seihai 側への申し送り）。証拠は 1 テーマ・2 分野。
+- OpenAlex の予算: 3 回の呼び出し（6 クエリ）で $0.006。実測後の残り $0.0848／$0.10。
 
 ---
 
@@ -2242,6 +2276,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 **新しい様式の候補（番号は contra 側で判断）**: 問いが「A か B かを分ける方法」と「分けた先で介入の成績がどちらに振れるか」の 2 段になっているとき、3 距離とも前段（検出器の誤警報を減らす）の文献だけが返り、後段に答える文献は 0 件だった。呼び手が `structure` 欄に検出器の構造だけを書いたことが主因とみられる（後段を構造語で書いていない）。seihai 側の実測では後段の答えが前段の直感と逆向きだった（誤警報とされる側で逆張りの成績が良い）ので、前段だけの収穫は設計判断を誤らせうる。
 
+> **contra 側注記（2026-10-09 失敗対処デー）**: この様式に **F-49** を採番して実測した。後段を `structure` と pseudo-abstract に書き足しても後段の文献は 0 件のままで、後段だけを書いた facet にすると 44 件中 14 件が返った＝「未対処」節 **F-49**。contra のコードは変えていない。
+
 ## 2026-10-09（金・seihai r05/F9 LLM）の観測
 
 テーマ: 着席 2 週で負けている戦略の損失を、同じ期間を再生したバックテストとの差（腕に固有の残差）と、再生自体の不振（地合い）に分ける。
@@ -2253,6 +2289,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 2・hollow 12・percentile 0.465（母数 46）・通過 13・出力 5（0.67／0.63／0.60／0.56／0.52）・接地検証失敗 0。`not_selected(no_material)` 8 件を名指し | 正常 |
 | **bybridge** | materials・include 5 語（backtest overfitting／out-of-sample performance／implementation shortfall／trading strategy／performance attribution）・`seed_semantic_text` 511 字 | semantic レッグ供給 15 件は主題どおり。**語彙レッグの主題一致 1/11＝9%**（外れ先: ボラティリティモデル 5・グリーンボンド 2 ほか）と警告が出た。bridge プール 46（語彙のみ 21／semantic のみ 21／両方 4）。最頻 bridge 占有 15%（上位 10 件 10%）＝主題ドメインの基礎文献（被引用 2,188） | F-46（プールが取得レッグで割れる）の再現。上位の多様化は有効 |
 | **delegate_finalize**（bybridge・60 件全件提出） | 2 件に材料 echo・58 件は点数のみ | anomaly 37・通過 3（固定フロア 0.2 でも 3）・fallback 出力 1（Surrogate Time Series・0.24）。交差候補の約 35 件は兄弟 Field に分類された同主題（データスヌーピング・ポートフォリオ最適化）、約 12 件は ESG・企業財務のハブ | 多様化したが収穫ゼロ（旧様式の再現ではない）。echo した 1 件は `venue` が上流で空で、欠落の警告が出た（材料に venue が無い候補） |
+
+> **contra 側注記（2026-10-09 失敗対処デー）**: (1) bybridge 行の「兄弟 Field に分類された同主題 約 35 件」を呼び手が手で数えなくて済むよう、候補ごとの Field／Topic を診断と materials に出した＝「対処済み」節 **F-44-I**。併せて F-44 の除外拡大を 4 テーマで数え、見送った。(2) byrepo 行の「README 一致だけで関連度 1.00」は what-if に掛け、README の満点を抑えても返る上位 16 枠中 3 枠しか動かず主題の実装は増えないことを確かめた＝「未対処」節 **F-48**（コードは変えていない）。(3) delegate_finalize の `venue` の行は、コードを読む限り F-19-V の表示（「contra の取得材料の時点で空でした」）に当たり、呼び手の echo 漏れとは名指ししない経路。seihai の当日の出力そのものは確認していない。
 
 ## 追記のしかた
 

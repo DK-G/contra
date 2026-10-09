@@ -1,0 +1,8 @@
+{
+  "theme_overview": "A strategy seated two weeks ago is losing in live trading. Looking for implementations that split the live loss into a strategy-specific residual (the gap between live fills and a backtest replayed over the same period) and the replay's own poor performance (market regime), i.e. live-versus-backtest reconciliation with slippage and fill attribution.",
+  "goal": "implementation anchors for reconciling live trades against a same-period backtest replay",
+  "why_problem": "a two-week live loss cannot be attributed to the strategy or to the regime without a replayed baseline",
+  "keywords_include": ["backtest", "live-trading", "reconciliation", "paper-trading", "slippage"],
+  "assumptions": ["the same period can be replayed in the backtester", "live fills differ from simulated fills by slippage and timing"],
+  "scope_field": "quantitative finance"
+}

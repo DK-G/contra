@@ -16,7 +16,12 @@ With ``--floors`` it prints instead the floor grid (F-29, second half): the rele
 rank = Reliability x (floor + (1 - floor) x relevance), today 0.35, crossed with the pool
 (default / fair-share) and the relevance rule (equal coverage / rarity-weighted).
 
-Usage: python scripts/byrepo_rank_whatif.py [--floors 0.35,0.2,0.1,0] <name>:<pool>[:<as-of>] ...
+With ``--readme-caps`` it prints instead the README-credit grid (2026-10-09): a keyword found only
+in the README earns density-normalised credit up to 1.0, the same as a keyword in the repository's
+name / description / topics. The grid caps that README credit (1.0 = today) on the default pool
+with the current floor, and marks each returned anchor's keywords as identity (I) or README (r).
+
+Usage: python scripts/byrepo_rank_whatif.py [--floors 0.35,0.2,0.1,0 | --readme-caps 1,0.5,0.25] <name>:<pool>[:<as-of>] ...
   e.g. python scripts/byrepo_rank_whatif.py 2026-10-02:30:2026-10-06 2026-10-06:10:2026-10-06
   <name> selects output/byrepo_pool_cache/<name> and scripts/byrepo_probe_themes/<name>.json
   (2026-10-02 uses the probe's built-in arguments).
@@ -100,6 +105,27 @@ def _floor_grid(default, fair, weights, floors) -> None:
                     for w in top))
 
 
+def capped_relevance(work, cap: float, n_keywords: int) -> float:
+    """Equal-weight coverage with README-only credit capped at ``cap``."""
+    total = 0.0
+    for m in work.source_meta.get("theme_fit_matched") or []:
+        credit = float(m.get("credit", 0))
+        total += min(credit, cap) if m.get("where") == "readme" else credit
+    return total / max(n_keywords, 1)
+
+
+def _readme_grid(default, n_keywords: int, caps) -> None:
+    for cap in caps:
+        rule = lambda w, c=cap: capped_relevance(w, c, n_keywords)   # noqa: E731
+        print(f"  README credit cap {cap:g}")
+        for i, w in enumerate(_rank(default, rule)[:TOP], 1):
+            m = w.source_meta
+            kws = ",".join(f"{x['keyword']}:{'r' if x.get('where') == 'readme' else 'I'}{float(x.get('credit', 0)):g}"
+                           for x in m.get("theme_fit_matched") or [])
+            print(f"    {i}. {w.title} rel={rule(w):.2f} (now {m.get('relevance')}) "
+                  f"Rel={m.get('reliability_score')} [{kws}]")
+
+
 def _show(label: str, ranked, relevance=None) -> None:
     print(f"  {label}")
     for i, w in enumerate(ranked[:TOP], 1):
@@ -112,9 +138,12 @@ def _show(label: str, ranked, relevance=None) -> None:
 
 def main() -> None:
     argv = sys.argv[1:]
-    floors = None
+    floors = readme_caps = None
     if argv and argv[0] == "--floors":
         floors = [float(x) for x in argv[1].split(",")]
+        argv = argv[2:]
+    elif argv and argv[0] == "--readme-caps":
+        readme_caps = [float(x) for x in argv[1].split(",")]
         argv = argv[2:]
     for spec in argv:
         name, pool, *rest = spec.split(":")
@@ -129,6 +158,11 @@ def main() -> None:
 
         print(f"\n===== {name} (pool {pool}) keywords={keywords}")
         default, _, fail_d = _pool(args, cache, int(pool), fair=False)
+        if readme_caps:
+            if fail_d:
+                print(f"   not cached: {fail_d}")
+            _readme_grid(default, len(keywords), readme_caps)
+            continue
         fair, legs, fail_f = _pool(args, cache, int(pool), fair=True)
         if fail_d or fail_f:
             print(f"   not cached: default {fail_d} / fair-share {fail_f}")

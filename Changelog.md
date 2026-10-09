@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-09（CL-0131） byrepo の README 一致の満点を what-if に掛けた（F-48）・二段の問いを実測した（F-49）。コードは不変
+
+### 概要
+* `scripts/byrepo_rank_whatif.py`: `--readme-caps`。README だけの一致の満点（現行 1.0）を抑えて、キャッシュ済みプールを並べ直す。`scripts/byrepo_probe_themes/2026-10-09.json` を追加。
+* 実測（F-48・4 テーマ・API なし）: 満点 1.0 → 0.5 で返る上位 16 枠中 3 枠が入れ替わり、主題の実装は増えない＝`theme_fit.keyword_fit` は変えない。
+* 実測（F-49・実 OpenAlex 3 回）: byserendipity の二段の問いは、後段を同じ pseudo-abstract に書き足しても後段の文献 0 件、後段だけの facet で 44 件中 14 件。contra 側の変更なし（呼び手のプロトコルへの申し送り）。
+* `docs/field_observations_seihai.md`: F-48・F-49 を起票、F-47 の見送りを追記、10/08・10/09 の観測に contra 側注記。
+
+---
+
 ## 2026-10-09（CL-0130） bybridge は交差候補ごとに OpenAlex の Field／Topic を出す（F-44-I）
 
 ### 概要
