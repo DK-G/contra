@@ -2292,6 +2292,23 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-09 失敗対処デー）**: (1) bybridge 行の「兄弟 Field に分類された同主題 約 35 件」を呼び手が手で数えなくて済むよう、候補ごとの Field／Topic を診断と materials に出した＝「対処済み」節 **F-44-I**。併せて F-44 の除外拡大を 4 テーマで数え、見送った。(2) byrepo 行の「README 一致だけで関連度 1.00」は what-if に掛け、README の満点を抑えても返る上位 16 枠中 3 枠しか動かず主題の実装は増えないことを確かめた＝「未対処」節 **F-48**（コードは変えていない）。(3) delegate_finalize の `venue` の行は、コードを読む限り F-19-V の表示（「contra の取得材料の時点で空でした」）に当たり、呼び手の echo 漏れとは名指ししない経路。seihai の当日の出力そのものは確認していない。
 
+## 2026-10-10（土・seihai 週次指針）の観測
+
+テーマ: 負け側の停止規則。自己始動型 CUSUM が着席直後の大きな損失を自分の尺度に取り込んで沈黙する問題と、生成器ごとの無益性（futility）停止。テーマ本文・facet とも英語で書いた。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github のみ・include 5 語（self-starting CUSUM／futility／group sequential／conditional power／sequential testing）・`scope_field` は自由文（sequential analysis） | 上位 4 件は臨床試験の群逐次設計（`keaven/gsDesign` 62.2・`Merck/gsDesign2` 46.4 ほか）。プール内訳の計器: `self-starting CUSUM` と `sequential testing` は README を含め 0 件、`futility` は README 言及のみ 9 件 | F-14 の再現（テーマの前半＝自己始動型検出器を掲げるリポジトリがプールに無い）。後半（無益性の境界）には `gsDesign` が実装アンカーとして使える＝半分は収穫あり |
+| **byserendipity** | raw_only・facet 3（製造の統計的工程管理／臨床試験のデータ監視／構造ヘルスモニタリング） | 返却 39/25/39 → 提出 20/20/20＝60 件。3 facet とも pseudo-abstract の主題どおりで、Near の 20 件はほぼ全て自己始動型管理図の文献 | 正常。今週いちばん主題に当たった取得 |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 8 件に材料 echo（抄録は先頭 1,250 字に切って送った）・52 件は点数のみ | anomaly 1・hollow 0・percentile 0.398（母数 59）・通過 17・出力 6（0.56／0.54／0.54／0.52／0.50／0.43）・接地検証失敗 0。「近いが有用」4 件を名指し（自己始動型管理図の原典と改良 3 本） | 正常。F-22（近いがゆえに有用な文献は距離で落ちる）が今回は主収穫の側に出た: テーマに最も直接答える 4 件（Hawkins 1987・cautious parameter learning 2 本・Q 管理図の bias）が全部この枠 |
+| **bybridge** | materials・include 5 語（trading strategy／sequential monitoring／structural break／stopping rule／drawdown）・`seed_semantic_text` 515 字 | semantic レッグ供給 26 件は主題どおり（Backward CUSUM・Monitoring Structural Change ほか）。**語彙レッグの主題一致 2/6＝33%**（外れ先: COVID-19・貿易協定・一般経済理論）。bridge プール 50（語彙のみ 1／semantic のみ 47／両方 2）、交差候補 60 件のうち 56 件が semantic 側だけを経由。最頻 bridge は Page 1954 "Continuous Inspection Schemes"（占有 27%・上位 10 件 30%）＝主題の基礎文献 | F-46 の再現（語彙側の寄与は延べ 128 本中 3%）。上位の多様化は有効 |
+| **delegate_finalize**（bybridge・60 件全件提出） | 3 件に材料 echo・57 件は点数のみ | anomaly 17・percentile 0.324（母数 43）・通過 12・出力 2（スマートグリッドの適応 CUSUM 0.45／片側群逐次検定 0.42）・接地検証失敗 0 | 収穫あり（先週までの「多様化したが収穫ゼロ」とは違う）。交差候補は変化点検出の応用先（電力網・脳波・森林攪乱・ダム）に広がった |
+
+追加の観測 2 点:
+
+- **materials の返り値が呼び手の上限を超えた。** byserendipity 178,651 字・bybridge 281,838 字で、どちらも MCP の結果としては受け取れずファイルに退避された。診断ブロックと候補 JSON を自前のスクリプトで切り出して読んだ。bybridge が大きいのは候補ごとの `referenced_works` と `concept_tags`。採点に使うのは題・抄録・`bridge_signals` だけなので、この 2 欄を既定で落とす（または件数を絞る）選択肢があると 1 回で読める。
+- **bybridge の候補で、採点したかった 3 件の抄録が空だった。** Remote Sensing of Environment の森林攪乱監視 3 本（`W2092141993`・`W1979532661`・`W2181171301`）と `W2082211426`（Robust monitoring of CAPM portfolio betas）・`W2264675900`（ダムの亀裂）。題だけで点を付けて全ゲートを通ったが、抄録が無いので接地契約の `source_quote` を書けず、出力に載せられなかった（`not_selected(no_material)`）。上流（OpenAlex）に抄録が無いレコードは「材料付きで再投すれば出力候補になる」の案内に従えない。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
