@@ -845,6 +845,153 @@ def render_seed_routes(routes: SeedRoutes, *, lexical_topic_fraction: Optional[f
     return line
 
 
+# --- F-44: where OpenAlex files each candidate, and whether the seed side had seen that Topic --
+#
+# seihai 2026-10-02 and 2026-10-09: the caller classified all 60 candidates by hand to learn
+# that 46 (10/02) and about 35 (10/09) were the theme's own subject filed under a sibling Field.
+# The home exclusion (F-32) removes the roster's Fields and the Topics the roster holds twice or
+# more; measured on 10/02, the Topic that made up 25 of the 60 candidates sat in the roster 0
+# times and in the semantic leg's retrieval twice, so nothing excluded it and nothing said so.
+# This reports the filing per candidate and counts the candidates whose Topic the seed side had
+# already retrieved. It excludes nothing and has no threshold: whether to widen the exclusion
+# (F-44) is undecided, and it needs exactly this count over more than one theme.
+#
+# A shared Topic does not say the candidate is the subject. Replayed on the saved 2026-10-06
+# runs: on the bid-ask-spread theme 23 of 60 candidates shared a Topic with the roster, and all
+# 23 were the drift (blockholders, dividends, governance). The roster seed carrying that Topic
+# was on the subject ("Bid-ask spread and order size in the foreign exchange market") — OpenAlex
+# files it under Corporate Finance and Governance. On the winner's-curse theme the subject's own
+# papers (Romano-Wolf, Hansen's SPA test) were filed under Topics no seed had, so 0 of 60 were
+# marked. Hence the roster seed that carries the Topic is named, and the line gives no verdict.
+
+TOPIC_SEEN_ROSTER = "roster"        # a roster seed is filed under the candidate's Topic
+TOPIC_SEEN_SEED_POOL = "seed_pool"  # no roster seed is, but a retrieved seed candidate is
+TOPIC_SEEN_NONE = "none"
+_TOPIC_SEEN = (TOPIC_SEEN_ROSTER, TOPIC_SEEN_SEED_POOL, TOPIC_SEEN_NONE)
+_FILING_TOP_FIELDS = 5
+_FILING_TOP_TOPICS = 5
+
+
+@dataclass
+class CandidateFiling:
+    """The candidates' OpenAlex Field / Topic distribution, against the seed side's Topics."""
+    total: int
+    unfiled: int                      # candidates with no primary Topic
+    fields: List[tuple]               # (Field name, candidates), most frequent first
+    topics: List[tuple]               # (Topic, Field, candidates, seen, roster seed title)
+    seen: Dict[str, int]              # seen level -> candidates
+    roster_topic_ids: Set[str]
+    seed_pool_topic_ids: Set[str]
+
+
+def _topic_ids(works: Iterable[Work]) -> Set[str]:
+    out: Set[str] = set()
+    for w in works or []:
+        tid = (getattr(w, "source_meta", None) or {}).get("primary_topic_id")
+        if tid:
+            out.add(str(tid))
+    return out
+
+
+def _topic_seen(topic_id: str, roster: Set[str], pool: Set[str]) -> str:
+    if topic_id and topic_id in roster:
+        return TOPIC_SEEN_ROSTER
+    if topic_id and topic_id in pool:
+        return TOPIC_SEEN_SEED_POOL
+    return TOPIC_SEEN_NONE
+
+
+def candidate_filing(
+    candidates: Sequence[Work], seeds: Sequence[Work], seed_pool: Sequence[Work] = (),
+) -> CandidateFiling:
+    """Count the candidates by Field and Topic. ``seed_pool`` is every seed candidate the run
+    retrieved (both legs, before the roster was trimmed)."""
+    roster = _topic_ids(seeds)
+    pool = _topic_ids(seed_pool) - roster
+    roster_seed: Dict[str, str] = {}
+    for w in seeds or []:
+        tid = (getattr(w, "source_meta", None) or {}).get("primary_topic_id")
+        if tid:
+            roster_seed.setdefault(str(tid), str(w.title or ""))
+    fields: Dict[str, int] = {}
+    topics: Dict[str, List[Any]] = {}
+    seen = {k: 0 for k in _TOPIC_SEEN}
+    unfiled = 0
+    for c in candidates or []:
+        meta = getattr(c, "source_meta", None) or {}
+        tid = str(meta.get("primary_topic_id") or "")
+        fname = str(meta.get("primary_topic_field_name") or "")
+        if fname:
+            fields[fname] = fields.get(fname, 0) + 1
+        if not tid:
+            unfiled += 1
+        else:
+            row = topics.setdefault(tid, [str(meta.get("primary_topic_name") or tid), fname, 0])
+            row[2] += 1
+        seen[_topic_seen(tid, roster, pool)] += 1
+    return CandidateFiling(
+        total=len(candidates or []), unfiled=unfiled,
+        fields=sorted(fields.items(), key=lambda kv: (-kv[1], kv[0])),
+        topics=[(name, fname, n, _topic_seen(tid, roster, pool), roster_seed.get(tid, ""))
+                for tid, (name, fname, n) in sorted(topics.items(), key=lambda kv: (-kv[1][2], kv[1][0]))],
+        seen=seen, roster_topic_ids=roster, seed_pool_topic_ids=pool,
+    )
+
+
+def candidate_filing_tag(work: Work, filing: CandidateFiling) -> Dict[str, str]:
+    """The per-candidate keys added to ``bridge_signals`` on the materials path."""
+    meta = getattr(work, "source_meta", None) or {}
+    tid = str(meta.get("primary_topic_id") or "")
+    return {
+        "openalex_field": str(meta.get("primary_topic_field_name") or ""),
+        "openalex_topic": str(meta.get("primary_topic_name") or ""),
+        "topic_seen": _topic_seen(tid, filing.roster_topic_ids, filing.seed_pool_topic_ids),
+    }
+
+
+_FILING_SEED_TITLE_CHARS = 50
+
+
+def _seen_label(seen: str, seed_title: str) -> str:
+    if seen == TOPIC_SEEN_ROSTER:
+        return f"［名簿のシードと同じ Topic: {seed_title[:_FILING_SEED_TITLE_CHARS]}］"
+    if seen == TOPIC_SEEN_SEED_POOL:
+        return "［名簿に絞る前のシード候補と同じ Topic］"
+    return ""
+
+
+def render_candidate_filing(filing: CandidateFiling) -> str:
+    """The F-44 lines: the candidates' Fields, their largest Topics, and how many candidates sit
+    in a Topic the seed side had retrieved. No verdict and no threshold (see the block comment)."""
+    if not filing.total:
+        return ""
+    s = filing.seen
+    line = (
+        f"- 交差候補の分類 (F-44): 交差候補 {filing.total} 件の OpenAlex Field＝"
+        + ("／".join(f"{name} {n}" for name, n in filing.fields[:_FILING_TOP_FIELDS]) or "不明")
+        + (f"／ほか {len(filing.fields) - _FILING_TOP_FIELDS} Field"
+           if len(filing.fields) > _FILING_TOP_FIELDS else "")
+        + (f"（Topic 未分類 {filing.unfiled} 件）" if filing.unfiled else "")
+    )
+    if filing.topics:
+        line += "\n  ・件数の多い Topic: " + "／".join(
+            f"{name}（{fname or 'Field 不明'}）{n} 件" + _seen_label(seen, seed_title)
+            for name, fname, n, seen, seed_title in filing.topics[:_FILING_TOP_TOPICS]
+        )
+    line += (
+        f"\n  ・シード側が既に引いていた Topic に属する候補: 名簿のシードと同じ Topic "
+        f"{s[TOPIC_SEEN_ROSTER]} 件／名簿には無いが、取得したシード候補（名簿に絞る前・両レッグ）と"
+        f"同じ Topic {s[TOPIC_SEEN_SEED_POOL]} 件／どちらにも無い Topic {s[TOPIC_SEEN_NONE]} 件。"
+        "ホーム除外が外すのは名簿の主要 Field と名簿が 2 件以上占める Topic だけなので、前の 2 つは"
+        "除外を通ります。同じ Topic でも主題とは限りません: 主題そのものが兄弟 Field に分類されて"
+        "通った場合と、主題のシード 1 本が OpenAlex で別分野の Topic に分類されていて、その分野の"
+        "候補が並んだ場合があります。逆に、主題の論文がどのシードにも無い Topic に分類されている"
+        "こともあります。どれに当たるかは候補の題で確かめてください（候補ごとの値は materials の "
+        "bridge_signals.openalex_field／openalex_topic／topic_seen）"
+    )
+    return line
+
+
 def _fmt_int(n: Optional[int]) -> str:
     return f"{int(n):,}" if isinstance(n, int) else "?"
 
@@ -935,4 +1082,8 @@ __all__ = [
     "candidate_route",
     "render_seed_routes",
     "head_window_note",
+    "CandidateFiling",
+    "candidate_filing",
+    "candidate_filing_tag",
+    "render_candidate_filing",
 ]

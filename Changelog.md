@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-09（CL-0130） bybridge は交差候補ごとに OpenAlex の Field／Topic を出す（F-44-I）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `candidate_filing` / `candidate_filing_tag` / `render_candidate_filing`。交差候補を Field と Topic で数え、各候補の Topic を「名簿のシードと同じ／取得したシード候補と同じ／どちらにも無い」に分ける。警告も閾値も無い。
+* `src/mcp_server.py`: 診断に「交差候補の分類 (F-44)」のブロック、`materials` の各候補に `bridge_signals.openalex_field`／`openalex_topic`／`topic_seen`。取得・プール・順位・除外は不変。
+* `tests/test_bridge_candidate_filing.py`: 新規 11 件。616 pass。
+* 実測: 保存データ 2 本の再生と実 OpenAlex 1 回。「シード側が引いていた Topic を除外する」what-if は 4 テーマで 26／23／0／4 件を外し、主題を正しく外すのは 1 テーマだけ（10/05 相当では主題外の 23 件、10/06・10/09 相当では兄弟 Field の同主題にほぼ触れない）＝F-44 の除外拡大は見送り。
+* `docs/field_observations_seihai.md`: F-44-I（対処済み）、F-44 に 4 テーマの追試。
+
+---
+
 ## 2026-10-06（CL-0129） byrepo の単独検索はハイフン語を句として送る（F-42・全語 OR は実測して変えなかった）
 
 ### 概要

@@ -848,12 +848,22 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
   - 検証: 回帰 17 件（`tests/test_git_query_hyphen.py`。既定の綴りと全語 OR のクエリが不変であることを含む）。588 → 605 pass（`byrepo` 既定経路の出力はキャッシュ再演で before と同一）。
   - **残る限界**: 既定の経路は何も変わっていない＝seihai の byrepo の出力は今日の変更で動かない。opt-in 経路でも主題の実装は上位 4 件に届かない（順位側＝下記 F-43-M）。
 
-### F-44. bybridge — **同主題が兄弟 Field の Topic に分類されると、その Topic が名簿に 1 件も無くてもホーム除外を素通りする**（seihai 2026-10-02 の観測 (2)。F-32-R の「残る限界」を実測で具体化・2026-10-02 起票・**実装していない**）
+### F-44. bybridge — **同主題が兄弟 Field の Topic に分類されると、その Topic が名簿に 1 件も無くてもホーム除外を素通りする**（seihai 2026-10-02 の観測 (2)。F-32-R の「残る限界」を実測で具体化・2026-10-02 起票・**除外の拡大は実装していない**） → **計器は 2026-10-09 に対処済み＝「対処済み」節 F-44-I。除外の拡大は 4 テーマで数えて見送り＝下の「2026-10-09 の追試」**
 
 - 実測（22:17 JST・実 OpenAlex・10/02 のテーマ・履歴は読まず書かず。交差候補 60 件の Field／Topic を contra 側で集計）: Field は Decision Sciences 29・Business, Management and Accounting 18・Computer Science 5・Mathematics 4 ほか。**Topic `Stock Market Forecasting Methods`（Decision Sciences）が 25/60**＝テクニカルルールの収益性検定・GP による売買規則探索など主題そのもの（22:15 の実行では、上位 12 件のうち 10 件が題からテクニカルルール／データスヌーピングの論文と読める。うち一部は別 Topic に分類されている）。この Topic は**名簿 20 件に 0 件・語彙シードのプール 60 件に 0 件・semantic レッグのプール 18 件に 2 件**。現行の除外（名簿の主要 Field＋名簿が 2 件以上占める Topic）には掛からない。
 - what-if（同じ 60 件から追加で外れる件数。コードは変えていない）: 「名簿に 1 件以上ある Topic」→ 1 件。「名簿または semantic プールに 1 件以上ある Topic」→ **26 件**。残る 34 件の先頭は、別 Topic に分類された同主題（`A Reality Check for Data Snooping`＝Forecasting Techniques／`Reexamining the Profitability of Technical Analysis…`＝Auditing…）、分野外の巨大ハブ（`Users of the world, unite!`＝ソーシャルメディア・企業評判・自社株買い）、行動ファイナンスの隣接（`Are investors moonstruck?`）。
 - **実装しなかった理由**: (i) 証拠が 1 テーマで、境が「semantic プールに 2 件」とぎりぎり（2 件以上を条件にすると 1 件の差で外れる）。(ii) 外した後に上がってくるのが経営学のハブなので、除外を広げると上位の中身が悪くなる可能性がある（F-25 と同じ形。除外後に繰り上がる候補を見ないと判断できない）。(iii) 除外を広げると候補が尽きるテーマがありうる。⇒ 次回、09-22（F-32 の初例）と 10-02 の 2 テーマで、除外後に繰り上がる候補まで含めた before/after を取ってから決める。
-- 併せて: `materials` の各候補には Field／Topic が載っていない（seihai は 60 件を自分で分類して「兄弟 Field に 46 件」と数えた）。候補ごとの Field／Topic を材料に載せる計器は、次回の bybridge 出力段の候補（今日は同じ段で F-25-L を入れたので見送り）。
+- 併せて: `materials` の各候補には Field／Topic が載っていない（seihai は 60 件を自分で分類して「兄弟 Field に 46 件」と数えた）。候補ごとの Field／Topic を材料に載せる計器は、次回の bybridge 出力段の候補（今日は同じ段で F-25-L を入れたので見送り）。 → **計器は 2026-10-09 に対処済み＝「対処済み」節 F-44-I**
+- **2026-10-09 の追試（除外は変えていない・F-44-I の計器で 3 テーマを数えた）**: 「名簿またはシード候補に 1 件以上ある Topic を除外する」what-if で外れる件数は、テーマごとに意味が違った。
+
+  | テーマ | 外れる件数（60 件中） | 外れる中身 |
+  |---|---|---|
+  | 10/02 テクニカルルール（上の実測） | 26 | 主題そのもの（兄弟 Field に分類された Stock Market Forecasting Methods） |
+  | 10/05 相当・相対スプレッド（10/06 夜の保存データ。語彙レッグの取得は保存されておらず、名簿＋semantic 取得だけで判定） | 23 | **主題ではない**（大株主・配当・企業統治＝Corporate Finance and Governance）。この Topic を持つ名簿シードは主題どおりの 1 本（`Bid–ask spread and order size in the foreign exchange market`）で、OpenAlex がそれを企業統治の Topic に分類している |
+  | 10/06 相当・勝者の呪い（同上） | 0 | 主題の論文（Romano–Wolf のステップワイズ検定・Hansen の SPA 検定・Giacomini–White・ブロック長選択）は、どのシードにも無い Topic（Statistical Methods in Clinical Trials／Forecasting Techniques and Applications ほか）に分類されていた |
+  | 10/09 相当・実運用の損失の切り分け（今夜の実走・両レッグの取得込み） | 4 | 株価予測の機械学習（Stock Market Forecasting Methods）。兄弟 Field の金融計量の塊（Risk and Portfolio Optimization 12 件・Forecasting Techniques and Applications 11 件）は、どのシード候補とも Topic を共有せず残る |
+
+  ⇒ **この what-if を除外規則にする根拠は無い**。4 テーマのうち主題を正しく外すのは 10/02 だけで、10/05 は別の理由（シード 1 本の Topic 誤分類）で漂流を外し、10/06・10/09 では seihai が「兄弟 Field の同主題」と数えた塊にほとんど触れない。「同じ Topic」は主題であることの証拠にも、主題でないことの証拠にもならなかった。**除外を広げる処方は見送り**。残る手掛かりは、兄弟 Field の同主題が Decision Sciences の少数の Topic（Stock Market Forecasting Methods／Forecasting Techniques and Applications／Risk and Portfolio Optimization）に繰り返し現れること（10/02・10/06・10/09）だが、これはテーマ族（金融計量）に固有で、一般の規則にはならない。
 
 ### F-46. bybridge — **bridge プールが、取得レッグごとに別々の祖先文献の集まりに割れる**（seihai 2026-10-06 の「新しい様式の候補」に採番・**計器は同日対処済み＝「対処済み」節 F-46-I。割れそのものは未対処**）
 
@@ -873,6 +883,20 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 ---
 
 ## 対処済み
+
+### F-44-I. bybridge — **交差候補ごとに OpenAlex の Field／Topic を付け、その Topic をシード側が既に引いていたかを数える**（F-44 の計器） — **対処済み 2026-10-09（計器のみ）**
+
+- 発端: seihai 2026-10-02（「兄弟 Field に 46 件」）と 2026-10-09（「約 35 件は兄弟 Field に分類された同主題」）。どちらも呼び手が 60 件を手で分類して数えた。
+- 変えたもの（bybridge の**診断出力と materials の付帯情報のみ**・シード取得／プール構築／順位／除外は不変）:
+  1. `src/pipeline/bridge_diagnostics.py`: `candidate_filing`／`candidate_filing_tag`／`render_candidate_filing`。交差候補を Field と Topic で数え、各候補の Topic を「名簿のシードと同じ／名簿には無いが、取得したシード候補（名簿に絞る前・両レッグ）と同じ／どちらにも無い」に分ける。
+  2. `src/mcp_server.py`: 診断の「ホーム除外 (F-32)」の直下に 1 ブロック（`- 交差候補の分類 (F-44): …`）＝Field の内訳、件数の多い Topic 5 つ（名簿と同じ Topic には、その Topic を持つ名簿シードの題を添える）、3 区分の件数。`materials` の各候補に `bridge_signals.openalex_field`／`openalex_topic`／`topic_seen`（`roster`／`seed_pool`／`none`）。`diagnostics:false` でもタグは付く。
+  3. **警告も閾値も置いていない。** 当初の文面は「名簿／シード候補と同じ Topic の候補は、主題そのものが通っている場合がある」だったが、保存データで再生すると 10/05 相当のテーマでは同じ Topic の 23 件が全部主題外だった（上の F-44 の表）ので、「同じ Topic でも主題とは限らない・題で確かめる」に書き直した。
+- 検証: 回帰 11 件（`tests/test_bridge_candidate_filing.py`。較正は 10/02 の実測＝60 件中 25 件が「名簿 0 件・シード候補 2 件」の Topic）。605 → 616 pass。
+  - **再生（10/06 夜の保存データ 2 本を実関数に掛けた）**: 10/05 相当＝Field は Business, Management and Accounting 55／Decision Sciences 5、「名簿のシードと同じ Topic 23 件」。10/06 相当＝Business 27／Decision Sciences 16／Mathematics 5 ほか 7 Field、「同じ Topic 0 件」。
+  - **live（21:06 JST・実 OpenAlex・MCP の実経路・10/09 相当のテーマ。seihai の当日の引数ではなく、記録にあるキーワード 5 語と contra 側で書いた英文）**: 「交差候補 60 件の OpenAlex Field＝Decision Sciences 30／Engineering 8／Business, Management and Accounting 7／Mathematics 6／Computer Science 4／ほか 4 Field」「件数の多い Topic: Risk and Portfolio Optimization 12 件／Forecasting Techniques and Applications 11 件／Energy Load and Power Forecasting 6 件／Stock Market Forecasting Methods 4 件［名簿に絞る前のシード候補と同じ Topic］／…」「名簿のシードと同じ Topic 0 件／シード候補と同じ Topic 4 件／どちらにも無い 56 件」。materials 60 件すべてに 3 つのタグ。同じ実行の F-46 の行は bridge 33／9／5 本・候補 48／4／8 件、語彙レッグの主題一致 3/15＝20%（seihai の当日は 21／21／4 本・1/11＝9% で、同じ実行の再現ではない）。
+- **読み方（呼び手へ）**: Field の内訳は「交差候補がどの分野に散ったか」を手で数えずに読むためのもの。`topic_seen` は除外の判定ではなく、主題かどうかも言わない。seihai の記録に、これまで手で数えていた「兄弟 Field の同主題 N 件」を書くとき、この行の Field／Topic の件数をそのまま写せる。
+- **残る限界**: 計器であって処方ではない。F-44 の除外拡大は、この計器で 4 テーマを数えた結果、見送った（「未対処」節 F-44 の 2026-10-09 の追試）。「主題かどうか」を機械で決める手段は依然として無い。
+- OpenAlex の予算: 今夜の実走 1 回（20 リクエスト）。実走後の残り $0.0908／$0.10。
 
 ### F-46-I. bybridge — **bridge と交差候補を、それを引いたシードの取得レッグ別に数え、候補ごとに経路を付ける**（F-46 の計器） — **対処済み 2026-10-06（計器のみ）**
 

@@ -27,7 +27,10 @@ from src.pipeline.bridge_diagnostics import (
     bridge_concentration,
     bridge_usage,
     head_window_note,
+    candidate_filing,
+    candidate_filing_tag,
     candidate_route,
+    render_candidate_filing,
     render_seed_routes,
     seed_routes,
     filter_live_bridges,
@@ -1117,6 +1120,8 @@ class StdinMcpServer:
         # the semantic leg to have run; without it there is one leg and nothing to split.
         routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})
                   if sem_report is not None else None)
+        # F-44: where OpenAlex files each candidate, against the Topics the seed side retrieved.
+        filing = candidate_filing(ranked_all, seeds, list(lex_seeds) + list(sem_seeds))
         if diagnostics:
             # F-13 instrument: always reported, not only on warning — a roster that LOOKS fine
             # must still show where it landed (the drifted rosters were only ever caught by a
@@ -1190,6 +1195,8 @@ class StdinMcpServer:
                 + " を除外（Field だけでは、主題が兄弟 Field に分類された論文が交差候補として通る"
                 + ("" if home_topic_exclusion else "・home_topic_exclusion:false で Topic 除外は無効")
                 + "）\n"
+                # F-44: what passed that exclusion, counted by Field and Topic.
+                + (render_candidate_filing(filing) + "\n" if cands else "")
                 + diag_line
             )
         if diagnostics and dead_seed_count:
@@ -1249,6 +1256,7 @@ class StdinMcpServer:
                 }
                 if routes is not None:
                     m["bridge_signals"]["seed_route"] = candidate_route(w, routes.bridge_route)
+                m["bridge_signals"].update(candidate_filing_tag(w, filing))
                 mats.append(m)
             instruction = (
                 f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順。{head_note}）。"
@@ -1258,6 +1266,9 @@ class StdinMcpServer:
                 + ("bridge_signals.seed_route は、その候補が通る bridge を引用したシードの取得レッグです"
                    "（lexical＝キーワード検索のシードだけ／semantic＝テーマ本文の検索のシードだけ／both・F-46）。"
                    if routes is not None else "")
+                + "bridge_signals.openalex_field／openalex_topic は OpenAlex がその候補を分類した Field と Topic、"
+                "topic_seen はその Topic をシード側が既に引いていたか（roster＝名簿のシードと同じ Topic／"
+                "seed_pool＝名簿には無いが取得したシード候補と同じ Topic／none・F-44）です。"
                 +
                 "★接地契約: relationship / serendipity_rationale を書く場合は、テーマ側の逐語抜粋を theme_quote に、"
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"
