@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-11（CL-0133） `scope_time_range` は取得に使われていない、と説明文に書く（F-51）。性能調査の失敗 5 行に採番
+
+### 概要
+* `src/mcp_server.py`: `_time_range_prop` の説明文に「記録のみ・どの by\* も年で絞らない・候補の `year` で呼び手が絞る」。取得も出力も不変。
+* `tests/test_input_schema.py`: 1 件追加。621 pass。
+* what-if（API なし・`output/materials_size_probe/f51_year_whatif.py`）: 年の制限なしで返った候補のうち 2016 年より前は byserendipity 63〜82%、bybridge 47〜87%。
+* `docs/field_observations_seihai.md`: F-51（説明文のみ対処・絞り込みは判断待ち）、F-52（別 id の同一文献）、F-53（上流レコードの破損）、F-54（finalize の埋め草）を起票。
+
+---
+
 ## 2026-10-11（CL-0132） materials から下流が読まない 2 欄を落とし、大きさを申告する（F-50）
 
 ### 概要

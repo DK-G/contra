@@ -389,7 +389,15 @@ def _scale_prop() -> Dict[str, Any]:
 
 
 def _time_range_prop() -> Dict[str, Any]:
-    return _enum_prop(TIME_RANGE_TYPES, "Time range.", "last_10_years")
+    # F-51 (2026-10-11): no by* tool has ever applied this value to retrieval (nothing sets
+    # StructuredQuery.year_from). A caller on the default got 38 of 60 candidates from before
+    # 2016, and another re-ran a theme with `no_limit` expecting a wider pool. Say what it does.
+    prop = _enum_prop(TIME_RANGE_TYPES, "Time range.", "last_10_years")
+    prop["description"] += (
+        " RECORDED ONLY: no by* tool filters retrieval by publication year, so both values "
+        "return the same candidates and `last_10_years` results include older work (F-51). "
+        "Each returned candidate carries its `year`; filter on it yourself if you need a bound.")
+    return prop
 
 
 def _assumptions_prop() -> Dict[str, Any]:

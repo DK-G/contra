@@ -208,3 +208,21 @@ def test_scope_field_description_names_the_openalex_fields_where_it_drives_exclu
             continue
         desc = tool["inputSchema"]["properties"]["scope_field"]["description"]
         assert "Neuroscience" in desc and "Engineering" in desc, tool["name"]
+
+
+def test_time_range_schema_says_it_is_not_applied_to_retrieval():
+    """F-51 (2026-10-11): `scope_time_range` is validated and printed but no by* tool filters
+    on it. The schema said only "Time range.", so one caller read 38 pre-2016 candidates out
+    of 60 as a mismatch and another spent a retry switching to `no_limit`."""
+    import inspect
+    import src.mcp_server as mcp_mod
+    import src.pipeline.collect as collect_mod
+    import src.pipeline.git_collect as git_mod
+
+    tools = {t["name"]: t for t in mcp_mod.StdinMcpServer().list_tools()}
+    for name in ("byserendipity_discover", "bybridge_collect", "byrepo_search", "delegate_finalize"):
+        desc = tools[name]["inputSchema"]["properties"]["scope_time_range"]["description"]
+        assert "RECORDED ONLY" in desc and "F-51" in desc, name
+    # The claim itself: if a collector starts reading the value, this description must change.
+    for mod in (collect_mod, git_mod):
+        assert "time_range" not in inspect.getsource(mod), mod.__name__
