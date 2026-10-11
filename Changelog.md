@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-11（CL-0132） materials から下流が読まない 2 欄を落とし、大きさを申告する（F-50）
+
+### 概要
+* `src/pipeline/delegate.py`: `material_from_work` に `include_concept_names`／`include_concept_tags`／`abstract_max_chars`。切った抄録には `abstract_full_chars`（元の長さ）。既定値は従来どおり全欄。
+* `src/mcp_server.py`: byserendipity(raw_only) と bybridge(materials) は `concepts` を出さない。bybridge(materials) は `referenced_works` も出さない。引数 `materials_lean`（`concept_tags` を省く）と `materials_abstract_chars`（抄録を先頭 N 字・下限 200）を両ツールに追加。出力に「materials の大きさ (F-50)」の行（欄ごとの字数と減らし方）、抄録が上流で空の候補の件数と「title から `source_quote` を取れる」の案内。`delegate_finalize` の candidates の説明文から 2 欄を外した。
+* `tests/test_raw_output_legibility.py`: 4 件追加。620 pass。
+* 実測（実 OpenAlex 3 回・10/10 相当のテーマ）: bybridge 281,916 → 166,165 字（lean 96,307）、byserendipity 180,386 → 159,919 字（lean 90,446・lean＋抄録 1,200 字で 78,261）。
+* `docs/agent_rules/byserendipity.md` 手順 2、`docs/field_observations_seihai.md`（F-50 を対処済みに起票、10/10 の観測に contra 側注記）。
+
+---
+
 ## 2026-10-09（CL-0131） byrepo の README 一致の満点を what-if に掛けた（F-48）・二段の問いを実測した（F-49）。コードは不変
 
 ### 概要

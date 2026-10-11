@@ -184,7 +184,14 @@ def work_from_material(material: Dict[str, Any]) -> Work:
     )
 
 
-def material_from_work(work: Work, *, include_references: bool = True) -> Dict[str, Any]:
+def material_from_work(
+    work: Work,
+    *,
+    include_references: bool = True,
+    include_concept_names: bool = True,
+    include_concept_tags: bool = True,
+    abstract_max_chars: Optional[int] = None,
+) -> Dict[str, Any]:
     """Serialize a Work into the candidate-material dict the agent scores and echoes back.
 
     The inverse of :func:`work_from_material`: contra's key-free raw collection emits these so the
@@ -194,11 +201,22 @@ def material_from_work(work: Work, *, include_references: bool = True) -> Dict[s
 
     ``include_references=False`` drops ``referenced_works`` (F-38): only the bridge path reads it,
     and on the byserendipity path it was 32% of a 289k-char output nobody downstream used.
+
+    F-50 (2026-10-11): the materials still exceeded the caller's tool-result limit (178k-282k
+    chars on 2026-10-10). ``include_concept_names=False`` drops ``concepts``, which repeats the
+    names in ``concept_tags`` and which ``delegate_finalize`` never reads.
+    ``include_concept_tags=False`` drops the tags too; the only thing finalize does with them is
+    diversify its output picks (MMR), so without them the picks go by score.
+    ``abstract_max_chars`` keeps the head of a longer abstract and records the original length
+    under ``abstract_full_chars``; grounding is checked against the echoed (cut) text.
     """
+    abstract = work.abstract
+    full_chars = len(abstract) if isinstance(abstract, str) else 0
+    cut = bool(abstract_max_chars and full_chars > abstract_max_chars)
     material = {
         "id": work.id,
         "title": work.title,
-        "abstract": work.abstract,
+        "abstract": abstract[:abstract_max_chars] if cut else abstract,
         "year": work.year,
         "venue": work.venue,
         "doi": work.doi,
@@ -213,6 +231,12 @@ def material_from_work(work: Work, *, include_references: bool = True) -> Dict[s
     }
     if not include_references:
         del material["referenced_works"]
+    if not include_concept_names:
+        del material["concepts"]
+    if not include_concept_tags:
+        del material["concept_tags"]
+    if cut:
+        material[ABSTRACT_FULL_CHARS_KEY] = full_chars
     # F-19-R residue (2026-09-14 / 09-17): OpenAlex sometimes has no venue (or abstract) for a
     # work, contra emits "", the caller echoes it faithfully — and finalize then told the caller
     # it had dropped the field. Mark the gap at its source; the mark rides along in the echo.
@@ -366,6 +390,9 @@ ECHO_RECOMMENDED = ("title", "abstract", "year", "venue", "cited_by_count")
 # Marker contra puts on its OWN candidate material listing the recommended fields that were
 # already empty upstream (F-19-R residue). Travels with the echo; finalize reads it back.
 UPSTREAM_EMPTY_KEY = "upstream_empty"
+
+# Original length of an abstract that contra cut to ``abstract_max_chars`` (F-50).
+ABSTRACT_FULL_CHARS_KEY = "abstract_full_chars"
 
 
 def _field_empty(material: Dict[str, Any], key: str) -> bool:

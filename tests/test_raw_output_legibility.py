@@ -20,7 +20,7 @@ import pytest
 
 import src.mcp_server as mcp_mod
 import src.pipeline.collect as collect_mod
-from src.core.models import Work
+from src.core.models import Concept, Work
 
 
 def _long_raw(wid: str, n_words: int = 300, n_refs: int = 80) -> Dict[str, Any]:
@@ -153,3 +153,74 @@ def test_bybridge_materials_returns_every_reported_candidate(monkeypatch, bridge
     assert len(mats) == 45
     assert "交差候補 45 件" in text
     assert all("bridge_signals" in m for m in mats)
+
+
+# --- F-50 (2026-10-11): the materials still exceeded the caller's tool-result limit -----
+#
+# 2026-10-10: byserendipity 178,651 / 223,039 chars and bybridge 281,838 chars were saved to
+# files and read through ad-hoc scripts. In three saved bybridge runs `referenced_works` was
+# 38-44% of the output and `concepts` (the names already in concept_tags) another 7%; nothing
+# after the collect call reads either.
+
+def _bridge_materials(monkeypatch, **over) -> str:
+    seed = Work(id="S1", title="s", year=2024, venue="v", doi=None, cited_by_count=0,
+                abstract="a", referenced_works=["B1"])
+    cands = [Work(id=f"C{i:02d}", title=f"candidate title {i}", year=2024, venue="v", doi=None,
+                  cited_by_count=i, abstract=("" if i < 3 else "abstract text " * 60),
+                  concepts=["Alpha", "Beta"],
+                  concept_tags=[Concept(name="Alpha", level=0, score=0.5),
+                                Concept(name="Beta", level=2, score=0.4)],
+                  referenced_works=["B1"] + [f"R{j}" for j in range(40)]) for i in range(12)]
+    monkeypatch.setattr(mcp_mod, "collect_and_filter", lambda *a, **k: [seed])
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", lambda *a, **k: cands)
+    args = {"theme_overview": "t" * 200, "goal": "g", "why_problem": "w",
+            "approach_type": "application", "assumptions": ["a", "b"], "scope_field": "medicine",
+            "materials": True, "no_history": True, "min_seeds": 0, "seed_count": 2}
+    args.update(over)
+    return mcp_mod.StdinMcpServer().handle_tool_call("bybridge_collect", args)["content"][0]["text"]
+
+
+def test_bybridge_materials_drop_fields_nothing_downstream_reads(monkeypatch, bridge_offline):
+    text = _bridge_materials(monkeypatch)
+    mats = _materials(text)
+    assert all("referenced_works" not in m and "concepts" not in m for m in mats)
+    assert all(m["concept_tags"] and m["bridge_signals"]["shared_bridge_count"] == 1 for m in mats)
+    assert "materials の大きさ (F-50): 候補 12 件" in text and "materials_lean:true" in text
+
+
+def test_materials_lean_and_abstract_cut_are_opt_in_and_named(monkeypatch, bridge_offline):
+    full = _materials(_bridge_materials(monkeypatch))
+    text = _bridge_materials(monkeypatch, materials_lean=True, materials_abstract_chars=300)
+    mats = _materials(text)
+    assert all("concept_tags" not in m for m in mats)
+    cut = [m for m in mats if "abstract_full_chars" in m]
+    assert len(cut) == 9 and all(len(m["abstract"]) == 300 for m in cut)
+    assert cut[0]["abstract_full_chars"] == len(full[3]["abstract"]) == 840
+    assert "concept_tags は省いています" in text and "先頭 300 字まで" in text and "9 件を" in text
+    # a cut below the minimum is raised to it, not honoured
+    tiny = _materials(_bridge_materials(monkeypatch, materials_abstract_chars=5))
+    assert {len(m["abstract"]) for m in tiny if m["abstract"]} == {200}
+
+
+def test_empty_upstream_abstracts_are_counted_and_the_title_route_is_named(monkeypatch, bridge_offline):
+    """seihai 2026-10-10: five candidates had no abstract upstream; the caller concluded it
+    could not write a source_quote and left them out. A title quote satisfies the contract."""
+    from src.pipeline.delegate import verify_grounding
+    text = _bridge_materials(monkeypatch)
+    assert "抄録が上流で空の候補 3 件" in text and "title から取れます" in text
+    m = dict(_materials(text)[-1])           # ranked last: cited_by_count 0 -> empty abstract
+    assert not m["abstract"]
+    m.update(relationship="r", theme_quote="t" * 12, source_quote=m["title"])
+    assert verify_grounding(m, "t" * 200) == []
+
+
+def test_byserendipity_raw_drops_concept_names_and_reports_size(facet_pages):
+    res = mcp_mod.StdinMcpServer().handle_tool_call("byserendipity_discover", _serendipity_args())
+    text = res["content"][0]["text"]
+    assert all("concepts" not in m and "concept_tags" in m for m in _materials(text))
+    assert "materials の大きさ (F-50): 候補 60 件" in text
+    lean = mcp_mod.StdinMcpServer().handle_tool_call(
+        "byserendipity_discover", _serendipity_args(materials_lean=True, materials_abstract_chars=400))
+    lean_text = lean["content"][0]["text"]
+    assert all("concept_tags" not in m and len(m["abstract"]) <= 400 for m in _materials(lean_text))
+    assert len(lean_text) < len(text)

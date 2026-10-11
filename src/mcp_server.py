@@ -240,6 +240,76 @@ def _materials_json(materials: List[Dict[str, Any]]) -> str:
     return "[\n" + ",\n".join(rows) + "\n]"
 
 
+# F-50: a caller-chosen abstract cut below this would leave too little to score or quote from.
+_MATERIALS_ABSTRACT_MIN_CHARS = 200
+
+
+def _materials_lean_prop() -> Dict[str, Any]:
+    return {"type": "boolean", "default": False, "description": (
+        "Leave `concept_tags` out of the returned materials (F-50). They are about a third of a "
+        "byserendipity result and a quarter of a bybridge one; delegate_finalize reads them only "
+        "to diversify its output picks (MMR), so without them the picks go by score. Use when "
+        "the result exceeds your tool-result limit; the `materials の大きさ` line reports the "
+        "size per field.")}
+
+
+def _materials_abstract_chars_prop() -> Dict[str, Any]:
+    return {"type": "integer", "description": (
+        "Keep only the first N characters of each abstract in the returned materials "
+        f"(minimum {_MATERIALS_ABSTRACT_MIN_CHARS}; omit or 0 for the full abstract). A cut "
+        "candidate carries `abstract_full_chars` (the original length). source_quote must then "
+        "come from the returned head, because grounding is checked against what you echo (F-50).")}
+
+
+def _materials_options(args: Dict[str, Any]) -> "tuple[bool, Optional[int]]":
+    """(lean, abstract cut) as requested by the caller; a cut of 0/None means none."""
+    try:
+        cut = int(args.get("materials_abstract_chars") or 0)
+    except (TypeError, ValueError):
+        cut = 0
+    return bool(args.get("materials_lean")), (max(cut, _MATERIALS_ABSTRACT_MIN_CHARS) if cut > 0 else None)
+
+
+def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
+                         abstract_cut: Optional[int]) -> str:
+    """How large the materials JSON is and which fields make it so (F-50).
+
+    On 2026-10-10 three results (178k / 223k / 282k chars) exceeded the caller's tool-result
+    limit and were read through ad-hoc scripts. The caller could not see what the size was made
+    of, so the only way to learn that two fields nobody scored from were half of it was to
+    measure by hand.
+    """
+    if not materials:
+        return ""
+    per_field: Dict[str, int] = {}
+    for m in materials:
+        for k, v in m.items():
+            per_field[k] = per_field.get(k, 0) + len(json.dumps(v, ensure_ascii=False))
+    total = len(_materials_json(materials))
+    named = [k for k in ("abstract", "concept_tags", "bridge_signals") if per_field.get(k)]
+    parts = "／".join(f"{k} {per_field[k]:,}" for k in named)
+    line = f"- materials の大きさ (F-50): 候補 {len(materials)} 件・{total:,} 字（うち {parts}）。"
+    if lean:
+        line += ("concept_tags は省いています（materials_lean）＝delegate_finalize の出力枠の"
+                 "多様化は働かず、点数順になります。")
+    else:
+        line += ("結果が上限を超える場合は materials_lean:true で concept_tags を省けます"
+                 "（delegate_finalize が出力枠の多様化にだけ使う欄）。")
+    cut_n = sum(1 for m in materials if "abstract_full_chars" in m)
+    if abstract_cut:
+        line += (f"抄録は先頭 {abstract_cut:,} 字まで（materials_abstract_chars）＝{cut_n} 件を"
+                 "切りました（abstract_full_chars が元の長さ）。source_quote は返した範囲から"
+                 "取ってください。")
+    else:
+        line += "materials_abstract_chars:N で抄録を先頭 N 字に切れます。"
+    no_abstract = sum(1 for m in materials if not str(m.get("abstract") or "").strip())
+    if no_abstract:
+        line += (f"\n- 抄録が上流で空の候補 {no_abstract} 件（upstream_empty に abstract）: "
+                 "source_quote は title から取れます（10字以上の逐語抜粋）。title を echo すれば"
+                 "出力候補になります。")
+    return line
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -411,6 +481,8 @@ class StdinMcpServer:
                         "raw_only": {"type": "boolean", "description": "Key-free DELEGATION (no contra API key): contra runs only OpenAlex semantic retrieval and returns raw candidate MATERIALS for the CALLING AGENT to score, then pass to delegate_finalize. Requires `facets` (and ideally `structure`). The agent does the targeted-abstraction + scoring + prose with its OWN inference, so no LLM is billed.", "default": False},
                         "structure": {"type": "string", "description": "When raw_only: the theme's relational structure re-described in DOMAIN-NEUTRAL function words (keep the structural constraints, drop the theme's surface topic words). Concatenated with each facet's pseudo-abstract for semantic retrieval."},
                         "facets": {"type": "array", "description": "When raw_only: up to 3 DISTINCT distant-domain facets the agent generated via targeted abstraction. contra runs OpenAlex search.semantic on each (no LLM) and excludes the home domain client-side.", "items": {"type": "object", "properties": {"domain": {"type": "string", "description": "The distant domain/discipline."}, "pseudo_abstract": {"type": "string", "description": "A short (~80-word) hypothetical abstract of a paper in THAT domain exhibiting the shared structure, in that domain's own vocabulary."}}}},
+                        "materials_lean": _materials_lean_prop(),
+                        "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
@@ -477,6 +549,8 @@ class StdinMcpServer:
                         "bridge_count": {"type": "integer", "description": "Maximum number of bridge-derived entries to return after LLM selection.", "default": 3},
                         "seed_count": {"type": "integer", "description": "Number of near-field seed papers used to build the bridge pool.", "default": 20},
                         "materials": {"type": "boolean", "description": "DELEGATION MODE (production path since 2026-08-22): return the ranked cross-domain candidates as scoreable materials JSON (with bridge_signals) for the CALLING AGENT to score and pass to delegate_finalize — the byserendipity raw_only path's symmetric twin. The agent does the purpose/mechanism judgement and grounded prose with its OWN inference; contra verifies deterministically.", "default": False},
+                        "materials_lean": _materials_lean_prop(),
+                        "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "bridge_liveness": {"type": "boolean", "description": "Drop bridge-pool ids that OpenAlex no longer resolves (one batched call, fails open). referenced_works keeps the ids of merged/deleted records, and such a phantom is a bibliographic scar rather than a shared ancestor: the measured worst case, W4285719527, resolves to nothing yet sits in 4.9M reference lists and captured 59/60 candidates, collapsing the output into the globally most-cited works. Set false to restore the old behaviour.", "default": True},
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
@@ -529,8 +603,8 @@ class StdinMcpServer:
                             "type": "array",
                             "description": (
                                 "Agent-scored candidates. Each item echoes contra's candidate material "
-                                "(id, title, abstract, year, venue, doi, cited_by_count, concepts, "
-                                "concept_tags[{name,level,score}], referenced_works) AND carries the agent's "
+                                "as returned (id, title, abstract, year, venue, doi, cited_by_count, "
+                                "concept_tags[{name,level,score}] when present) AND carries the agent's "
                                 "scoring: purpose_sim (0-1), mechanism_dist (0-1), optional structural_depth "
                                 "(0-1) and has_causal_pm (bool), connection_label, serendipity_rationale, and "
                                 "optional relationship/summary/caution prose. "
@@ -737,9 +811,12 @@ class StdinMcpServer:
             }
         # F-38: each candidate names its facet, and referenced_works (read only on the bridge
         # path; 32% of a 289k-char output on 2026-09-27) is left out.
+        # F-50: `concepts` repeats the names in concept_tags and finalize never reads it.
+        lean, abstract_cut = _materials_options(args)
         materials = []
         for w in works:
-            m = material_from_work(w, include_references=False)
+            m = material_from_work(w, include_references=False, include_concept_names=False,
+                                   include_concept_tags=not lean, abstract_max_chars=abstract_cut)
             facet = (w.source_meta or {}).get("serendipity_facet")
             materials.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
@@ -754,6 +831,7 @@ class StdinMcpServer:
             "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
             "必ず添えてください（各10字以上）。抜粋できない主張は書かないでください——contra が決定論的に"
             "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
+            + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=abstract_cut)
         )
         return {
             "content": [{"type": "text", "text": diag + "\n\n" + _materials_json(materials)}],
@@ -1242,9 +1320,14 @@ class StdinMcpServer:
             # "交差候補 60 件" and this list stopped at 30 without saying so. Every reported
             # candidate goes out, like byserendipity's 60; F-15-U asks the caller to submit
             # them all (score-only for the ones it will not render).
+            # F-50: referenced_works was 38-44% of this output (110k-122k of 278k-294k chars,
+            # three saved runs) and nothing after this point reads it: delegate_finalize has no
+            # bridge set, and the bridge signals the caller scores from are computed right here.
+            lean, abstract_cut = _materials_options(args)
             mats = []
             for w in ranked_all:
-                m = material_from_work(w)
+                m = material_from_work(w, include_references=False, include_concept_names=False,
+                                       include_concept_tags=not lean, abstract_max_chars=abstract_cut)
                 meta = w.source_meta or {}
                 m["bridge_signals"] = {
                     # computed directly (not from annotation side-effects) so the material
@@ -1277,7 +1360,9 @@ class StdinMcpServer:
             # Lines that must reach the caller even with diagnostics off (the raw paths print
             # diag_line unconditionally): the F-40 lexical-leg failure and an unresolved F-37 scope.
             forced = "".join(f"- {n}\n" for n in (lex_note, scope_note if not home_ids else "") if n)
-            body = (instruction + "\n\n" + (diag_line + "\n\n" if diagnostics else (forced + "\n" if forced else ""))
+            size_note = _materials_size_note(mats, lean=lean, abstract_cut=abstract_cut)
+            body = (instruction + "\n" + size_note + "\n\n"
+                    + (diag_line + "\n\n" if diagnostics else (forced + "\n" if forced else ""))
                     + _materials_json(mats))
             return {"content": [{"type": "text", "text": body}], "isError": False}
 

@@ -918,6 +918,38 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ## 対処済み
 
+### F-50. byserendipity(raw_only)／bybridge(materials) — **返す materials が呼び手のツール結果の上限を超える。誰も読まない 2 欄を既定で落とし、残りは大きさを申告して呼び手が減らせるようにした** — **対処済み 2026-10-11（既定の 2 欄は無損失・それ以上は opt-in）**
+
+- 発端（2026-10-10 に 3 回）: seihai 週次指針＝byserendipity 178,651 字・bybridge 281,838 字。性能調査（salon-sites）＝byserendipity 223,039 字。どれも結果がファイルへ退避され、呼び手は自前のスクリプトで切り出して読んだ。seihai の見立ては「bybridge が大きいのは `referenced_works` と `concept_tags`。採点に使うのは題・抄録・`bridge_signals` だけ」。
+- 欄ごとの内訳（保存してあった実出力 6 本を数えた・API なし）:
+
+  | 出力 | 全体 | `referenced_works` | `concept_tags` | `concepts` | `abstract` |
+  |---|---|---|---|---|---|
+  | bybridge 10/05 相当 | 280,307 | 116,119（41%） | 66,927（24%） | 18,604（7%） | 44,614（16%） |
+  | bybridge 10/06 相当 | 277,645 | 122,292（44%） | 64,454（23%） | 18,399（7%） | 40,227（14%） |
+  | bybridge 10/09 相当 | 294,242 | 110,573（38%） | 72,639（25%） | 21,646（7%） | 45,666（16%） |
+  | byserendipity 10/08 相当（3 本） | 127,505〜175,737 | —（F-38 で除去済み） | 33〜37% | 10〜11% | 41〜45% |
+
+  `concepts` は 344 件すべてで `concept_tags` の名前の並びと同一だった。
+- 下流が読むか（コードを追った）: `delegate_finalize` は `referenced_works` も `concepts` も読まない（bridge の集合を持たず、`bridge_signals` は収集の時点で計算済み）。`concept_tags` を読むのは 1 か所だけで、ゲートを通った候補から出力枠を選ぶときの多様化（`_mmr_rerank`・`count` が 2 以上のとき）。ホーム近傍の判定は `theme_profile` を渡していないので働いていない。
+- 変えたもの（**materials の直列化と、その大きさの申告だけ**。取得・順位・除外・ゲートは不変。byserendipity と bybridge は同じ直列化関数を通るので 1 件として扱った）:
+  1. 既定で `concepts` を落とす（両ツール）。bybridge の materials からは `referenced_works` も落とす（byserendipity は F-38 で除去済み）。どちらも finalize が読まないので、結果は変わらない。
+  2. opt-in の引数を 2 つ足した（両ツール）。`materials_lean: true`＝`concept_tags` も落とす（出力枠の多様化が働かず点数順になる、と説明文と出力の両方に書いた）。`materials_abstract_chars: N`＝抄録を先頭 N 字で切り、切った候補に元の長さ `abstract_full_chars` を付ける（下限 200 字）。接地検証は echo された本文に対して行うので、切った範囲から引用すれば通る。
+  3. 出力に 1 行: `- materials の大きさ (F-50): 候補 60 件・N 字（うち abstract a／concept_tags b／bridge_signals c）` と、減らし方（上の 2 引数）。
+  4. 抄録が上流で空の候補があれば件数を数え、「`source_quote` は title から取れる・title を echo すれば出力候補になる」と書く（下の「抄録が空の候補」）。
+- 検証: 回帰 4 件を `tests/test_raw_output_legibility.py` に追加（既定で 2 欄が無い／lean と切り詰めは指定したときだけ・件数と元の長さが出る・下限未満は 200 字に上げる／空の抄録の件数と、title の引用が接地検証を通ること／byserendipity 側）。616 → 620 pass。
+  - **live（21:06〜21:07 JST・実 OpenAlex・MCP の実経路・10/10 相当のテーマ。seihai の当日の引数ではなく、記録にあるキーワードと contra 側で書いた英文。履歴は読まず書かず。before は同じ取得結果を旧い直列化に掛けた値）**:
+
+    | ツール | before | 既定 | `materials_lean` | lean＋抄録 1,200 字 |
+    |---|---|---|---|---|
+    | byserendipity（60 件） | 180,386 | **159,919**（89%） | 90,446 | 78,261（実経路でも同値。21 件を切った） |
+    | bybridge（60 件・診断込み） | 281,916 | **166,165**（59%） | 96,307 | 89,836 |
+
+    lean の 2 列は、bybridge は同じ取得結果から手元で計算した値、byserendipity の右端は引数を付けた実呼び出し。
+- **抄録が空の候補（seihai 10/10 の追加観測 2 点目）**: 「抄録が無いので `source_quote` を書けず、出力に載せられなかった」とあるが、接地検証の照合先は title＋abstract で（`verify_grounding`）、出力枠に入る条件も「title か abstract のどちらかがある」（`_has_material`）。**題から 10 字以上を抜けば契約は満たせる**。これを materials の出力に書いた（今夜の bybridge 実走では 60 件中 17 件が該当）。題だけを根拠にした散文をどこまで許すかは呼び手の判断で、contra の検証は逐語一致しか見ない。
+- **残る限界**: (i) 既定のままでは 16 万字前後で、10/10 に上限を超えた大きさ（17.8 万字）と大差ない。**上限に収まるかは呼び手が `materials_lean`（と必要なら `materials_abstract_chars`）を指定するかどうかで決まる**。呼び手の上限が何字かは contra 側では分からないので、lean の 9 万字前後で収まるかも未確認。(ii) `materials_lean` は finalize の多様化を止める。出力 5〜6 件を材料付き 6〜8 件から選ぶ今の seihai の使い方では差は小さいはずだが、測っていない。(iii) 性能調査が記録した「最長 1 件 12,556 字の抄録」は今夜の 2 回では出ていない（最長 3,000 字前後）。`materials_abstract_chars` で抑えられるが、既定では切らない。
+- OpenAlex の予算: 実走 3 回（30 リクエスト）。実走後の残り $0.0806／$0.10。
+
 ### F-44-I. bybridge — **交差候補ごとに OpenAlex の Field／Topic を付け、その Topic をシード側が既に引いていたかを数える**（F-44 の計器） — **対処済み 2026-10-09（計器のみ）**
 
 - 発端: seihai 2026-10-02（「兄弟 Field に 46 件」）と 2026-10-09（「約 35 件は兄弟 Field に分類された同主題」）。どちらも呼び手が 60 件を手で分類して数えた。
@@ -2308,6 +2340,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 - **materials の返り値が呼び手の上限を超えた。** byserendipity 178,651 字・bybridge 281,838 字で、どちらも MCP の結果としては受け取れずファイルに退避された。診断ブロックと候補 JSON を自前のスクリプトで切り出して読んだ。bybridge が大きいのは候補ごとの `referenced_works` と `concept_tags`。採点に使うのは題・抄録・`bridge_signals` だけなので、この 2 欄を既定で落とす（または件数を絞る）選択肢があると 1 回で読める。
 - **bybridge の候補で、採点したかった 3 件の抄録が空だった。** Remote Sensing of Environment の森林攪乱監視 3 本（`W2092141993`・`W1979532661`・`W2181171301`）と `W2082211426`（Robust monitoring of CAPM portfolio betas）・`W2264675900`（ダムの亀裂）。題だけで点を付けて全ゲートを通ったが、抄録が無いので接地契約の `source_quote` を書けず、出力に載せられなかった（`not_selected(no_material)`）。上流（OpenAlex）に抄録が無いレコードは「材料付きで再投すれば出力候補になる」の案内に従えない。
+
+> **contra 側注記（2026-10-11 失敗対処デー）**: (1) materials の大きさは **F-50** として対処した＝「対処済み」節。`concepts` と（bybridge の）`referenced_works` は既定で落とし、`concept_tags` と抄録の長さは呼び手が `materials_lean`／`materials_abstract_chars` で減らせる。出力に大きさの内訳が 1 行出る。(2) 抄録が空の候補は、title からの逐語抜粋で `source_quote` を満たせる（照合先は title＋abstract）。これも同じ行の下に件数つきで出るようにした。(3) byrepo 行（核の語を掲げるリポジトリがプールに無い）は F-14／F-41 の再現で、今回は手を付けていない。
 
 ## 追記のしかた
 

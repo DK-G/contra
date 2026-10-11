@@ -44,7 +44,8 @@ description: contra の Track B を使って遠いが構造的に接続する論
    - **生成過程 facet**: 3つの facet のうち **1つは、棚卸しで最も効いていそうな生成・観測過程を研究している分野**に割り当てる。pseudo_abstract はその分野の語彙で「観測・生成の仕組みそのものをモデル化して推定を正す」研究として書く。残りの facet は従来どおり、予測・説明の対象の関係構造で選ぶ。棚卸しの4問がすべて「不明」か自明（単純な計測で、目的変数への依存も合成も無い）なら省略してよい。省略したらその理由を出力に1行残す。
    - 生成過程 facet を立てたら、棚卸しの要点を **`concern` に1〜2文で書く**（例: 「観測の有無が重症度に依存している可能性がある」）。手順3の採点と接地（theme_quote）がこの文を参照できるようにするため。
    - 根拠: 過去コンペ4題の後知恵テスト（2026-09-27）では、勝因の3題が生成・観測過程にあったのに、呼び手の facet は全題で対象の振る舞いの類推に寄った。seihai の採用台帳でも、採用された文献の多くは測定・観測の研究だった（DECISION_LOG 2026-09-27「生成・観測過程 facet」）。
-2. **（contra MCP・キー無し）生候補収集**: `mcp__contra__byserendipity_discover` を `raw_only=true` で呼び、`structure`（手順1の構造）と `facets`（`[{domain, pseudo_abstract}]`）を渡す。contra が OpenAlex `search.semantic`（埋め込み検索）で各 facet を引き、ホームドメインをクライアント側で除外し、**生候補の materials（id/title/abstract/concepts/...）を JSON で返す**。`search.semantic` は実験的エンドポイントで一部 facet が 5xx になることがあるが、その facet はスキップされ残りが返る。
+2. **（contra MCP・キー無し）生候補収集**: `mcp__contra__byserendipity_discover` を `raw_only=true` で呼び、`structure`（手順1の構造）と `facets`（`[{domain, pseudo_abstract}]`）を渡す。contra が OpenAlex `search.semantic`（埋め込み検索）で各 facet を引き、ホームドメインをクライアント側で除外し、**生候補の materials（id/facet/title/abstract/concept_tags/...）を JSON で返す**。`search.semantic` は実験的エンドポイントで一部 facet が 5xx になることがあるが、その facet はスキップされ残りが返る。
+   - 60 件で 16 万字前後になる。結果が自分のツール結果の上限を超えるなら `materials_lean: true`（`concept_tags` を省く。9 万字前後）と、必要なら `materials_abstract_chars: N`（抄録を先頭 N 字で切る）を付ける。出力の「materials の大きさ (F-50)」の行に欄ごとの字数が出る。`materials_lean` を付けると手順4の出力枠の多様化が働かず点数順になる。抄録を切った候補の `source_quote` は返ってきた範囲から取る（F-50・2026-10-11）。
 3. **（エージェント）採点**: 返ってきた各候補を SOLVENT（purpose × mechanism）で自分の推論で採点する。各候補に次を付与:
    - `purpose_sim`（0–1。問題の因果構造の一致度。**< 0.20 は anomaly として contra 側で棄却**される。none≈0.10 / partial≈0.45 / strong≈0.70 が目安）
    - `mechanism_dist`（0–1。機構の遠さ。別分野・別手法ほど高い）
