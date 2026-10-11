@@ -2416,6 +2416,22 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-11 失敗対処デー）**: (1) materials の大きさは **F-50** として対処した＝「対処済み」節。`concepts` と（bybridge の）`referenced_works` は既定で落とし、`concept_tags` と抄録の長さは呼び手が `materials_lean`／`materials_abstract_chars` で減らせる。出力に大きさの内訳が 1 行出る。(2) 抄録が空の候補は、title からの逐語抜粋で `source_quote` を満たせる（照合先は title＋abstract）。これも同じ行の下に件数つきで出るようにした。(3) byrepo 行（核の語を掲げるリポジトリがプールに無い）は F-14／F-41 の再現で、今回は手を付けていない。
 
+## 2026-10-12（月・seihai r01/FJ 判断の席）の観測
+
+テーマ（英語で投入）: 分足 FX で、足のレンジ・レンジ内の終値位置・ヒゲの非対称・ティック数を状態変数として使い、戻る変位と続く変位を分けられるか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github） | include 5 語 | theme 関連度は全件 0.2 以下。計器の申告＝5 語とも名前／説明／topics に掲げるリポジトリがプールに 0 件（`close location value` は README 含め 0 件）。上位は 0DTE オプション計算機・暗号資産グリッド bot・アーカイブ済みライブラリ | **F-14 の再現（10 回目）**。収穫ゼロ |
+| **byserendipity**（raw_only・facet 3・`materials_lean`・抄録 500 字） | 水文学／地震工学／運動制御 | 返却 133 → 提出 60。結果は 55.2KB で呼び手の上限を超え、ファイルに退避された（F-50 の 2 つの引数を使っても超えた） | 地震工学と運動制御の facet は構造どおりの候補を返した。**水文学の facet は洪水頻度解析に流れ、構造に合う候補 0 件**（疑似抄録の「日最大・日末水位」が年最大流量の統計に引かれた） |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 5 件に材料 echo・55 件は点数のみ | anomaly 8・percentile 0.304（母数 52）・通過 16・出力 4（残留変位 2・力パルス適応 2）・接地検証失敗 0 | 正常。`not_selected(no_material)` の案内（F-15-U2）が 1 件出て、再投すべき候補が分かった |
+| **bybridge**（materials・`materials_lean`・抄録 400 字） | include 5 語 | シード 20（語彙レッグの主題一致 100%・ローソク足の FX 検証 2 本を含む）／最頻 bridge＝Brock–Lakonishok–LeBaron（主題の基礎文献）／上位 10 件占有 20%・全体 32%／結果は 59,810 字でファイルに退避 | 上位の多様化は維持。先週までの会計開示への漂流は起きなかった |
+| **delegate_finalize**（bybridge・60 件全件提出） | 3 件に材料 echo・57 件は点数のみ | anomaly 18・hollow 2・**通過 0・fallback 1**（chart pattern の収益性・0.17）。percentile 0.2（母数 40） | **「多様化したが収穫ゼロ」**（旧様式の再現ではない）。交差候補 60 件のうち 39 件が Decision Sciences の機械学習による価格予測＝テーマと同じ主題を別の Field ラベルで扱う論文で、距離（mechanism_dist 0.24〜0.31）で全滅した。F-32 のホーム除外は名簿が 2 件以上占める Topic しか外さないので、Topic「Stock Market Forecasting Methods」30 件が通った |
+
+追加の観測 1 点:
+
+- **`materials_lean` と `materials_abstract_chars` を両方付けても、60 件の結果は MCP の受け取り上限を超えた**（byserendipity 52,822 字・bybridge 50,770 字。bybridge は `bridge_signals` だけで 14,923 字）。上限内に収めるには抄録を 200 字まで切るか件数を減らす必要があり、後者は全件提出（F-15-U）と両立しない。ファイル退避でも作業はできるが、切り出しのスクリプトを毎回書いている。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
