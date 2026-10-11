@@ -59,12 +59,21 @@ def _structured_summary(abstract: str | None, cfg: GenerationConfig) -> str:
 
 
 
+# F-54 (2026-10-11): what the structured fill prints for a field nobody wrote. The old fillers
+# read as content ("【接続点: …】 という関係構造でテーマに接続する。", the theme's concern
+# repeated under every entry as that paper's caution, with the heading doubled as
+# 「注意点: 注意点:」). A reader could not tell an unwritten field from a weak one, so the
+# filler now says the field is unwritten and names where the text it shows came from.
+_UNWRITTEN = "（記入なし）"
+
+
 def _structured_caution(theme: ThemeInput) -> str:
+    # No "注意点: " prefix: every renderer already prints the heading.
     if theme.concern:
-        return f"注意点: {theme.concern}"
+        return f"（個別の注意点は記入なし）テーマの不安点: {theme.concern}"
     if theme.assumptions:
-        return f"注意点: 前提「{theme.assumptions[0]}」が成り立つか要確認。"
-    return "注意点: 評価条件の違いで結論が変わる可能性。"
+        return f"（個別の注意点は記入なし）前提「{theme.assumptions[0]}」が成り立つか要確認。"
+    return "（個別の注意点は記入なし）"
 
 
 
@@ -290,11 +299,11 @@ def fill_track_entries(
                 level = entry.relationship_level or "中"
                 relationship = f"関係軸「{entry.label}」で関係度「{level}」の関連性がある。"
             else:
-                relationship = f"{entry.label} という関係構造でテーマに接続する。"
+                relationship = f"{_UNWRITTEN}接続点ラベルのみ: {entry.label}"
         if not summary:
             summary = _summarize(entry.work.abstract) if theme is None else _structured_summary(entry.work.abstract, cfg)
         if not hypothesis:
-            hypothesis = "この論文の知見をテーマの具体的局面に転用できるか要検討。"
+            hypothesis = _UNWRITTEN
         if not caution:
             caution = _structured_caution(theme) if theme else cfg.caution_stub
 

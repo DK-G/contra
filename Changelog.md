@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-11（CL-0134） 構造整形の埋め草を「記入なし」と出どころの明示に変える（F-54-R）
+
+### 概要
+* `src/pipeline/generate.py`: Track B の関連性の埋め草を「（記入なし）接続点ラベルのみ: …」、仮説を「（記入なし）」、注意点を「（個別の注意点は記入なし）テーマの不安点: …」に。注意点の「注意点: 」接頭辞を外した（描画側と二重になっていた）。呼び手が書いた欄は不変。
+* `tests/test_fill_track_entries.py`: 期待値 1 件更新、1 件追加。622 pass。
+* 実経路（API なし）: 今夜の byserendipity 実出力 60 件を `delegate_finalize` に戻して before/after を確認。byrepo(structured)・bybridge(structured) の注意点の行も同じ文言になる。
+* `docs/field_observations_seihai.md`: F-54-R（対処済み）。付録の TBD と表題は F-54 に残した。
+
+---
+
 ## 2026-10-11（CL-0133） `scope_time_range` は取得に使われていない、と説明文に書く（F-51）。性能調査の失敗 5 行に採番
 
 ### 概要
