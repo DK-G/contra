@@ -339,6 +339,9 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
         parts.append(
             f"[{i}] {dom}: " + (f"ok{note} / " if note else "")
             + f"返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+            # F-52: the same paper under another OpenAlex id, merged on its abstract.
+            + (f"（抄録が同文の別レコード {r['same_abstract']} 件を統合）"
+               if r.get("same_abstract") else "")
         )
         if not sel:
             emptied.append(dom)

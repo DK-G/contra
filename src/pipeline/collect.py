@@ -55,6 +55,11 @@ class CollectConfig:
     # let the theme's own subject through when OpenAlex files it under a sibling Field
     # ("Stock Market Forecasting Methods" -> Decision Sciences). False restores Field-only.
     home_topic_exclusion: bool = True
+    # F-52 (2026-10-11): in the semantic Track B collection, a record whose abstract opens with
+    # the same text as one already kept is the same paper under another OpenAlex id (a
+    # repository copy titled "SUMMARY" or "….pdf", no DOI or a deposit DOI), which the
+    # id / title / DOI checks cannot see. False restores the old behaviour.
+    same_abstract_dedup: bool = True
     # F-33 (2026-09-25): the bybridge semantic seed leg re-sends a 504 until this many seconds
     # have passed (OpenAlexConfig.gateway_patience_sec). The endpoint's 504s come in streaks
     # that clear within minutes and are not charged to the daily budget; the leg supplied 0
@@ -484,6 +489,24 @@ def _norm_title(title: Optional[str]) -> str:
     """
     t = (title or "").lower().split(":")[0]
     return " ".join(t.split())
+
+
+_ABSTRACT_KEY_CHARS = 200
+
+
+def _abstract_key(abstract: Optional[str]) -> str:
+    """The opening of an abstract, letters and digits only, for same-paper detection (F-52).
+
+    Empty when the abstract is too short to identify a paper (or is not in Latin script), so
+    such records are never merged on this key.
+    """
+    a = re.sub(r"[^a-z0-9]+", "", (abstract or "").lower())
+    return a[:_ABSTRACT_KEY_CHARS] if len(a) >= _ABSTRACT_KEY_CHARS else ""
+
+
+def _record_standing(work: Work) -> tuple:
+    """Which of two records of one paper to keep: the one with a DOI, then the more cited."""
+    return (bool(work.doi), int(work.cited_by_count or 0))
 
 
 def _norm_doi(doi: Optional[str]) -> str:
@@ -1058,6 +1081,7 @@ def _collect_track_b_semantic(
     seen_ids: Set[str] = set(used_ids or set())
     seen_titles: Set[str] = set(used_titles or set())
     seen_dois: Set[str] = set(used_dois or set())
+    seen_abstracts: Dict[str, Any] = {}   # abstract key -> (bucket, position) of the kept record
     buckets: List[List[Work]] = []
     stats: List[Dict[str, Any]] = []
     valid_facets = 0
@@ -1066,7 +1090,7 @@ def _collect_track_b_semantic(
         client_cfg.gateway_patience_sec = max(0.0, cfg.facet_gateway_patience_sec)
     for facet_no, facet in enumerate(spec.facets, 1):
         rec: Dict[str, Any] = {"domain": facet.domain, "status": "ok",
-                               "returned": 0, "kept": 0, "selected": 0}
+                               "returned": 0, "kept": 0, "selected": 0, "same_abstract": 0}
         stats.append(rec)
         if not cfg.facet_fair_share and sum(len(b) for b in buckets) >= max_count:
             # Legacy behaviour kept behind the flag: stop once the cap is full (facet unqueried).
@@ -1133,6 +1157,20 @@ def _collect_track_b_semantic(
                 # (the 2026-09-27 caller had to infer it from the interleaved order).
                 w.source_meta = {**(w.source_meta or {}),
                                  "serendipity_facet": f"[{facet_no}] {facet.domain}"}
+                abs_key = _abstract_key(w.abstract) if cfg.same_abstract_dedup else ""
+                if abs_key and abs_key in seen_abstracts:
+                    # F-52: the same paper again. It keeps one slot, held by the better record,
+                    # at the position and under the facet of the first one found.
+                    rec["same_abstract"] += 1
+                    held_bucket, pos = seen_abstracts[abs_key]
+                    held = held_bucket[pos]
+                    if _record_standing(w) > _record_standing(held):
+                        w.source_meta["serendipity_facet"] = (held.source_meta or {}).get(
+                            "serendipity_facet", w.source_meta["serendipity_facet"])
+                        held_bucket[pos] = w
+                    continue
+                if abs_key:
+                    seen_abstracts[abs_key] = (bucket, len(bucket))
                 bucket.append(w)
         rec["kept"] = len(bucket)
         buckets.append(bucket)

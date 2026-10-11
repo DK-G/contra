@@ -24,7 +24,8 @@ from src.core.models import Concept, Work
 
 
 def _long_raw(wid: str, n_words: int = 300, n_refs: int = 80) -> Dict[str, Any]:
-    words = {f"word{i:03d}x": [i] for i in range(n_words)}
+    # each work gets its own abstract: identical ones are merged as one paper (F-52)
+    words = {f"{wid.lower()}word{i:03d}x": [i] for i in range(n_words)}
     return {"id": wid, "display_name": f"title {wid}", "publication_year": 2021,
             "abstract_inverted_index": words,
             "referenced_works": [f"https://openalex.org/W9{i:08d}" for i in range(n_refs)],

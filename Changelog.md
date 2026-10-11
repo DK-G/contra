@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-11（CL-0135） byserendipity は抄録が同文の別レコードを 1 枠にまとめる（F-52-R）
+
+### 概要
+* `src/pipeline/collect.py`: `_abstract_key`（抄録の先頭 200 字・英数字のみ）と `_record_standing`。`_collect_track_b_semantic` は鍵が同じレコードを採らず、DOI のある方・被引用の多い方に枠を持たせる。`CollectConfig.same_abstract_dedup`（既定 True）。
+* `src/mcp_server.py`: facet 別内訳に「（抄録が同文の別レコード N 件を統合）」。
+* `tests/test_same_abstract_dedup.py`: 新規 5 件。`tests/test_raw_output_legibility.py` の合成データは全件同じ抄録だったので、候補ごとに別の抄録にした。627 pass。
+* 実測（実 OpenAlex 1 回・10/08 相当の腕 A）: 同文の組 2 → 0、空いた 2 枠に次点の 2 件。
+* `docs/field_observations_seihai.md`: F-52-R（対処済み）。
+
+---
+
 ## 2026-10-11（CL-0134） 構造整形の埋め草を「記入なし」と出どころの明示に変える（F-54-R）
 
 ### 概要
