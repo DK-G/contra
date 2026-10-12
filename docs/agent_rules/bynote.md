@@ -1,60 +1,50 @@
 ---
-name: bynote
-description: メモの概念リンクを起点に、調査・一次資料統合・意思決定まで進める統一 named flow。Contra MCP は Purpose/Mechanism 分解と Serendipity Bridge 生成を担当する。
+name: bynote_link_concepts
+description: メモを Purpose/Mechanism に分解し、類推ドメインと Serendipity Bridge の問いを返す Contra の MCP ツール `bynote_link_concepts` の運用ノート。調査と意思決定の flow（旧 bynote）は 2026-10-12 にハブの deep-research へ移った。
 ---
 
-# Bynote
+# bynote_link_concepts（概念リンク）
 
-`bynote` はメモ分析と Phase 0 の戦略設計を分けず、一つの flow として扱う。
-Contra の `bynote_link_concepts` は、この flow の概念リンク工程を実行する MCP ツールであり、別名のルーチンではない。
+**2026-10-12 改訂。** この文書は以前、`bynote` を「メモ分析から Phase 0 の意思決定までの 1 つの flow」として定義していた。その flow の調査と意思決定は、ハブの `deep-research` へ置き換わった（正本: `D:\dev\docs\skills\bynote.md`）。置き換え後の手順は NotebookLM も概念リンクも含まない。
 
-## Purpose
+ここに残すのは、Contra の MCP ツール `bynote_link_concepts` の使い方だけである。ツール名は実装（`_execute_bynote`）に合わせて据え置く。
+
+## 何をするツールか
 
 - 曖昧なメモや仮説を Purpose（何を実現したいか）と Mechanism（どう実現するか）に分解する
-- 別ドメインの構造類推と Serendipity Bridge の問いから、調査の視野を広げる
-- 外部調査とプロジェクト一次資料を統合し、実行可能な方針へ収束させる
+- 別ドメインの構造類推を 2〜3 件出す
+- 前提を入れ替えて発想を跳ばすための問い（Serendipity Bridge）を作る
 
-## Invocation
+LLM を 1 回呼ぶだけで、外部の資料は集めない。
 
-- `bynote`
-- `bynote で進めて`
-- `bynote で整理して`
-- `フェーズ0から進めて`
+## 呼び出し
+
 - `このメモから類推先を出して`
+- `Purpose/Mechanism に分けて`
+
+`bynote`・`フェーズ0`・`ディープリサーチ` と言われた場合は、このツールではなくハブの `deep-research` を回す。
 
 ## Inputs
 
 - `note_content`（必須）: 分析対象のメモ、アイデア、設計仮説。会話と一次資料から組み立ててよい
-- `theme_overview`（任意）: メモを適用する背景テーマ
-- プロジェクト一次資料: README、task、plan、仕様、既存コード、判断ログ
+- `theme_overview`（任意）: メモを適用する背景テーマ。指定すると、そのテーマへ転用するときの接続ロジックも返る
 
-## Workflow
+## 出力
 
-1. 今回決める対象を一つに絞り、関連する一次資料から `note_content` と `theme_overview` を作る。
-2. Contra MCP の `bynote_link_concepts` を呼び、次を得る。
-   - Purpose / Mechanism
-   - 類推可能な別ドメイン 2〜3件と接続理由
-   - Serendipity Bridge の問い
-   - 背景テーマへの接続ロジック
-3. 出力を調査仮説として扱い、NotebookLM Deep Research 等で外部資料を収集する。MCP出力だけを根拠に結論を出さない。
-4. 外部資料とプロジェクト一次資料を統合し、実装コスト、運用コスト、リスク、可逆性、既存構成、ユーザー価値で選択肢を比較する。
-5. 推奨方針を確定し、重要な判断は `DECISION_LOG.md` に残す。
+1. Purpose / Mechanism
+2. 類推可能な別ドメイン 2〜3 件と、なぜ類推できるか
+3. Serendipity Bridge の問い
+4. 背景テーマへの接続ロジック（`theme_overview` を渡したときだけ）
 
-## MCP Execution
+## 実行条件
 
 - ツール名: `mcp__contra__bynote_link_concepts`（ホストにより接頭辞が異なる場合は、末尾が `bynote_link_concepts` の Contra ツールを使う）
 - 実装: `src/mcp_server.py::_execute_bynote`
-- 現行実装は `gpt-4o-mini` を呼ぶため、`OPENAI_API_KEY` と `api.openai.com` への到達性が必要で、API利用料が発生しうる。
-- ツールが使えない場合は、呼び出し側エージェントが同じ4項目を推論して先へ進める。概念リンク工程の不在だけで Phase 0 全体を止めない。
+- 現行実装は `gpt-4o-mini` を呼ぶため、`OPENAI_API_KEY` と `api.openai.com` への到達性が必要で、API 利用料が発生しうる。委譲モード（キー無し）は無い（[`../dispatch_setup.md`](../dispatch_setup.md) §0.5）。
+- ツールが使えない場合は、呼び出し側エージェントが同じ出力を自分で作って先へ進める。
 
-## Output Expectations
+## 出力の扱い
 
-- 今回のテーマ
-- Purpose / Mechanism
-- 類推ドメインと接続理由
-- Serendipity Bridge の問い
-- 使用した調査ノートと主要資料
-- 比較した選択肢
-- 推奨方針と理由
-- 判断記録と次の実装ステップ
-
+- 出力は調査仮説であり、裏付けなしに採用判断へ直結させない。
+- 類推先がホームドメインの中に留まることがある（[`../field_observations_seihai.md`](../field_observations_seihai.md) F-06）。返ってきた類推先がテーマと同じ分野でないかを確かめてから使う。
+- 仮説を外部の資料で確かめたいときは、問いの形に直してハブの `deep-research` に渡す。

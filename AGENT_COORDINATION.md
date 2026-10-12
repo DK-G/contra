@@ -14,7 +14,7 @@
 
 | Flow Name | Description | Key Procedures |
 | :--- | :--- | :--- |
-| **`bynote`** | 戦略・知識統合 | `research_start` -> `poll` -> `import` -> `query` |
+| **`deep-research`**（旧 `bynote`） | 判断の前の深い調査 | 問いを 1 つに絞る -> 調査員を並列に走らせる -> 根拠の強さを分けた報告書（正本: `D:\dev\docs\skills\bynote.md`。2026-10-12 に NotebookLM から置き換え） |
 | **`bythink`** | 論理設計・設計 | `sequential_thinking` -> 設計案比較 -> `ARCHITECTURE.md` |
 | **`bystitch`** | UI/UX 生成 | `generate_screen` -> `apply_design_system` -> `UI_DNA.md` |
 | **`byjules`** | 最適化・磨き | 課題抽出 -> `byjules` 実行 -> 性能検証 |

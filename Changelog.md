@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-12（CL-0136） `bynote` の文書を、ハブの deep-research への置き換えに合わせる（文書のみ）
+
+### 概要
+* 背景: ハブの `bynote`（NotebookLM の Deep Research を核にした調査と意思決定の flow）は 2026-10-12 に deep-research へ置き換わった（Kira 決定。正本 `D:\dev\docs\skills\bynote.md`）。新しい手順は NotebookLM も概念リンクも含まない。
+* `docs/agent_rules/bynote.md`: flow の定義をやめ、MCP ツール `bynote_link_concepts` の運用ノートにした（何をするか・入力・出力・実行条件・出力の扱い）。`bynote`・`フェーズ0` と呼ばれたらハブの deep-research へ回す、と明記。F-06（類推先がホームドメインに留まる）への参照を追加。
+* `AGENT_COORDINATION.md`・`TOOL_CONFIG_GUIDE.md`・`docs/dispatch_setup.md`: `bynote` を NotebookLM の手順として説明していた 3 か所を deep-research に合わせた。
+* コード・テスト・ツール名は不変（`bynote_link_concepts` と `_execute_bynote` はそのまま）。
+
+---
+
 ## 2026-10-11（CL-0135） byserendipity は抄録が同文の別レコードを 1 枠にまとめる（F-52-R）
 
 ### 概要

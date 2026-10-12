@@ -40,8 +40,8 @@ bridge プールを作る。ここが開いていないと bybridge は **0 件�
   （[`src/mcp_server.py`](../src/mcp_server.py) `_execute_bynote` → [`src/openai_client.py`](../src/openai_client.py)）。
   Dispatch でキー無しだと `OPENAI_API_KEY is not set` で失敗する。キー無しで使いたい場合は委譲パスの
   実装が別途必要（スコア設計外なので [`spec.md`](../spec.md) 禁則には触れない）。
-  - ※ `/bynote` **スキル**（NotebookLM Deep Research）は MCP 経由ではない別物。ここで言うキー依存は
-    MCP ツール `bynote_link_concepts` の話。
+  - ※ `/bynote` **スキル**（2026-10-12 から中身は deep-research。それ以前は NotebookLM Deep Research）は
+    MCP 経由ではない別物。ここで言うキー依存は MCP ツール `bynote_link_concepts` の話。
 
 ## 1. ネットワークポリシー（Web UI でしか変えられない）
 

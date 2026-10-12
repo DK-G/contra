@@ -2,10 +2,10 @@
 
 このプロジェクトで使用する「精鋭 6 ツール」のセットアップと活用方法のガイドです。
 
-## 1. NotebookLM (`bynote`)
-- **目的**: プロジェクトの「脳」として機能させ、仕様の不整合をゼロにする。
-- **設定**: `STRATEGIC_PLANNING.md` や `docs/*.md` をソースとして常に最新に保つ。
-- **活用**: `research_start` で外部の競合調査や技術トレンドを取り込み、`research_import` で知識ベースを拡張する。
+## 1. deep-research（旧 `bynote`。2026-10-12 に NotebookLM から置き換え）
+- **目的**: 不確実な判断の前に、根拠の強さを分けた調査報告書を 1 本作る。
+- **設定**: 鍵もログインも要らない。手順と置き場所の正本は `D:\dev\docs\skills\bynote.md`。
+- **活用**: 問いを 1 つに絞って回し、報告書の結論と「不明」の一覧を判断の材料にする。メモの概念リンク（`bynote_link_concepts`）は別物で、[`docs/agent_rules/bynote.md`](docs/agent_rules/bynote.md) を参照。
 
 ## 2. Sequential Thinking (`bythink`)
 - **目的**: AI の「考えの跡」を可視化し、設計ミスを未然に防ぐ。
