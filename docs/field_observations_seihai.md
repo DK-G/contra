@@ -2432,6 +2432,23 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 - **`materials_lean` と `materials_abstract_chars` を両方付けても、60 件の結果は MCP の受け取り上限を超えた**（byserendipity 52,822 字・bybridge 50,770 字。bybridge は `bridge_signals` だけで 14,923 字）。上限内に収めるには抄録を 200 字まで切るか件数を減らす必要があり、後者は全件提出（F-15-U）と両立しない。ファイル退避でも作業はできるが、切り出しのスクリプトを毎回書いている。
 
+## 2026-10-13（火・seihai r02/F2 GP）の観測
+
+テーマ（英語で投入）: 単一スコアで進化させた GP 個体 240 本を 2 本の固定バー（2 倍コストの net・CPCV 正の割合）の連言で審査すると、片方ずつ通る個体はいるが両方通る個体がいない。二律背反か、探索が交点を狙っていないのか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 10） | include 5 語（genetic programming / lexicase selection / multi-objective / constraint handling / trading strategy） | 計器の申告＝**"lexicase selection" と "constraint handling" は README を含めプール 0 件**。上位は jenetics・DEAP・TPOT（汎用の進化計算ライブラリ・関連度 0.37〜0.4）と Freqtrade 用の手書き戦略（0.2） | **F-14 の再現（11 回目）**。収穫ゼロ。主題語 2 つが検索段で落ち、残りの汎用語（genetic programming・multi-objective）に一致するライブラリが並んだ |
+| **byserendipity**（raw_only・facet 3・`materials_lean`・抄録 500 字） | 進化計算（lexicase）／育種（不利な遺伝相関・選抜指数と独立淘汰）／創薬の多パラメータ最適化 | 返却 34/45/31 → ホーム除外・重複後 11/37/23 → 提出 60。結果 58.3KB でファイルに退避 | 3 facet とも構造どおりの候補を返した。facet 1（進化計算）は返却 34 → 11 と減りが大きい（内訳は出力からは読めない） |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 6・hollow 27・通過 8・**出力 4**。percentile 0.476（母数 27）。接地照合失敗 0。**『近いが有用』1 件を名指し**（Lexicase selection of specialists・構造 0.71 × 距離 0.58） | 本日の主収穫。F-22 の名指しは有効に働いた（落選理由が距離だと分かり、採用した）。**呼び手側の送信漏れ**: echo した 6 件に `cited_by_count` を付けず、警告 6 件・被引用 0 と描画された |
+| **bybridge**（materials・`seed_semantic_text` 指定・`materials_lean`・抄録 400 字） | home=Economics, Econometrics and Finance | シード 20 件中 18 件が主題（GP／テクニカルルールの収益性）。語彙レッグ主題一致 9/11 = 82%。最頻 bridge＝Brock–Lakonishok–LeBaron（被引用 2,290・主題の基礎文献）・全体 33%／上位 10 件 80%。通行 bridge 39 本。結果 57.5KB でファイルに退避 | 名簿も最頻 bridge も主題側。**旧様式ではない** |
+| **delegate_finalize**（bybridge・60 件全件提出） | 3 件に材料 echo・57 件は点数のみ | **anomaly 25・hollow 31**・通過 1・fallback 1（Schmidt & Lipson 2009・0.32）。分位の母数 4 件 | **「名簿が合うと主題の内側が並ぶ」**: 交差候補 60 件中 **41 件が Topic「Stock Market Forecasting Methods」（Decision Sciences）**＝名簿のシード 1 本（A real-time adaptive trading system using genetic programming）と同じ Topic。F-32 のホーム除外は名簿が 2 件以上占める Topic だけを外すので通った（診断ブロックが「名簿のシードと同じ Topic 41 件」と正しく申告）。10/09 の 30〜39 件に続く同じ Topic の通過 |
+
+追加の観測 2 点:
+
+- **bybridge は 2 週で逆側の不発を出した**: 10/06 は語彙シードが主題から外れ（主題一致 0%）、交差候補は企業金融。本日は名簿が主題に合い（82%）、交差候補は主題そのもの（株価予測の機械学習）。**名簿の主題適合を上げても、交差候補が「遠い構造」になる方向には動かなかった**。このテーマ族（売買ルールの探索・検証）では、共有引用の 2-hop 先に別分野がほとんど無い可能性がある。
+- **抄録が上流で空の候補が bybridge で 33/60 件**。題だけで採点することになり、hollow（構造の深さ 0.5 未満）に落ちた 31 件の多くはこれに当たる。抄録が無い候補は「構造が浅い」と「材料が無くて判断できない」が同じ欄に落ちる。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
