@@ -438,6 +438,14 @@ def _topic(w: Work) -> str:
     return str((getattr(w, "source_meta", None) or {}).get("primary_topic_name") or "")
 
 
+def _top_topics(works: Sequence[Work]) -> List[Any]:
+    counts: Dict[str, int] = {}
+    for w in works:
+        if _topic(w):
+            counts[_topic(w)] = counts.get(_topic(w), 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 def _leg_agreement(
     seeds: Sequence[Work], semantic_pool: Optional[Sequence[Work]], sub_home_ids: set,
 ) -> Optional[Dict[str, Any]]:
@@ -480,6 +488,10 @@ def _leg_agreement(
         "lexical_topic_agree": len(agree),
         "lexical_topic_fraction": (len(agree) / len(known)) if (known and pool_topics) else None,
         "lexical_miss_topics": sorted(miss.items(), key=lambda kv: (-kv[1], kv[0])),
+        # F-47: both legs' own Topics, so the warning can show the two sides instead of
+        # declaring which one is the subject.
+        "lexical_top_topics": _top_topics(known),
+        "semantic_top_topics": _top_topics(pool),
         "semantic_top_subfield": top_sub,
     }
 
@@ -639,13 +651,33 @@ def render_seed_alignment(
         )
     lfrac = legs["lexical_topic_fraction"] if (legs and legs["semantic_pool"]) else None
     if lfrac is not None and lfrac < SEED_LEG_TOPIC_WARN_BELOW:
-        missed = " / ".join(f"{n} {c}" for n, c in legs["lexical_miss_topics"][:4])
+        # F-47 (2026-10-13): this used to say "the keyword-found seeds are off the subject" and
+        # call the semantic side the subject. The number only says the two legs' Topics do not
+        # overlap. Replayed 2026-10-06 it read 0/11 while the SEMANTIC leg was the one that had
+        # drifted (voting theory, pulled by the prose's wording) and the lexical seeds included
+        # the subject itself; on seihai's 10/09 and 10/10 runs the lexical side was the one off.
+        # So: name the disagreement, show both sides' Topics, give the remedy for each case.
+        def _fmt(pairs: Sequence[Any]) -> str:
+            return " / ".join(f"{n} {c}" for n, c in pairs[:4]) or "（分類なし）"
         lines.append(
-            f"  ⚠ キーワードで選ばれたシードが主題から外れています（語彙由来のトピック一致 "
-            f"{lfrac:.0%} < {SEED_LEG_TOPIC_WARN_BELOW:.0%}）。外れたトピック: {missed}。"
-            "名簿のうち semantic 由来の件はテーマ本文で選ばれた主題側で、外れているのは語彙側"
-            "＝キーワードが別の主題の語彙に衝突しています（F-13）。keywords_include を主題の標準語彙へ"
-            "寄せてください。"
+            f"  ⚠ キーワードで選ばれたシードと、テーマ本文で選ばれたシードのトピックが重なっていません"
+            f"（語彙由来のトピック一致 {lfrac:.0%} < {SEED_LEG_TOPIC_WARN_BELOW:.0%}）"
+            "＝少なくとも片方のレッグが主題から外れています。どちらが外れたかは、この数字からは"
+            "決まりません（基準にしている semantic 側が、テーマ本文の言い回しに引かれて外れることも"
+            "あります・F-47）。下の 2 行を読んで決めてください。"
+        )
+        lines.append(
+            f"    語彙レッグ（名簿の語彙由来 {legs['lexical_topic_known']} 件）の上位トピック: "
+            f"{_fmt(legs.get('lexical_top_topics') or legs['lexical_miss_topics'])}"
+        )
+        lines.append(
+            f"    semantic レッグ（取得 {legs['semantic_pool']} 件）の上位トピック: "
+            f"{_fmt(legs.get('semantic_top_topics') or [])}"
+        )
+        lines.append(
+            "    主題と読めるのが semantic 側なら、キーワードが別の主題の語彙に衝突しています（F-13）"
+            "＝keywords_include を主題の標準語彙へ寄せる。主題と読めるのが語彙側なら、"
+            "seed_semantic_text を主題の語で書き直す（比喩や言い回しを主題の用語に置き換える）。"
         )
     if sem == 0:
         lines.append(

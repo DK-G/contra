@@ -507,7 +507,7 @@ def test_lexical_drift_under_a_methodology_theme_is_still_caught_and_attributed(
                                   semantic_count=10, semantic_pool=pool)
     line = render_seed_alignment(stats, subfield_label="Finance")
     assert "語彙由来 1/6 = 17%" in line
-    assert "⚠ キーワードで選ばれたシードが主題から外れています" in line
+    assert "⚠ キーワードで選ばれたシードと、テーマ本文で選ばれたシードのトピックが重なっていません" in line
     assert "Housing Market and Economics 2" in line
     assert "サブフィールド一致が低い主因" in line
 
@@ -566,7 +566,7 @@ def test_field_warning_follows_the_same_scope_mismatch_rule():
     line = render_seed_alignment(stats, subfield_label="Finance")
     assert "シード名簿がテーマの分野から外れています" not in line
     assert "ℹ 分野・サブフィールド一致が低い主因" in line
-    assert "⚠ キーワードで選ばれたシードが主題から外れています" in line   # drift still named
+    assert "⚠ キーワードで選ばれたシードと、テーマ本文で選ばれたシードのトピックが重なっていません" in line   # drift still named
     # without the semantic pool there is no cross-leg verdict, so the old Field warning stands
     legacy = render_seed_alignment(
         seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"], semantic_count=10),
@@ -603,3 +603,26 @@ def test_unrecovered_504_streak_says_the_roster_is_lexical_only(monkeypatch):
     _, rep = collect_mod.collect_seeds_semantic_report(_theme(), CollectConfig())
     line = render_semantic_leg(rep)
     assert "504 を 23 回・178.2 秒待って未回復" in line and "語彙シードのみ" in line
+
+
+def test_leg_disagreement_warning_names_both_sides_and_no_culprit():
+    """F-47 (2026-10-13). Replayed 2026-10-06: 0/11 lexical agreement, but the SEMANTIC leg was
+    the drifted one (voting theory) and the lexical seeds held the subject. The warning must not
+    call either side the subject; it shows both legs' Topics and the remedy for each case."""
+    dec = ("18", "Decision Sciences", "1803", "Management Science")
+    pool = [_legseed(f"S{i}", dec, "Game Theory and Voting Methods") for i in range(5)]
+    roster = pool[:3] + (
+        [_legseed(f"L{i}", _ECON, "Financial Markets and Investment Strategies") for i in range(4)]
+        + [_legseed("L9", _ECON, "Corporate Finance and Governance")])
+    stats = seed_domain_alignment(roster, ["20"], home_subfield_ids=["2003"],
+                                  semantic_count=5, semantic_pool=pool)
+    assert stats["legs"]["lexical_top_topics"][0] == ("Financial Markets and Investment Strategies", 4)
+    assert stats["legs"]["semantic_top_topics"] == [("Game Theory and Voting Methods", 5)]
+    line = render_seed_alignment(stats, subfield_label="Finance")
+    assert "少なくとも片方のレッグが主題から外れています" in line
+    assert "どちらが外れたかは、この数字からは決まりません" in line
+    assert "語彙レッグ（名簿の語彙由来 5 件）の上位トピック: Financial Markets and Investment Strategies 4" in line
+    assert "semantic レッグ（取得 5 件）の上位トピック: Game Theory and Voting Methods 5" in line
+    assert "keywords_include" in line and "seed_semantic_text" in line
+    # the old verdict is gone
+    assert "外れているのは語彙側" not in line and "主題側で" not in line

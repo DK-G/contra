@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-13（CL-0137） bybridge のレッグ不一致の警告は、外れた側を断定せず両側のトピックを並べる（F-47-R）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `render_seed_alignment` の F-13-L 警告を「2 つのレッグのトピックが重なっていない＝少なくとも片方が外れている」に改め、語彙レッグと semantic レッグの上位トピックを 1 行ずつ出す。処方は両側（`keywords_include`／`seed_semantic_text`）。`legs` に `lexical_top_topics`／`semantic_top_topics` を追加。閾値・取得・順位は不変。
+* `tests/test_seed_field_scope.py`: 新規 1 件、既存 2 件の期待文言を更新。628 pass。
+* 実測（保存した再演 3 本・API なし）: 10/06 相当で旧文は「外れているのは語彙側」と誤って断定、新文は semantic 側の上位トピック「Game Theory and Voting Systems 10」を並べる。10/09 相当は語彙側の外れが読める。10/05 相当は警告なしのまま。
+* `docs/field_observations_seihai.md`: F-47-R（対処済み）。
+
+---
+
 ## 2026-10-12（CL-0136） `bynote` の文書を、ハブの deep-research への置き換えに合わせる（文書のみ）
 
 ### 概要
