@@ -270,8 +270,53 @@ def _materials_options(args: Dict[str, Any]) -> "tuple[bool, Optional[int]]":
     return bool(args.get("materials_lean")), (max(cut, _MATERIALS_ABSTRACT_MIN_CHARS) if cut > 0 else None)
 
 
+def _materials_max_chars_prop() -> Dict[str, Any]:
+    return {"type": "integer", "description": (
+        "Size budget for the WHOLE returned text, in characters (F-50b). contra picks the longest "
+        "abstract head (never below "
+        f"{_MATERIALS_ABSTRACT_MIN_CHARS}) that keeps the result within it, so you do not have to "
+        "guess materials_abstract_chars and re-run. Every candidate is still returned. If the "
+        "budget cannot be met even at the minimum head, the result says so and by how much. "
+        "contra cannot see your tool-result limit. Measured on Claude Code 2026-10-13 with the "
+        "same 60 candidates: a 45.6k-char result arrived inline and a 51.9k-char one was saved "
+        "to a file, so 45000 is a tested value there. Use it with materials_lean:true (without "
+        "it the concept_tags alone exceed that). An explicit materials_abstract_chars is an "
+        "upper bound on the head.")}
+
+
+def _materials_budget(args: Dict[str, Any]) -> Optional[int]:
+    try:
+        n = int(args.get("materials_max_chars") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return n if n > 0 else None
+
+
+def _fit_abstract_cut(render, budget: int, *, upper: int) -> "tuple[Optional[int], bool]":
+    """Longest abstract head that keeps ``len(render(cut))`` within ``budget`` (F-50b).
+
+    ``render(cut)`` returns the full result text for a head of ``cut`` chars (None = uncut);
+    ``upper`` is the longest head worth trying (the longest abstract, or the caller's own cut).
+    Returns ``(cut, fits)``: ``(None, True)`` when no cut is needed; the minimum head with
+    ``fits=False`` when even that is over budget. The text grows with the head, so bisect.
+    """
+    if len(render(None if upper is None else upper)) <= budget:
+        return upper, True
+    lo = _MATERIALS_ABSTRACT_MIN_CHARS
+    if len(render(lo)) > budget:
+        return lo, False
+    hi = upper                      # known not to fit
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if len(render(mid)) <= budget:
+            lo = mid
+        else:
+            hi = mid
+    return lo, True
+
+
 def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
-                         abstract_cut: Optional[int]) -> str:
+                         abstract_cut: Optional[int], budget_note: str = "") -> str:
     """How large the materials JSON is and which fields make it so (F-50).
 
     On 2026-10-10 three results (178k / 223k / 282k chars) exceeded the caller's tool-result
@@ -302,6 +347,7 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
                  "取ってください。")
     else:
         line += "materials_abstract_chars:N で抄録を先頭 N 字に切れます。"
+    line += budget_note
     no_abstract = sum(1 for m in materials if not str(m.get("abstract") or "").strip())
     if no_abstract:
         line += (f"\n- 抄録が上流で空の候補 {no_abstract} 件（upstream_empty に abstract）: "
@@ -494,6 +540,7 @@ class StdinMcpServer:
                         "facets": {"type": "array", "description": "When raw_only: up to 3 DISTINCT distant-domain facets the agent generated via targeted abstraction. contra runs OpenAlex search.semantic on each (no LLM) and excludes the home domain client-side.", "items": {"type": "object", "properties": {"domain": {"type": "string", "description": "The distant domain/discipline."}, "pseudo_abstract": {"type": "string", "description": "A short (~80-word) hypothetical abstract of a paper in THAT domain exhibiting the shared structure, in that domain's own vocabulary."}}}},
                         "materials_lean": _materials_lean_prop(),
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
+                        "materials_max_chars": _materials_max_chars_prop(),
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
@@ -824,28 +871,67 @@ class StdinMcpServer:
         # path; 32% of a 289k-char output on 2026-09-27) is left out.
         # F-50: `concepts` repeats the names in concept_tags and finalize never reads it.
         lean, abstract_cut = _materials_options(args)
-        materials = []
-        for w in works:
-            m = material_from_work(w, include_references=False, include_concept_names=False,
-                                   include_concept_tags=not lean, abstract_max_chars=abstract_cut)
-            facet = (w.source_meta or {}).get("serendipity_facet")
-            materials.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
+        budget = _materials_budget(args)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
-        diag = (
-            facet_diag + "\n"
-            f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
-            f"（semantic・{'ホームドメイン除外済' if home_ids else 'ホームドメイン除外なし（F-37）'}"
-            f"・キー無し{hist_note}）。各候補の facet 欄はその候補を引いた facet（距離段）。"
-            "各候補を purpose_sim/mechanism_dist 等で"
-            "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
-            "★接地契約: relationship / serendipity_rationale を書く場合は、その主張が対応づける"
-            "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
-            "必ず添えてください（各10字以上）。抜粋できない主張は書かないでください——contra が決定論的に"
-            "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
-            + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=abstract_cut)
-        )
+
+        def _build(cut: Optional[int]) -> List[Dict[str, Any]]:
+            out = []
+            for w in works:
+                m = material_from_work(w, include_references=False, include_concept_names=False,
+                                       include_concept_tags=not lean, abstract_max_chars=cut)
+                facet = (w.source_meta or {}).get("serendipity_facet")
+                out.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
+            return out
+
+        def _render(cut: Optional[int], budget_note: str = "") -> str:
+            materials = _build(cut)
+            diag = (
+                facet_diag + "\n"
+                f"raw 収集: facet {len(spec.facets)} 件 -> 候補 {len(materials)} 件"
+                f"（semantic・{'ホームドメイン除外済' if home_ids else 'ホームドメイン除外なし（F-37）'}"
+                f"・キー無し{hist_note}）。各候補の facet 欄はその候補を引いた facet（距離段）。"
+                "各候補を purpose_sim/mechanism_dist 等で"
+                "採点し、同じ材料を echo して delegate_finalize へ渡してください（採用分は履歴に記録されます）。"
+                "★接地契約: relationship / serendipity_rationale を書く場合は、その主張が対応づける"
+                "テーマ側の逐語抜粋を theme_quote に、候補側（title/abstract）の逐語抜粋を source_quote に"
+                "必ず添えてください（各10字以上）。抜粋できない主張は書かないでください——contra が決定論的に"
+                "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
+                + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=cut,
+                                              budget_note=budget_note)
+            )
+            return diag + "\n\n" + _materials_json(materials)
+
+        budget_note = ""
+        if budget:
+            # F-50b (2026-10-13): with materials_lean AND a hand-picked materials_abstract_chars
+            # the result still exceeded the caller's limit three times (52,822 / 55.2KB /
+            # 78,498 chars), because the caller has to guess the head length before seeing the
+            # size. Given the budget, contra picks the head. The note it adds is itself part of
+            # the text, so the fit is done against a reserved allowance and then stated.
+            longest = max((len(w.abstract) for w in works if isinstance(w.abstract, str)), default=0)
+            upper = min(abstract_cut, longest) if abstract_cut else longest
+            upper = max(upper, _MATERIALS_ABSTRACT_MIN_CHARS)
+            reserve = 260
+            abstract_cut, fits = _fit_abstract_cut(_render, budget - reserve, upper=upper)
+            if abstract_cut >= longest:
+                abstract_cut = None if not _materials_options(args)[1] else abstract_cut
+            size = len(_render(abstract_cut))
+            if fits:
+                budget_note = (
+                    f"\n- 大きさの予算 (materials_max_chars {budget:,} 字): 収まりました＝"
+                    + (f"抄録の先頭を {abstract_cut:,} 字にしました" if abstract_cut
+                       else "抄録は切っていません")
+                    + "（候補は全件返しています）。"
+                )
+            else:
+                budget_note = (
+                    f"\n- ⚠ 大きさの予算 (materials_max_chars {budget:,} 字) に収まりません: 抄録を最小の "
+                    f"{_MATERIALS_ABSTRACT_MIN_CHARS} 字まで切っても結果は約 {size + 150:,} 字です"
+                    "（候補は全件返しています。件数は減らしていません）。"
+                    + ("" if lean else "materials_lean:true で concept_tags を省くと縮みます。")
+                )
         return {
-            "content": [{"type": "text", "text": diag + "\n\n" + _materials_json(materials)}],
+            "content": [{"type": "text", "text": _render(abstract_cut, budget_note)}],
             "isError": False,
         }
 

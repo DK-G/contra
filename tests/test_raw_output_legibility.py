@@ -225,3 +225,53 @@ def test_byserendipity_raw_drops_concept_names_and_reports_size(facet_pages):
     lean_text = lean["content"][0]["text"]
     assert all("concept_tags" not in m and len(m["abstract"]) <= 400 for m in _materials(lean_text))
     assert len(lean_text) < len(text)
+
+
+def _fresh_call(client, args):
+    """Same retrieval every time: the fake pages are handed out by call count."""
+    client.calls = 0
+    return mcp_mod.StdinMcpServer().handle_tool_call("byserendipity_discover", args)
+
+
+def test_byserendipity_size_budget_picks_the_abstract_head(facet_pages):
+    """F-50b (2026-10-13): with materials_lean and a hand-picked materials_abstract_chars the
+    result still exceeded the caller's limit three times (52,822 / 55.2KB / 78,498 chars). Given
+    a budget for the whole text, contra picks the longest head that fits and keeps every row."""
+    full = _fresh_call(facet_pages, _serendipity_args())["content"][0]["text"]
+    assert "大きさの予算" not in full                       # opt-in: nothing changes without it
+    lean = _fresh_call(facet_pages, _serendipity_args(materials_lean=True))["content"][0]["text"]
+    floor = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_abstract_chars=200))["content"][0]["text"]
+    budget = (len(lean) + len(floor)) // 2                 # reachable only by cutting abstracts
+    text = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_max_chars=budget))["content"][0]["text"]
+    mats = _materials(text)
+    assert len(text) <= budget and len(mats) == 60
+    heads = {len(m["abstract"]) for m in mats}
+    assert len(heads) == 1 and 200 < heads.pop() and "収まりました" in text
+    assert all(m["abstract_full_chars"] > len(m["abstract"]) for m in mats)
+    # one char more of head would not have fit by much: the fit is not needlessly short
+    assert budget - len(text) < 60 * 2 + 400
+    # a generous budget cuts nothing
+    roomy = _fresh_call(facet_pages, _serendipity_args(
+        materials_max_chars=len(full) + 1000))["content"][0]["text"]
+    assert "抄録は切っていません" in roomy and _materials(roomy) == _materials(full)
+
+
+def test_byserendipity_size_budget_that_cannot_be_met_says_so_and_keeps_every_row(facet_pages):
+    text = _fresh_call(facet_pages, _serendipity_args(
+        materials_max_chars=5000))["content"][0]["text"]
+    mats = _materials(text)
+    assert len(mats) == 60 and {len(m["abstract"]) for m in mats} == {200}
+    assert "⚠ 大きさの予算 (materials_max_chars 5,000 字) に収まりません" in text
+    assert "materials_lean:true" in text
+    # an explicit head is an upper bound the budget never raises
+    capped = _fresh_call(facet_pages, _serendipity_args(
+        materials_abstract_chars=300, materials_max_chars=10 ** 7))["content"][0]["text"]
+    assert {len(m["abstract"]) for m in _materials(capped)} == {300}
+
+
+def test_size_budget_is_offered_on_byserendipity_only_for_now():
+    tools = {t["name"]: t for t in mcp_mod.StdinMcpServer().list_tools()}
+    assert "materials_max_chars" in tools["byserendipity_discover"]["inputSchema"]["properties"]
+    assert "materials_max_chars" not in tools["bybridge_collect"]["inputSchema"]["properties"]

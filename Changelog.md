@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-13（CL-0138） byserendipity は結果全体の字数の予算を受け取り、収まる最長の抄録の先頭を選ぶ（F-50b）
+
+### 概要
+* `src/mcp_server.py`: `materials_max_chars`（byserendipity のみ・opt-in）。`_fit_abstract_cut` が 200 字以上で予算に収まる最長の先頭を二分探索で選ぶ。候補は減らさない。収まらなければ警告と字数を出す。引数なしの出力は不変。
+* `tests/test_raw_output_legibility.py`: 新規 3 件。631 pass。
+* 実測（実 OpenAlex・この実行自身の MCP 呼び出し）: 同じ 60 件で本文 45.6k 字は届き、51.9k 字はファイルに退避された。lean＋予算 40,000 字で抄録の先頭 273 字・39,818 字。
+* `docs/agent_rules/byserendipity.md`: 手順に `materials_lean`＋`materials_max_chars: 45000` を追記。
+* `docs/field_observations_seihai.md`: F-50b（対処済み）。bybridge は見送り。
+
+---
+
 ## 2026-10-13（CL-0137） bybridge のレッグ不一致の警告は、外れた側を断定せず両側のトピックを並べる（F-47-R）
 
 ### 概要
