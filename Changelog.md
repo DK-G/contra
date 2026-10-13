@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-13（CL-0139） delegate_finalize の付録と表題は、finalize が知っていることを書く（F-54-A）
+
+### 概要
+* `src/mcp_server.py`: `_execute_delegate_finalize` が付録の 3 行（取得日＝実行日／検索条件＝finalize は検索しない／フィルタ条件＝掛けたゲートと件数）を埋める。TBD を出さない。
+* `src/core/output_spec.py`（全経路共通の描画）: 表題を「# contra 視座拡張レポート（ホーム分野: X）」に。「時代:」行に、`no_limit` 以外では「記録のみ」の注記（F-51）。
+* `tests/test_finalize_appendix.py`: 新規 3 件。634 pass。
+* 実測（保存した 10/10 相当の実出力 60 件を実経路に戻して before/after・API なし）。
+* `docs/field_observations_seihai.md`: F-54-A（対処済み）、F-55（抄録が空の候補が hollow に混ざる・起票のみ）、10/13 の観測への注記。
+
+---
+
 ## 2026-10-13（CL-0138） byserendipity は結果全体の字数の予算を受け取り、収まる最長の抄録の先頭を選ぶ（F-50b）
 
 ### 概要

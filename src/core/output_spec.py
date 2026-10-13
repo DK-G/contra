@@ -13,7 +13,9 @@ def _auto_tag(section_idx: int, entry_idx: int, label: str, edge: str) -> str:
 
 def _lines_for_theme(theme: ThemeInput) -> List[str]:
     lines = []
-    lines.append(f"# {theme.scope.field} contra 視座拡張レポート")
+    # F-54: the heading used to be "# {scope.field} contra 視座拡張レポート", which reads as
+    # the report's subject. scope.field is the HOME field the candidates are kept away from.
+    lines.append(f"# contra 視座拡張レポート（ホーム分野: {theme.scope.field}）")
     lines.append("")
     lines.append("## 入力サマリ")
     lines.append("")
@@ -27,7 +29,10 @@ def _lines_for_theme(theme: ThemeInput) -> List[str]:
     lines.append("- スコープ:")
     lines.append(f"  - 分野: {theme.scope.field}")
     lines.append(f"  - スケール: {theme.scope.scale}")
-    lines.append(f"  - 時代: {theme.scope.time_range}")
+    # F-51: the value is recorded, not applied — say so where the reader meets it.
+    lines.append(f"  - 時代: {theme.scope.time_range}"
+                 + ("（記録のみ。by* は出版年で絞らないので、これより古い文献も返る・F-51）"
+                    if theme.scope.time_range != "no_limit" else ""))
     if theme.keywords.include:
         lines.append(f"- include: {', '.join(theme.keywords.include)}")
     if theme.keywords.exclude:

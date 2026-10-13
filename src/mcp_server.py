@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from datetime import date
 import sys
 import traceback
 from typing import Any, Dict, List, Optional
@@ -1696,6 +1697,21 @@ class StdinMcpServer:
         if adopted:
             diag_line += f" / 履歴記録 {adopted} 件"
         diag_line += extra
+        # F-54: the delegated path left the appendix as "取得日: TBD / 検索条件: TBD / フィルタ条件:
+        # TBD". finalize knows its own date and the gates it applied; it never searched, so the
+        # search line says where the conditions are instead of pretending to hold them.
+        doc.collected_at = (f"{date.today().isoformat()}（delegate_finalize の実行日。"
+                            "収集は呼び手の別の呼び出しで、その日時は contra に渡されない）")
+        doc.query = ("delegate_finalize は検索しない。検索条件は収集呼び出し"
+                     "（byserendipity_discover / bybridge_collect）の引数と診断ブロックにある")
+        doc.filter_policy = (
+            f"決定論 post-gate（LLM なし）: 提出 {len(materials)} 件 → anomaly {diag.get('anomaly', 0)}"
+            f"・hollow {diag.get('hollow', 0)} を除外 → 分位ゲート"
+            + (f" {diag['gate_percentile']}" if diag.get("gate_percentile") is not None else "")
+            + f" と output_floor {output_floor} → 通過 {diag.get('passed', 0)} 件・出力 {len(entries)} 件"
+            + f"（count {count}・接地契約 {'あり' if grounded_only else 'なし'}"
+            + ("・fallback 出力" if diag.get("status") == "fallback" else "") + "）"
+        )
         md = render_markdown(doc)
         return _external_data_result(f"{diag_line}\n\n{md}")
 
