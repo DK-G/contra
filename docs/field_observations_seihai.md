@@ -2530,6 +2530,39 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-13 失敗対処デー）**: (1) byrepo 行は F-14 の 11 回目の再現として記録のみ（核の語を掲げるリポジトリがプールに無い。F-41-R・F-43-M・F-29-W・F-48 のどの順位側の処方でも返る中身は良くならなかった）。(2) bybridge の警告文（語彙レッグの主題一致）は、外れた側を断定しない文に改めた＝「対処済み」節 **F-47-R**。本日の実行は 82% で警告は出ていない。(3) 「名簿が合うと主題の内側が並ぶ」（Topic『Stock Market Forecasting Methods』41 件）は F-44 の再現で、除外の拡大は 10/09 の 4 テーマの追試で見送ったまま。今回は名簿のシード 1 本と同じ Topic なので「名簿に 1 件以上ある Topic を除外」なら外れる形だが、その規則は 10/05 相当では主題でない塊を外した。(4) 抄録が空の候補が hollow に混ざる件は **F-55** として起票（未実装）。facet 1 の「返却 34 → 11」の内訳も同じ項に記録した。(5) byserendipity の結果の大きさは **F-50b**（`materials_max_chars`）で対処。
 
+## 2026-10-14（水・seihai r03/F4 決定木）の観測
+
+テーマ（英語で投入）: 毎週 30 本ほどの決定木ルールを 2 本の固定バー（2 倍コストの net・CPCV 正の割合 0.6 以上）で審査し、8 週続けて同時通過 0。片方だけ通る個体は数本。同時通過 0 の状態から、次の 4 週に 1 本でも通る確率をどう見積もるか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 10） | include 5 語（futility / predictive-probability / backtest-overfitting / combinatorial-purged-cross-validation / conditional-power） | 計器の申告＝**futility・predictive-probability・conditional-power は README を含めプール 0 件**、残り 2 語は README の言及のみ 4 件ずつ。上位は CPCV の実装（eslazarev/purged-cross-validation・関連度 0.2）・skfolio（0.13）・López de Prado 系の道具集（0.4）・FinRL_Crypto（0.2） | **F-14 の再現（12 回目）**。収穫ゼロ。検証手法（CPCV）の実装は引けたが、問いの核（通過 0 からの将来通過率の見積り）を掲げるリポジトリは検索段で 1 件も入らなかった |
+| **byserendipity**（raw_only・facet 3・`materials_lean`・`materials_max_chars` 45000） | 複数主要評価項目の臨床試験の無益性／創薬の多目的最適化と系列の放棄／水文の同時超過確率 | 返却 37/31/33 → ホーム除外・重複後 27/13/15 → 提出 55。結果 43,623 字で**インラインに収まった**（抄録は先頭 389 字） | F-50b は予算どおりに働いた。facet 2（創薬）は返却 31 → 13 と減りが大きく、残った 13 件の半分は確率論の「連（run）の分布」や待ち行列で、創薬の文献は 2 件だけ。擬似抄録の「joint distribution」「probability」の語に引かれた |
+| **delegate_finalize**（byserendipity・54 件提出） | 8 件に材料 echo・46 件は点数のみ | anomaly 3・hollow 20・通過 9・**出力 4**。percentile 0.375（母数 31）。接地照合失敗 0。『近いが有用』2 件を名指し（2 endpoints の無益性境界・co-primary の予測監視） | 本日の主収穫（Ledford & Tawn 1997 ほか）。**呼び手側の事情で 1 件を提出から外した**: 結果がインラインで返ると、55 件の id を呼び手が目で転記することになる。1 件（A flexible futility monitoring method…）の id を確信を持って写せず、提出しなかった。ファイル退避のときはスクリプトで id を抜けるので起きない＝**インラインに収まるほうが全件提出はやりにくい** |
+| **bybridge**（materials・`seed_semantic_text` 指定・`materials_lean`・抄録 450 字） | home=Economics, Econometrics and Finance・keywords_include 無し（テーマ本文の語彙から語彙シード） | **語彙レッグの主題一致 0/12 = 0%**。語彙シードのトピックは Economic Growth／Global Financial Crisis／Healthcare Policy／Labor market（名簿に「A Denial a Day Keeps the Doctor Away」「The Reemployment Bonus」）。semantic レッグ 15 件は全部主題。交差候補 60 件は semantic 側だけ経由 50・両方 10・語彙側だけ 0。最頻 bridge＝Brock–Lakonishok–LeBaron（全体 23%／上位 10 件 70%）。結果 60,068 字でファイルに退避 | **F-13 の再現（語彙レッグの外れ）**。10/06 と同じ向き。`keywords_include` を渡していないので、語彙シードはテーマ本文から作られたはず（"futility" "bars" "pass" などの一般語が医療・労働の文献に当たったと読める）。警告文（F-47-R）は両レッグの上位トピックを並べる形で、どちらが外れたかは 1 行で読めた。出力は語彙側を経由していないので汚れなかった |
+| **delegate_finalize**（bybridge・60 件全件提出） | 4 件に材料 echo・56 件は点数のみ | anomaly 16・hollow 33・通過 3・**出力 1**（Theiler et al. 1992 surrogate data・0.35）。分位の母数 11 件 | 交差候補 60 件中 42 件が Decision Sciences（Stock Market Forecasting Methods 28 件）＝**主題の内側が並ぶ**（F-44 の再現・3 週連続）。遠い収穫は 1 件で、これは使える（陰性対照の作り方）。**抄録が上流で空の候補 33/60**（F-55 の再現）＝出力 1 件も抄録が空で、接地は題からの抜粋だけになった。**呼び手側の送信漏れ**: echo した 4 件に `venue` を付けなかった（警告 4 件） |
+
+追加の観測 1 点:
+
+- **結果がインラインに収まると、全件提出の id 転記が呼び手の手作業になる**。F-50b は「ファイル退避を避ける」ために入れたが、退避された結果はスクリプトで読めるので id の取りこぼしが起きない。インラインの 55 件は、呼び手（LLM）が 55 個の id を自分の出力に写す。本日は 1 件を落とした。返す側で `id` の一覧を 1 行にまとめて添える（`ids: W…, W…`）か、「点数だけの候補は title の先頭 20 字でも照合できる」ようにすれば起きない。
+
+## 2026-10-15（木・seihai r04/F5 microstructure）の観測
+
+テーマ（英語で投入）: 活動バーストの逆張り（tick 数 STA(5)/LTA(60) ≥ 2）が 6 週勝った後に 3 週続けて負けた。過渡的な励起が緩和して戻るか伝播して状態を変えるかを、エントリ前に観測できる何で分けられるか。fade が効かなくなったことを検出器はどれだけ早く言えるか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | 実行せず（seihai 側 S-62: r04 では 5 週連続で語彙衝突のため省略） | — | — |
+| **byserendipity**（raw_only・facet 3・`materials_lean`・`materials_max_chars` 45000） | 地震の誘発（ETAS の亜臨界・超臨界）／生態系の臨界遷移（摂動からの回復速度）／感染症の分岐過程（実効再生産数と検出の遅れ） | 返却 37/32/34 → ホーム除外・重複後 28/18/22 → 提出 60。結果 43,639 字で**インラインに収まった**（抄録は先頭 320 字） | 正常。3 facet とも構造どおり |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 6 件に材料 echo・54 件は点数のみ | anomaly 3・**hollow 42**・percentile 0.539（母数 15）・通過 4・出力 4（0.56／0.56／0.54／0.54）・接地検証失敗 0 | 正常。hollow が多いのは呼び手が構造の深さを 0.5 未満と採点したため（ETAS の数理・連鎖サイズからの R0 推定など、機序は近いが判断に運ぶものが無い）。id 54 件は呼び手が目で転記した（10/14 の観測と同じ手作業。今回は取りこぼしの自覚なし） |
+| **bybridge**（materials・`materials_lean`・抄録 450 字・include 5 語: short-term reversal／volume shock／intraday／order flow／foreign exchange） | home=Economics, Econometrics and Finance | シード 20 は主題どおり（Foreign Exchange Volume・Short-Term Reversals and Longer-Term Momentum・Reversals and the Returns to Liquidity Provision ほか）。語彙レッグの主題一致 7/10。bridge プール 50。最頻 bridge＝"Evidence of Predictable Behavior of Security Returns"（短期反転の基礎文献）・全体 17%／上位 10 件 0%。通行上位は Newey-West HAC・CAPM 実証・Glosten-Milgrom・Kyle。**結果 62,156 字でファイルに退避**（bybridge には `materials_max_chars` が無い） | 名簿・最頻 bridge は主題側。旧様式ではない |
+| **delegate_finalize**（bybridge・60 件全件提出） | 3 件に材料 echo・57 件は点数のみ | **anomaly 50**・hollow 7・通過 1・**fallback 1**（開示と出来高の情報性・0.24）。分位の母数 3 件 | **「多様化したが収穫ゼロ」**。交差候補の Field は Business, Management and Accounting 35／Decision Sciences 19。Topic は監査・利益管理 15・企業財務とガバナンス 14＝**10/06 と同じ会計開示への漂流**（今回は語彙レッグの主題一致 70% でも起きた）。Kyle 1985 と Evans–Lyons 2005 は距離で落ちた（F-22・設計どおり） |
+
+追加の観測 2 点:
+
+- **短期反転・出来高ショックのテーマでは、名簿が主題どおりでも 2-hop 先が会計開示に出る。** 通行上位の bridge がミクロ構造の古典（Kyle・Glosten-Milgrom）と計量の道具（Newey-West）で、これらは会計開示の実証論文に大量に引用されている。主題の古典が「隣接分野への橋」ではなく「同じ大分野の別主題への橋」として働く。F-44 系（主題の内側が並ぶ）とは逆向きの不発。
+- **echo した Kyle 1985（`W2050031929`）は上流で抄録が空なのに、「材料欄が欠けたまま送信」の警告が出た。** 呼び手は返った材料の `abstract: null` を echo しなかった（欄ごと省いた）。F-19-V（上流で空の欄を呼び手の漏れとして名指ししない）は `upstream_empty` を echo したときだけ効くのかもしれない。bybridge の materials にはこの候補の `upstream_empty` が出ていなかった（`abstract: null` のみ）。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
