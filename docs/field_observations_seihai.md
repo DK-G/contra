@@ -2563,6 +2563,22 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 - **短期反転・出来高ショックのテーマでは、名簿が主題どおりでも 2-hop 先が会計開示に出る。** 通行上位の bridge がミクロ構造の古典（Kyle・Glosten-Milgrom）と計量の道具（Newey-West）で、これらは会計開示の実証論文に大量に引用されている。主題の古典が「隣接分野への橋」ではなく「同じ大分野の別主題への橋」として働く。F-44 系（主題の内側が並ぶ）とは逆向きの不発。
 - **echo した Kyle 1985（`W2050031929`）は上流で抄録が空なのに、「材料欄が欠けたまま送信」の警告が出た。** 呼び手は返った材料の `abstract: null` を echo しなかった（欄ごと省いた）。F-19-V（上流で空の欄を呼び手の漏れとして名指ししない）は `upstream_empty` を echo したときだけ効くのかもしれない。bybridge の materials にはこの候補の `upstream_empty` が出ていなかった（`abstract: null` のみ）。
 
+## 2026-10-16（金・seihai r05/F9 LLM）の観測
+
+テーマ（英語で投入）: 同じ期間を再生したバックテストより大きく負け続ける戦略がある。同じ口座の兄弟戦略は再生とほぼ一致する。ライブのエントリの約 3 分の 1 は、その足の再生にシグナルが無い。ライブと再生の差を、シグナルの食い違い・同時建玉・決済経路に帰属させたい。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github のみ・pool 30・`keyword_fair_share`・include 5 語（backtest／live-trading／reconciliation／trade-matching／paper-trading） | 上位 4 件は汎用の売買基盤（QuantDinger・futu_algo・jesse・rust-trade、theme 関連度 0.57〜0.60）。プール内訳: `reconciliation` は名前・説明・topics の一致 0（README 4）、`trade-matching` も 0（README 4）。fair share で単独検索した `trade-matching`（GitHub 全体 1,007 件）からも、主題に掲げるリポジトリはプールに入らなかった | F-14 の再現（10/09 と同じ）。fair share を足しても核の語の実装は上がらない（F-41-R の注記どおり） |
+| **byserendipity** | raw_only・facet 3（製造ラインのデジタルツイン／建物エネルギーの性能ギャップ／母集団薬物動態の投与記録）・`materials_lean`・`materials_max_chars` 45000 | 返却 36/36/39 → ホーム除外・重複後 30/24/19 → 提出 60。43,655 字でインラインに収まった（抄録 300 字） | 正常。3 facet とも pseudo-abstract の主題どおり |
+| **delegate_finalize**（byserendipity・60 件全件提出） | 5 件に材料 echo・55 件は点数のみ | anomaly 17・hollow 0・percentile 0.351（母数 43）・通過 12・出力 5（0.48／0.48／0.43／0.40／0.38）・接地検証失敗 0。`not_selected(no_material)` 7 件を名指し | 正常 |
+| **bybridge**（materials・`materials_lean`・include 5 語: backtest overfitting／implementation shortfall／live trading／execution cost／strategy performance） | home=Economics, Econometrics and Finance | **最頻 bridge＝GARCH（Bollerslev・被引用 22,260）が交差候補の 23%・上位 10 件の 70%**。語彙レッグの主題一致 5/14＝36% の警告。語彙側で bridge 寄与最大のシードは株式ボラティリティの波及と Bitcoin の GARCH 予測。交差候補 60 件は Stock Market Forecasting 17・Forecasting Techniques 8・ポートフォリオ 7・電力価格予測 5。**結果 89,759 字でファイルに退避**（`materials_max_chars` は bybridge の引数に無く、黙って無視された＝10/15 と同じ） | **旧様式の再現**（上位が共有 bridge 1 本・主題外のハブ）。語彙レッグがボラティリティ予測へ外れ、その祖先の GARCH が上位を占めた |
+| **delegate_finalize**（bybridge・60 件全件提出） | 2 件に題だけ echo・58 件は点数のみ | anomaly 52・通過 0・**saturated（出力 0）**。echo した 2 件（Backtest overfitting in the ML era／why most published findings do not live up to their promise）はホーム内で距離が律速 | 収穫ゼロ。材料欄の echo を題だけにしたため「材料欄が欠けたまま」の警告 2 件（呼び手の手抜き） |
+
+追加の観測:
+
+- **bybridge の語彙レッグは「live trading」「execution cost」を含む include でも、ボラティリティ予測（GARCH 系）のシードを引いた。** 10/09（9%）・今日（36%）と、r05 の「バックテストとライブの差」テーマでは 2 回続けて語彙レッグが主題から外れている。semantic レッグ側のシード（Bybit/Binance のレイテンシ、市場シミュレータ、トレース再生系）は主題に近い。主題の祖先を通る交差候補は semantic 経由の 18 件（9＋両方 9）だけ。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
