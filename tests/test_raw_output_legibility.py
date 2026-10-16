@@ -275,3 +275,26 @@ def test_size_budget_is_offered_on_byserendipity_only_for_now():
     tools = {t["name"]: t for t in mcp_mod.StdinMcpServer().list_tools()}
     assert "materials_max_chars" in tools["byserendipity_discover"]["inputSchema"]["properties"]
     assert "materials_max_chars" not in tools["bybridge_collect"]["inputSchema"]["properties"]
+
+
+def test_byserendipity_lists_every_id_on_one_line_inside_the_budget(facet_pages):
+    # F-59 (seihai 2026-10-14): an inline result made the caller copy 55 ids by eye; one dropped.
+    text = _fresh_call(facet_pages, _serendipity_args(materials_lean=True))["content"][0]["text"]
+    [line] = [ln for ln in text.splitlines() if ln.startswith("- 候補の id 一覧")]
+    ids = line.split("）: ", 1)[1].split(", ")
+    assert ids == [m["id"] for m in _materials(text)] and len(ids) == 60
+    floor = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_abstract_chars=200))["content"][0]["text"]
+    budget = len(floor) + 3000
+    fit = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_max_chars=budget))["content"][0]["text"]
+    assert len(fit) <= budget and "候補の id 一覧（60 件" in fit
+
+
+def test_finalize_takes_a_bare_openalex_id_as_its_url():
+    assert mcp_mod._expand_openalex_id({"id": "W2050031929"})["id"] == \
+        "https://openalex.org/W2050031929"
+    assert mcp_mod._expand_openalex_id({"id": "https://openalex.org/W1"})["id"] == \
+        "https://openalex.org/W1"
+    assert mcp_mod._expand_openalex_id({"id": "N0"})["id"] == "N0"
+    assert mcp_mod._short_ids_line([{"id": "https://openalex.org/W7"}, {"id": "N0"}]).endswith(": W7, N0")

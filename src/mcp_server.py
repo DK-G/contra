@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from datetime import date
 import sys
 import traceback
@@ -224,6 +225,34 @@ def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_
         **({} if history_dir is None else {"history_dir": history_dir}),
     )
     return len(ids)
+
+
+_OPENALEX_WORK_PREFIX = "https://openalex.org/"
+
+
+def _expand_openalex_id(material: Any) -> Any:
+    """F-59: a bare ``W123`` id from the short id line means the same work as its URL form.
+
+    Ids are compared as strings downstream (history, used_ids), so a short id must not reach
+    them in a second spelling.
+    """
+    if isinstance(material, dict):
+        wid = material.get("id")
+        if isinstance(wid, str) and re.fullmatch(r"W\d+", wid.strip()):
+            return {**material, "id": _OPENALEX_WORK_PREFIX + wid.strip()}
+    return material
+
+
+def _short_ids_line(materials: List[Dict[str, Any]]) -> str:
+    """F-59: every candidate id on one line, for submitting all of them (F-15-U).
+
+    seihai 2026-10-14: when the result arrived inline (F-50b), the caller copied 55 ids out of
+    the JSON by eye and dropped one; a result saved to a file is read by script instead.
+    """
+    ids = [str(m.get("id") or "") for m in materials]
+    short = [i[len(_OPENALEX_WORK_PREFIX):] if i.startswith(_OPENALEX_WORK_PREFIX) else i for i in ids]
+    return (f"- 候補の id 一覧（{len(short)} 件・全件提出用。delegate_finalize は W 番号だけの id も"
+            f"受け付けます）: {', '.join(short)}")
 
 
 def _materials_json(materials: List[Dict[str, Any]]) -> str:
@@ -922,6 +951,7 @@ class StdinMcpServer:
                 "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
                 + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=cut,
                                               budget_note=budget_note)
+                + ("\n" + _short_ids_line(materials) if materials else "")
             )
             return diag + "\n\n" + _materials_json(materials)
 
@@ -1550,7 +1580,7 @@ class StdinMcpServer:
         # the deterministic hard floors (no LLM) and renders. See
         # docs/research/mcp_subscription_delegation.md.
         theme = _build_theme_input(args)
-        materials = args.get("candidates") or []
+        materials = [_expand_openalex_id(m) for m in (args.get("candidates") or [])]
         if not materials:
             return {
                 "content": [{"type": "text", "text": "candidates が空です。エージェント採点済みの候補リストを渡してください。"}],

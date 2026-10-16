@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-16（CL-0143） byserendipity は id を 1 行に並べ、finalize は W 番号だけの id を受け付ける（F-59）
+
+### 概要
+* `src/mcp_server.py`: `_short_ids_line`（byserendipity raw の診断ブロック末尾・予算に含めて合わせる）と `_expand_openalex_id`（delegate_finalize の入口で `W\d+` を URL に戻す）。
+* `tests/test_raw_output_legibility.py`: 新規 2 件。641 pass。
+* 実測: 60 件で 836 字。W 番号で出した 27 件が finalize で URL の形に戻ることを確認。
+* `docs/field_observations_seihai.md`: F-59 と F-59-R。
+
+---
+
 ## 2026-10-16（CL-0142） 欠落の警告に upstream_empty の持ち帰り方を書く（F-58）
 
 ### 概要

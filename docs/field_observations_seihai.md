@@ -983,9 +983,21 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 確認（10/15 07:17 の保存結果 `…/d26e8641-…/tool-results/mcp-contra-bybridge_collect-1792016264099.txt` の 286〜294 行目）: この候補の materials には `"abstract": null` と **`"upstream_empty": ["abstract"]` の両方が出ていた**。呼び手は両方を省いて echo した。finalize は「鍵が無く印も無い」を呼び手の漏れと扱う（F-19-V の設計どおり）ので、警告は正しかった。**観測の「付いていなかった」は誤り**。
 - 残る問題: 警告文は「全欄 echo してください」とだけ言い、印の欄を持ち帰れば消えることを書いていなかった。
 
+### F-59. byserendipity(raw_only)／delegate_finalize — **結果がインラインに収まると、全件提出の id を呼び手が目で写し、取りこぼす**（seihai 2026-10-14 の追加の観測に採番・2026-10-16 起票） → **同日対処済み＝「対処済み」節 F-59-R**
+
+- 観測: F-50b で結果が 43.6k 字のインラインに収まった日に、呼び手は 55 件の id を JSON から目で写し、1 件（A flexible futility monitoring method…）を確信を持って写せず提出から外した。ファイルに退避された日はスクリプトで抜くので起きない。10/15 も同じ手作業（取りこぼしの自覚なし）。
+
 ---
 
 ## 対処済み
+
+### F-59-R. byserendipity(raw_only) は **全候補の id を W 番号で 1 行に並べ**、delegate_finalize は **W 番号だけの id を OpenAlex の URL に戻して受け付ける** — **対処済み 2026-10-16**
+
+- 変えたもの: (1) `src/mcp_server.py` の byserendipity raw の診断ブロック末尾に「- 候補の id 一覧（N 件・全件提出用…）: W…, W…」。materials と同じ順。行は `_render` の中で作るので、`materials_max_chars` の予算はこの行を含めて合わせる。(2) `delegate_finalize` は候補の `id` が `W\d+` だけなら `https://openalex.org/` を前に付けてから扱う（履歴・used_ids は文字列で照合するので、同じ文献が 2 つの綴りで入らないように）。URL の id とそれ以外の id は不変。
+- 実測（API なし）: 保存済みの byserendipity 結果（`output/materials_size_probe/byserendipity_lean_max40000.txt`・60 件・39,818 字）で、行は **836 字**。45,000 字の予算の下では抄録の先頭が 1 件あたり約 14 字短くなる（例: 389 → 約 375 字）。W 番号だけで提出した 27 件のバッチを `delegate_finalize` に通し、出力・落選内訳の id はすべて URL の形になった（W 番号のまま残ったもの 0）。
+- 検証: 回帰 2 件（id 一覧が materials の順と一致し予算内に収まる／W 番号の展開）。639 → 641 pass。
+- bybridge には入れていない（bybridge は抄録を全部捨てても 47k 字でインラインに収まらない＝F-57。ファイル退避ならスクリプトで id を抜ける）。
+- **残る限界**: 呼び手が行から写すこと自体は残る（1 行なのでまとめて写せる）。抄録の先頭が 14 字ほど短くなる代償は、性能調査の「抄録 290 字では仕組みが読めない」（10/14・10/15）と同じ向きに効く。
 
 ### F-58-R. delegate_finalize — **「材料欄が欠けたまま」の警告に、`upstream_empty` も echo すれば呼び手の漏れと扱わないことを書く** — **対処済み 2026-10-16（文言のみ）**
 
