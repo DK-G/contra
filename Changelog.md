@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-16（CL-0142） 欠落の警告に upstream_empty の持ち帰り方を書く（F-58）
+
+### 概要
+* `src/pipeline/delegate.py`: `echo_completeness_warnings` の ⚠ 行に、上流で空の欄なら `upstream_empty` も echo すれば漏れと扱わない旨を追記。判定は不変。
+* `tests/test_full_batch_submission.py`: 新規 1 件。639 pass。
+* `docs/field_observations_seihai.md`: F-58（seihai 10/15 の「upstream_empty が出ていなかった」は保存結果で反証）と F-58-R。
+
+---
+
 ## 2026-10-16（CL-0141） 宣言していない引数は無視したと名指しする（F-57）
 
 ### 概要

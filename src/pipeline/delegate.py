@@ -486,6 +486,13 @@ def echo_completeness_warnings(
                     " ★ この欠落は接地検証も不能にします（source_quote は送られた"
                     " title/abstract に対してのみ照合されるため、正しい引用でも失敗します）。"
                 )
+            # F-58 (seihai 2026-10-15): the caller dropped `abstract: null` AND contra's
+            # `upstream_empty` mark from the echo, then read this warning as contra failing to
+            # mark the gap. The mark was in the materials; say how to carry it.
+            line += (
+                f" 上流で空だった欄なら、contra の材料にある {UPSTREAM_EMPTY_KEY} 欄も一緒に echo "
+                "すれば、呼び手の漏れとは扱いません（F-19-V）。"
+            )
             warnings.append(line)
     return warnings
 

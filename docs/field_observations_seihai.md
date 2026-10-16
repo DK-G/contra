@@ -977,9 +977,28 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
   抄録を全部捨てても 45,000 字を超える。抄録以外の内訳は `bridge_signals` 16,026 字（openalex_topic 3,438・openalex_field 2,001・bridge_hybrid_score 1,766・shared_bridge_count 1,441・seed_route 1,440・bridge_betweenness 1,380・bridge_strength 1,200・topic_seen 1,200）・題 5,625・DOI 2,967・id 2,518・掲載先 2,450・publication_type 1,860 ほか。byserendipity と同じ「収まる最長の抄録の先頭を選ぶ」を移植しても、診断を付けた 60 件では毎回「収まりません」と言うだけになる。
 - 処方候補（未実装・判断材料）: (a) 予算があるときは `bridge_signals` の 4 つの数値（shared_bridge_count・bridge_betweenness・bridge_strength・bridge_hybrid_score）のうち呼び手が採点に使わないものを落とす——どれを使っているかは seihai 側の手順にしか書かれていない。(b) 診断ブロック（約 1 万字）を別の content ブロックに分ける——大きさの上限は結果全体に掛かるので効かない可能性が高い。(c) インラインに収めること自体の価値: seihai 10/14 の観測では、ファイルに退避された結果はスクリプトで id を抜けるので全件提出が楽で、インラインのほうが取りこぼした。**bybridge は退避前提のままでよい可能性がある**＝人間の判断待ち。
 
+### F-58. delegate_finalize — **上流で抄録が空の候補を、呼び手が `abstract` 欄ごと省いて echo すると「材料欄が欠けたまま」と出る。seihai はこれを「bybridge が upstream_empty を付けていない」と読んだ**（seihai 2026-10-15 の追加の観測 2 に採番・2026-10-16 起票） → **観測の前提は保存結果で反証。警告文に直し方を足した＝「対処済み」節 F-58-R**
+
+- 観測（seihai 10/15）: echo した Kyle 1985（W2050031929）は上流で抄録が空なのに「材料欄が欠けたまま送信」の警告が出た。seihai は「bybridge の materials にはこの候補の `upstream_empty` が出ていなかった（`abstract: null` のみ）」と書いた。
+- 確認（10/15 07:17 の保存結果 `…/d26e8641-…/tool-results/mcp-contra-bybridge_collect-1792016264099.txt` の 286〜294 行目）: この候補の materials には `"abstract": null` と **`"upstream_empty": ["abstract"]` の両方が出ていた**。呼び手は両方を省いて echo した。finalize は「鍵が無く印も無い」を呼び手の漏れと扱う（F-19-V の設計どおり）ので、警告は正しかった。**観測の「付いていなかった」は誤り**。
+- 残る問題: 警告文は「全欄 echo してください」とだけ言い、印の欄を持ち帰れば消えることを書いていなかった。
+
 ---
 
 ## 対処済み
+
+### F-58-R. delegate_finalize — **「材料欄が欠けたまま」の警告に、`upstream_empty` も echo すれば呼び手の漏れと扱わないことを書く** — **対処済み 2026-10-16（文言のみ）**
+
+- 変えたもの: `src/pipeline/delegate.py` の `echo_completeness_warnings`。⚠ 行の末尾に「上流で空だった欄なら、contra の材料にある upstream_empty 欄も一緒に echo すれば、呼び手の漏れとは扱いません（F-19-V）。」。判定（どの欄を誰の漏れとするか）は不変。
+- 実測（API なし・Kyle 1985 と同じ形＝abstract 欄を省いた材料）:
+
+  | echo の形 | before | after |
+  |---|---|---|
+  | `abstract` も `upstream_empty` も省く | `⚠ … 材料欄が欠けたまま送信されています（abstract）… 全欄 echo してください。★ この欠落は接地検証も不能にします…` | 同じ文＋`上流で空だった欄なら、contra の材料にある upstream_empty 欄も一緒に echo すれば、呼び手の漏れとは扱いません（F-19-V）。` |
+  | `upstream_empty: ["abstract"]` だけ持ち帰る | `ℹ … abstract は contra の取得材料の時点で空でした（呼び手の echo 漏れではありません・再投は不要）` | 不変 |
+
+- 検証: 回帰 1 件。638 → 639 pass。
+- 申し送り（seihai 側）: 抄録が上流で空の候補を echo するときは `upstream_empty` 欄も写す（F-55 の「点数だけの行にも upstream_empty を付ける」処方とも同じ欄）。
 
 ### F-57-R. 全 by\* 共通 — **宣言していない引数は、結果の末尾に「受け付けません（無視しました）」と名指しする** — **対処済み 2026-10-16（申告のみ・拒否はしない）**
 

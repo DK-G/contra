@@ -161,3 +161,13 @@ def test_not_selected_rows_name_the_output_slot_not_a_score_bar():
     for ln in rows:
         assert "閾値 3" not in ln
         assert "出力枠 3 件の外" in ln and "分位ゲート" in ln
+
+
+def test_missing_field_warning_says_how_to_carry_the_upstream_mark():
+    # F-58 (seihai 2026-10-15): Kyle 1985 had `upstream_empty: ["abstract"]` in the bybridge
+    # materials; the caller echoed neither it nor `abstract`, and read the warning as contra's.
+    dropped = {k: v for k, v in _full("K1", 0.5, 0.8).items() if k != "abstract"}
+    marked = {**dropped, "upstream_empty": ["abstract"]}
+    [warn] = echo_completeness_warnings([dropped])
+    assert "材料欄が欠けたまま" in warn and "upstream_empty" in warn
+    assert not any("欠けたまま" in w for w in echo_completeness_warnings([marked]))
