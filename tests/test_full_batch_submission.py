@@ -150,3 +150,14 @@ def test_fallback_prefers_a_renderable_candidate():
     works, scores, _ = normalize_agent_scores(mats)
     entries = apply_post_gates(scores, works, count=1, gate=0.2, output_floor=0.35)
     assert [e.work.id for e in entries] == ["F1"]
+
+
+def test_not_selected_rows_name_the_output_slot_not_a_score_bar():
+    # F-56 (survey 2026-10-14/15): the count lives in `threshold` for these rows, and
+    # "閾値 3" read as a score bar beside the real percentile bar.
+    text = _finalize(_mmr_batch(), count=3)
+    rows = [ln for ln in text.splitlines() if "not_selected(" in ln and ln.startswith("- ")]
+    assert rows
+    for ln in rows:
+        assert "閾値 3" not in ln
+        assert "出力枠 3 件の外" in ln and "分位ゲート" in ln

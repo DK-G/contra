@@ -955,9 +955,27 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - **今日実装しなかった理由**: 同じツール（delegate_finalize）に今日 F-54-A を入れた。こちらは診断の段で F-54-A は描画の段だが、どちらも finalize の出力なので 1 件に留めた。
 - 併せて記録: 同じ日の byserendipity で facet 1 が「返却 34 → ホーム除外・重複後 11」と大きく減り、seihai は「内訳は出力からは読めない」と書いた。ホーム除外・履歴除外・重複のどれで減ったかを facet 別に分ける計器は、byserendipity の出力段の次回の候補（今日は同じ段に F-50b を入れた）。
 
+### F-56. delegate_finalize — **出力枠で落ちた候補（`not_selected(...)`）の行が「閾値 3」と出て、点数の閾値と読める**（性能調査 2026-10-14 EX将棋・2026-10-15 hAIbit の 2 回に採番・2026-10-16 起票） → **同日対処済み＝「対処済み」節 F-56-R**
+
+- 観測: `not_selected(count=3)` と `not_selected(no_material)` の行が「実測 0.468 / 閾値 3」。点数の閾値（分位ゲート 0.432・0.416）と並んで読まれ、取り違える。
+- 機序（コード）: `classify._record_rejections` の `threshold` 欄に、この 2 種の落選だけ出力の件数 `count` が入っている。描画（`mcp_server` の落選内訳）は全行を同じ「/ 閾値 {threshold}」で書いていた。
+
 ---
 
 ## 対処済み
+
+### F-56-R. delegate_finalize — **出力枠で落ちた行は「出力枠 N 件の外・点数の閾値（分位ゲート X）は通過済み」と書く** — **対処済み 2026-10-16（描画のみ）**
+
+- 変えたもの: `src/mcp_server.py` の落選内訳の 1 行。`floor` が `not_selected` で始まる行だけ、「/ 閾値 {count}」の代わりに「（出力枠 {count} 件の外・点数の閾値（分位ゲート {gate_percentile}）は通過済み）」。診断の中身（`diag["rejections"]` の `threshold` 欄）・ゲート・選ばれる候補は不変。
+- 実測（API なし・`tests/test_full_batch_submission._mmr_batch` の 27 件を実経路 `delegate_finalize` に通した）:
+
+  | 行 | before | after |
+  |---|---|---|
+  | F4（材料あり・枠外） | `not_selected(count=3) — 実測 0.576 / 閾値 3` | `not_selected(count=3) — 実測 0.576（出力枠 3 件の外・点数の閾値（分位ゲート 0.24）は通過済み）` |
+  | B1（点数のみ） | `not_selected(no_material) — 実測 0.56 / 閾値 3` | `not_selected(no_material) — 実測 0.56（出力枠 3 件の外・点数の閾値（分位ゲート 0.24）は通過済み）` |
+
+- 検証: 回帰 1 件（`test_not_selected_rows_name_the_output_slot_not_a_score_bar`）。634 → 635 pass。
+- **残る限界**: 同じ行に付く F-22 の「律速は構造(purpose_sim)」も、枠で落ちた行では意味を持たない（ゲートで落ちていないので律速の因子が無い）。今回は文言 1 か所に留め、残した。
 
 ### F-54-A. delegate_finalize — **付録は finalize が実際に知っていることを書き、表題は分野名を「ホーム分野」と名乗らせる**（F-54 の残り） — **対処済み 2026-10-13（描画のみ）**
 

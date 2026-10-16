@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-16（CL-0140） delegate_finalize の「出力枠で落ちた」行は件数を閾値と名乗らない（F-56）
+
+### 概要
+* `src/mcp_server.py`: 落選内訳のうち `not_selected(...)` の行は「出力枠 N 件の外・点数の閾値（分位ゲート X）は通過済み」と書く。他の行・診断の中身・ゲートは不変。
+* `tests/test_full_batch_submission.py`: 新規 1 件。635 pass。
+* `docs/field_observations_seihai.md`: F-56（性能調査 10-14・10-15 の「閾値 3」に採番）と F-56-R（対処済み）。
+
+---
+
 ## 2026-10-13（CL-0139） delegate_finalize の付録と表題は、finalize が知っていることを書く（F-54-A）
 
 ### 概要

@@ -1607,7 +1607,16 @@ class StdinMcpServer:
                 continue
             label = title_by_id.get(str(r["id"]), "")
             label = f"「{label[:40]}」" if label else ""
-            line = f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
+            if str(r["floor"]).startswith("not_selected"):
+                # F-56: these rows carry the output COUNT in `threshold` (they cleared every
+                # score bar and lost an output slot). Printed as "閾値 3" it read as a score
+                # bar of 3 next to the real percentile bar (survey 2026-10-14/15).
+                bar = diag.get("gate_percentile")
+                bar_note = f"・点数の閾値（分位ゲート {bar}）は通過済み" if bar is not None else ""
+                line = (f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']}"
+                        f"（出力枠 {r['threshold']} 件の外{bar_note}）")
+            else:
+                line = f"- {r['id']}{label}: {r['floor']} — 実測 {r['value']} / 閾値 {r['threshold']}"
             # F-22: serendipity is a PRODUCT, so the product alone never says whether the
             # candidate was too close or too shallow. Print both factors and the binding one.
             if "purpose_sim" in r:
