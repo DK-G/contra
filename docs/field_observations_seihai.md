@@ -960,9 +960,40 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `not_selected(count=3)` と `not_selected(no_material)` の行が「実測 0.468 / 閾値 3」。点数の閾値（分位ゲート 0.432・0.416）と並んで読まれ、取り違える。
 - 機序（コード）: `classify._record_rejections` の `threshold` 欄に、この 2 種の落選だけ出力の件数 `count` が入っている。描画（`mcp_server` の落選内訳）は全行を同じ「/ 閾値 {threshold}」で書いていた。
 
+### F-57. 全 by\* 共通 — **道具が宣言していない引数を、何も言わずに無視する**（seihai 2026-10-15・10-16 の bybridge 行「`materials_max_chars` は bybridge の引数に無く、黙って無視された」に採番・2026-10-16 起票） → **無視したことの申告は同日対処済み＝「対処済み」節 F-57-R。bybridge の大きさの予算そのものは未実装（下の実測で、抄録を切るだけでは届かないと分かった）**
+
+- 観測: seihai は byserendipity と同じ `materials_max_chars: 45000` を bybridge に渡した。bybridge の結果は 62,156 字（10/15）・89,759 字（10/16）でファイルに退避され、引数が効かなかったことは大きさからしか分からなかった。
+- 機序（コード）: `handle_tool_call` は引数をスキーマと照合しない。各ツールは自分が読む鍵だけを `args.get` で読むので、ほかの鍵は消える（F-51 の `scope_time_range` は「宣言されているが使われない」、こちらは「宣言されていないので使われない」）。
+- **bybridge の予算を入れなかった理由（実測・API なし）**: 保存済みの bybridge materials（`output/materials_size_probe/bybridge.txt`・60 件・抄録あり 43 件）を lean にして抄録の先頭だけ変えた結果全体の字数:
+
+  | 抄録の先頭 | 結果全体（診断ブロック 9,934 字を含む） | materials だけ |
+  |---|---|---|
+  | 切らない | 96,308 | 86,372 |
+  | 450 | 66,040 | 56,104 |
+  | 300 | 59,833 | 49,897 |
+  | 200（最小） | 55,631 | 45,695 |
+  | 0（抄録を全部捨てる） | 47,053 | 37,117 |
+
+  抄録を全部捨てても 45,000 字を超える。抄録以外の内訳は `bridge_signals` 16,026 字（openalex_topic 3,438・openalex_field 2,001・bridge_hybrid_score 1,766・shared_bridge_count 1,441・seed_route 1,440・bridge_betweenness 1,380・bridge_strength 1,200・topic_seen 1,200）・題 5,625・DOI 2,967・id 2,518・掲載先 2,450・publication_type 1,860 ほか。byserendipity と同じ「収まる最長の抄録の先頭を選ぶ」を移植しても、診断を付けた 60 件では毎回「収まりません」と言うだけになる。
+- 処方候補（未実装・判断材料）: (a) 予算があるときは `bridge_signals` の 4 つの数値（shared_bridge_count・bridge_betweenness・bridge_strength・bridge_hybrid_score）のうち呼び手が採点に使わないものを落とす——どれを使っているかは seihai 側の手順にしか書かれていない。(b) 診断ブロック（約 1 万字）を別の content ブロックに分ける——大きさの上限は結果全体に掛かるので効かない可能性が高い。(c) インラインに収めること自体の価値: seihai 10/14 の観測では、ファイルに退避された結果はスクリプトで id を抜けるので全件提出が楽で、インラインのほうが取りこぼした。**bybridge は退避前提のままでよい可能性がある**＝人間の判断待ち。
+
 ---
 
 ## 対処済み
+
+### F-57-R. 全 by\* 共通 — **宣言していない引数は、結果の末尾に「受け付けません（無視しました）」と名指しする** — **対処済み 2026-10-16（申告のみ・拒否はしない）**
+
+- 変えたもの: `src/mcp_server.py` の `handle_tool_call`。正常に終わった結果に、そのツールの `inputSchema.properties` に無い引数の名前を 1 行足す（content の最後のブロック。content[0] の本文と materials JSON は不変なので、本文を切り出す呼び手のスクリプトは影響を受けない）。引数は従来どおり無視するだけで、呼び出しは拒否しない（拒否にすると、今日まで通っていた呼び出しが止まる）。
+- 誤報の確認: 既存の全テスト（635 件・実際の呼び出し形を含む）にこの判定を掛け、申告が出たのは 1 か所だけ＝byserendipity の `facets`/`structure` を bybridge にも渡しているテストで、これは本当に無視されている。コードが `args.get` で読む鍵はすべてどこかのツールのスキーマに宣言されていることも確かめた。
+- 実測（API なし）: seihai 10/15 の呼び方（`materials`・`materials_lean`・`materials_abstract_chars: 450`・`materials_max_chars: 45000`）を判定に掛けた。
+
+  | | before | after |
+  |---|---|---|
+  | bybridge に `materials_max_chars` | 何も出ない | `⚠ bybridge_collect はこの引数を受け付けません（無視しました・F-57）: materials_max_chars。…` |
+  | byserendipity に `materials_max_chars` | 何も出ない | 何も出ない（宣言済み） |
+
+- 検証: 回帰 3 件（`tests/test_ignored_args_note.py`）。635 → 638 pass。稼働中の MCP サーバーは変更前のコードなので、MCP 経由で出ることは次のサーバー起動後（seihai の次の実行）に分かる。
+- **残る限界**: bybridge の大きさの予算そのものは入れていない（上の F-57 の実測）。
 
 ### F-56-R. delegate_finalize — **出力枠で落ちた行は「出力枠 N 件の外・点数の閾値（分位ゲート X）は通過済み」と書く** — **対処済み 2026-10-16（描画のみ）**
 

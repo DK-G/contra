@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-16（CL-0141） 宣言していない引数は無視したと名指しする（F-57）
+
+### 概要
+* `src/mcp_server.py`: `_ignored_args_note`。`handle_tool_call` が、そのツールのスキーマに無い引数の名前を結果の最後のブロックに 1 行足す。拒否はしない。本文は不変。
+* `tests/test_ignored_args_note.py`: 新規 3 件。638 pass。
+* `docs/field_observations_seihai.md`: F-57（起票・bybridge の大きさの下限の実測つき）と F-57-R（対処済み）。bybridge の `materials_max_chars` は、抄録を全部捨てても 47k 字＝抄録の先頭を選ぶ方式では届かないので入れていない。
+
+---
+
 ## 2026-10-16（CL-0140） delegate_finalize の「出力枠で落ちた」行は件数を閾値と名乗らない（F-56）
 
 ### 概要

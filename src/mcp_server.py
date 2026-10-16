@@ -700,6 +700,26 @@ class StdinMcpServer:
             }
         ]
 
+    def _ignored_args_note(self, name: str, args: Dict[str, Any]) -> str:
+        """F-57: name the arguments this tool's schema does not declare.
+
+        The server never rejected unknown keys, so an argument copied from a sibling tool did
+        nothing and said nothing: seihai passed byserendipity's `materials_max_chars` to
+        bybridge on 2026-10-15 and 10-16 and learned only from the result size (62k / 90k chars).
+        """
+        if not isinstance(args, dict) or not args:
+            return ""
+        props = next((t.get("inputSchema", {}).get("properties", {})
+                      for t in self.list_tools() if t.get("name") == name), None)
+        if not props:
+            return ""
+        unknown = sorted(k for k in args if k not in props)
+        if not unknown:
+            return ""
+        return (f"⚠ {name} はこの引数を受け付けません（無視しました・F-57）: "
+                + ", ".join(unknown)
+                + "。別の道具の引数を写した場合は、この道具の引数一覧（ツールの説明）を確かめてください。")
+
     def handle_tool_call(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Routes and executes tool calls, capturing stdout to prevent protocol corruption."""
         buffer = io.StringIO()
@@ -726,6 +746,9 @@ class StdinMcpServer:
             caveat = run_stats_caveat() or low_budget_caveat()
             if caveat and isinstance(result.get("content"), list):
                 result["content"].append({"type": "text", "text": caveat})
+            ignored = self._ignored_args_note(name, args)
+            if ignored and isinstance(result.get("content"), list):
+                result["content"].append({"type": "text", "text": ignored})
 
             # Add stdout logs if there are any, for tracing
             sys.stdout = old_stdout
