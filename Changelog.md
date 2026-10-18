@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-18（CL-0147） 切り口ごとの主な分野を内訳に出す（F-64 の計器）
+
+### 概要
+* `src/pipeline/collect.py`: facet の記録に `top_field`（残った候補の最多 Field と件数）。
+* `src/mcp_server.py`: `_facet_breakdown_line` に「（主な分野 X n/kept）」。
+* `tests/test_facet_top_field.py`: 新規 2 件。647 pass。
+* 実測（実 API）: 10-17 の切り口 [3] は Engineering 9/16。`structure` を省くと Physics 19/21。24 切り口の `structure` あり／なしの比較は F-64 に記録（既定は不変）。
+* `docs/field_observations_seihai.md`: F-64 と F-64-I。
+
+---
+
 ## 2026-10-18（CL-0146） 書かれなかった概要は原文の抜粋だと名乗る（F-62）
 
 ### 概要

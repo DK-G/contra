@@ -995,9 +995,44 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - **F-63. byserendipity(raw_only) — 抄録がほぼ同文（完全一致でない）の別レコードが統合されない** → **「Abstract:」の接頭辞の分は 2026-10-18 に対処済み＝「対処済み」節 F-63-R。版違い（論文と学会抄録）は統合しないまま**（10-15 hAIbit: W7100622646 と W1824152488 は先頭 322 字が「Abstract:」と「tech-niques」のハイフン以外同じ。10-12 メタグモ: 論文版と学会抄録版）。F-52-R は書き出しの完全一致で統合する。処方候補: 正規化（「Abstract:」の接頭辞・ハイフン改行・空白）を足してから比べる。
 - 併記（F-53 と同種・上流のレコード）: 図・補足資料のレコード（10-15: Regensburg 大リポジトリの図の説明・Figshare の「Figure S1 from …」。どちらも publication_type は article）と、題が出版社名で要旨の欄に別の題が入ったレコード（W7098591357「North-Holland」）。contra 側では題の形（`^Figure S?\d+ from `）で落とすことはできるが、誤って落とす範囲が未測定。
 
+### F-64. byserendipity(raw_only) — **呼び手の `structure` が各切り口の検索文に連結されるので、`structure` の字面の語（emitter・receivers）に引かれて、切り口が名乗る分野と別の分野から返る**（性能調査 2026-10-17 salon-sites の「切り口の取り違え」に採番・2026-10-18 起票） → **計器は同日対処済み＝「対処済み」節 F-64-I。`structure` を連結する既定そのものは変えていない（人間の判断待ち）**
+
+- 観測（性能調査 10-17）: 切り口 [3]「Experimental particle physics and astrophysics (rare-event searches with background)」の 17 件に粒子物理・天体物理の文献が 0 件。電波の受信機・電磁妨害・レーダーの閾値・1954 年の信号検出理論。呼び手の `structure` は「An emitter sends an unprompted signal to many independent receivers…」。
+- 機序（コード）: `build_semantic_query(structure, pseudo_abstract)` が `structure + " " + pseudo_abstract` を 1 本の埋め込み検索文にする（Query2doc/HyDE の「クエリ＋疑似文書」の設計）。`structure` は検索にしか使われていない。
+- 実測（実 API・`output/f64_structure_probe.py`／`f64_structure_probe_multi.py`・**切り口ごとに `structure` あり／なしで上位 50 件の OpenAlex Field を数えた**。直近の by\* 呼び出し 8 本＝seihai 5・性能調査 3、計 24 切り口）:
+
+  | 切り口 | `structure` あり | `structure` なし | 上位 10 件の重なり |
+  |---|---|---|---|
+  | 10-17 [3] 粒子物理・天体物理 | **Engineering 25**・Physics 11・CS 8 | **Physics 42**（Nuclear and High Energy 27） | 4 |
+  | 10-13 seihai [2] 創薬・材料の多目的最適化 | **Mathematics 22**・CS 9・Decision 8 | **CS 37**・Biochem 6・Chem Eng 3 | **0** |
+  | 10-13 seihai [3] 水文・構造信頼性の同時超過 | **Economics 17**・Decision 14・Env 9 | **Env 29**・Earth 10・Decision 8 | 4 |
+  | 10-15 seihai [3] 臨床薬理のモデルによる監視 | Medicine 30・**Mathematics 12** | **Medicine 43**・Pharmacology 4 | 4 |
+  | 10-14 survey [2] スポーツ科学のルール変更 | **Economics 23**・Medicine 10・Social 8 | Medicine 16・Economics 16・Social 14 | 5 |
+  | 10-14 survey [3] 進化生物学の表現型可塑性 | Agri/Bio 36・Biochem 7 | Agri/Bio 45・Biochem 3 | 7 |
+  | ほか 18 切り口 | 主な分野は同じ（差は ±5 件以内） | 同上 | 4〜9 |
+
+  **`structure` を外して切り口の分野から遠ざかった例は 0／24。近づいた例は 5〜6／24**（うち 2 件は seihai のホーム分野＝Economics へ引き戻されていた。ホーム除外で捨てられるので、その切り口の実質の枠が減る）。
+- **既定を変えなかった理由**: (1) 測ったのは「名乗った分野から返ったか」だけで、`structure` を連結した本来の狙い（構造が同じ文献を引く）を落とすかどうかは測っていない。上位 10 件の重なりは平均 6 件で、入れ替わった 4 件が構造の点で良いか悪いかは読んで採点しないと分からない。(2) 呼び手は `structure` を渡さないだけで今日から外せる（`structure` は検索文にしか使われない）。既定（説明文の「ideally structure」）を変えるかは、seihai と性能調査の手順書の書き換えと組になるので人間の判断。
+- 処方候補（未実装）: (a) 説明文を「切り口の疑似要旨が構造を自分の分野の語で書いているなら `structure` は省く」に改める。(b) 切り口ごとに `structure` を使うかを選べる欄（`facets[].use_structure`）。(c) `structure` を疑似要旨の後ろに置く・短く切る（埋め込みの重みが変わるかは未測定）。
+
 ---
 
 ## 対処済み
+
+### F-64-I. byserendipity(raw_only) — **切り口ごとの内訳に、返った候補の主な OpenAlex Field を件数つきで出す**（F-64 の計器） — **対処済み 2026-10-18（計器のみ）**
+
+- 変えたもの: (1) `src/pipeline/collect.py` の `_collect_track_b_semantic`。ホーム除外・重複よけの後に残った候補の `primary_topic_field_name` を数え、最も多い分野と件数を facet の記録に残す。(2) `src/mcp_server.py` の `_facet_breakdown_line`。「提出 N」の後ろに「（主な分野 X n/kept）」。取得・選別・materials は不変。
+- 実測（実 API・10-17 salon-sites の呼び出しをそのまま 1 回取得し、同じ応答で 2 通り描画・履歴は読み書きしない・`output/f64_breakdown_live.py`）:
+
+  | | 切り口 [3] 粒子物理・天体物理の内訳 |
+  |---|---|
+  | before | `返却 45 / ホーム除外・重複後 16 / 提出 16` |
+  | after（`structure` あり＝10-17 の呼び方） | `返却 45 / ホーム除外・重複後 16 / 提出 16（主な分野 Engineering 9/16）` |
+  | 参考: `structure` を省いた呼び方 | `返却 40 / ホーム除外・重複後 21 / 提出 20（主な分野 Physics and Astronomy 19/21）` |
+
+  切り口 [1]（種子）は Agricultural and Biological Sciences 15/18、[2]（動的校正）は Biochemistry 10/21 と名乗りどおりに読める。
+- 検証: 回帰 2 件（`tests/test_facet_top_field.py`）。645 → 647 pass。
+- **残る限界**: 計器は「名乗りと違う分野から返った」を見せるだけで、どちらが良いかは決めない。Field は OpenAlex の粗い 26 分類で、分野をまたぐ切り口（[2] の動的校正は Biochem と Physics に割れる）では 1 位の件数が半分を切ることがある。
 
 ### F-62-R. delegate_finalize ほか構造整形の経路 — **呼び手が `summary` を書かなかった「1) 概要」は「（記入なし）原文の冒頭の抜粋: 」と名乗る**（F-54-R と同じ規則を概要の欄に） — **対処済み 2026-10-18（文言のみ）**
 

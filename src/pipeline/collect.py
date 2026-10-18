@@ -1179,6 +1179,13 @@ def _collect_track_b_semantic(
                     seen_abstracts[abs_key] = (bucket, len(bucket))
                 bucket.append(w)
         rec["kept"] = len(bucket)
+        # F-64 (survey 2026-10-17): a facet can come back from a different field than the one it
+        # names (particle physics -> radio receivers, pulled by the caller's `structure` words).
+        # Name the facet's most common OpenAlex Field so the caller can see it without a lookup.
+        names = Counter((w.source_meta or {}).get("primary_topic_field_name") or "不明" for w in bucket)
+        if names:
+            top, n = names.most_common(1)[0]
+            rec["top_field"] = {"name": top, "count": n}
         buckets.append(bucket)
 
     works = (_interleave_facet_buckets(buckets, max_count) if cfg.facet_fair_share

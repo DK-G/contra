@@ -415,6 +415,9 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
         parts.append(
             f"[{i}] {dom}: " + (f"ok{note} / " if note else "")
             + f"返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+            # F-64: the field the facet actually came back from, to read against its name.
+            + (f"（主な分野 {r['top_field']['name']} {r['top_field']['count']}/{r.get('kept', 0)}）"
+               if r.get("top_field") else "")
             # F-52: the same paper under another OpenAlex id, merged on its abstract.
             + (f"（抄録が同文の別レコード {r['same_abstract']} 件を統合）"
                if r.get("same_abstract") else "")
