@@ -2673,6 +2673,19 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-16 失敗対処デー）**: (1) bybridge の旧様式の再現（GARCH・被引用 22,260 が上位 10 件の 70%・語彙レッグ主題一致 36%）は F-13（語彙レッグのドリフト）の再現として記録。r05 のこのテーマ族で 10/09（9%）に続き 2 回目。F-47-R の警告どおり両レッグのトピックが並び、どちらが外れたかは呼び手が読めた。処方（語彙レッグを semantic レッグの主題に寄せる）は未実装。(2) `materials_max_chars` の無視は F-57（上の 10/15 注記）。(3) finalize の題だけ echo 2 件の警告は呼び手側の事情で、F-58 の追記文（upstream_empty も写す）は当たらない（題と抄録が上流にあった）。
 
+## 2026-10-17（土・seihai 週次指針）の観測
+
+テーマ: 負けている挑戦腕を止める規則——尺度を裁かれる腕の初期データから学ばない／累積した害を忘れない／人間が応答しないときの既定動作を持つ（英語で投入）。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github のみ・pool 20・include 5 語（kill switch／drawdown／strategy monitoring／sequential test／backtest） | 上位 4 件は汎用の売買 bot（go-trader 60.7・Vibe-Trading・investing-algorithm-framework・ai-hedge-fund）。プール内訳の計器: `strategy monitoring` と `sequential test` は README を含め **0 件**、`kill switch` は README 言及のみ 9 件・`drawdown` は README のみ 16 件 | **F-14 の再現**。収穫ゼロ（README に kill switch と書いてある bot が並ぶだけで、停止規則の実装を掲げるリポジトリはプールに無い） |
+| **byserendipity** | raw_only・facet 3（SPC 立ち上げ／臨床の安全性監視／鉄道の警報・フェイルセーフ）・lean・`materials_max_chars` 45,000 | 60 件（23／14／23）。予算内にインラインで返った。全件提出 → anomaly 3・通過 17・出力 5・**接地検証失敗 0** | 正常。facet 3（Very Far）が最上位 3 件を占めた |
+| **bybridge** | materials・lean・`seed_semantic_text` あり | シード 20 件は主題どおり（stop-loss・drawdown・CUSUM・Non-restarting CUSUM 等、Field 一致 65%・語彙レッグ主題一致 67%）。最頻 bridge は Automatic Block-Length Selection（交差候補の 15%・上位 10 件で 0%）。**交差候補は 60 件中 44 件を anomaly と採点**（会計開示・CSR・気候・EEG）。通過 4・出力 1（fallback・GLR の偽データ注入検出 0.26）・接地検証失敗 0 | 「シードは主題どおり・交差候補は主題外」の再現（10/05・10/13 に続く）。旧様式（共有 bridge 1 本への集中）ではない |
+| **bybridge（引数）** | `materials_max_chars` を渡した | 結果 87,439 字でファイル退避。**F-57-R の「無視した引数の名指し」は結果本文に見当たらなかった**（"無視" を全文 grep して 0 件）。MCP クライアントがスキーマに無い引数を contra へ届く前に落としている可能性 | F-57 の再現＋F-57-R が呼び手側から見えない（新しい観測。未検証の仮説として記録） |
+
+**新しい様式**: F-57-R の名指しが出なかった 1 点（原因は未確認）。他は再現。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
