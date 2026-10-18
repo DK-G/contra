@@ -140,7 +140,8 @@ def test_fill_track_entries_falls_back_when_mocked_llm_returns_none():
 
     # F-54 (2026-10-11): an unwritten field says so instead of reading as content.
     assert result[0].relationship == "（記入なし）接続点ラベルのみ: 【接続点: 失敗からの回復】"
-    assert result[0].abstract_summary == "Short abstract."
+    # F-62: borrowed opening is labelled as such.
+    assert result[0].abstract_summary == "（記入なし）原文の冒頭の抜粋: Short abstract."
     assert result[0].usefulness_hypothesis == "（記入なし）"
     assert result[0].caution == "（個別の注意点は記入なし）テーマの不安点: 論文の条件がゲーム体験へ転用できるか"
 
@@ -169,6 +170,18 @@ def test_unwritten_fields_render_without_a_doubled_heading_or_borrowed_content()
     assert filled[1].relationship.startswith("（記入なし）") and "L1" in filled[1].relationship
     assert filled[1].usefulness_hypothesis == "（記入なし）"
     assert filled[1].caution.startswith("（個別の注意点は記入なし）テーマの不安点: ")
+
+
+def test_unwritten_summary_names_the_borrowed_opening():
+    """F-62 (survey 10-12, 10-14, 10-17): with no caller summary, 1) 概要 was the abstract's first
+    ~150 chars in English and read as an overview contra had written."""
+    entries = [OutputEntry(work=_work("W0"), relationship="", abstract_summary="", caution="",
+                           track="B", label="L0"),
+               OutputEntry(work=_work("W1"), relationship="", abstract_summary="caller summary",
+                           caution="", track="B", label="L1")]
+    filled = fill_track_entries(entries, GenerationConfig(), theme=_theme(), mode="structured")
+    assert filled[0].abstract_summary.startswith("（記入なし）原文の冒頭の抜粋: ")
+    assert filled[1].abstract_summary == "caller summary"
 
 
 if __name__ == "__main__":

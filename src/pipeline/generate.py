@@ -301,7 +301,14 @@ def fill_track_entries(
             else:
                 relationship = f"{_UNWRITTEN}接続点ラベルのみ: {entry.label}"
         if not summary:
-            summary = _summarize(entry.work.abstract) if theme is None else _structured_summary(entry.work.abstract, cfg)
+            if theme is None:
+                summary = _summarize(entry.work.abstract)
+            else:
+                summary = _structured_summary(entry.work.abstract, cfg)
+                # F-62: the unwritten summary is the source's own opening (usually English),
+                # which read as a contra-written overview. Name it as borrowed text (F-54-R).
+                if entry.work.abstract and summary != "abstract欠損":
+                    summary = f"{_UNWRITTEN}原文の冒頭の抜粋: {summary}"
         if not hypothesis:
             hypothesis = _UNWRITTEN
         if not caution:

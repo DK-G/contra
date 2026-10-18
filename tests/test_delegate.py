@@ -83,7 +83,8 @@ def test_keyless_document_fills_4parts_without_llm():
     assert len(doc.sections) == 1
     entry = doc.sections[0].entries[0]
     # Deterministic structured fill: summary equals the structured summarizer output.
-    assert entry.abstract_summary == _structured_summary(abstract, GenerationConfig())
+    # F-62: the unwritten summary names itself as the source's opening.
+    assert entry.abstract_summary == "（記入なし）原文の冒頭の抜粋: " + _structured_summary(abstract, GenerationConfig())
     assert entry.relationship      # non-empty deterministic relationship
     assert entry.caution           # non-empty deterministic caution
     assert entry.usefulness_hypothesis

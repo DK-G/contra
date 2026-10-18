@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-18（CL-0146） 書かれなかった概要は原文の抜粋だと名乗る（F-62）
+
+### 概要
+* `src/pipeline/generate.py`: 構造整形で summary が空なら、抜粋の前に「（記入なし）原文の冒頭の抜粋: 」。
+* `tests/test_fill_track_entries.py`: 新規 1 件。既存 2 件（`test_delegate.py`・`test_fill_track_entries.py`）の期待文言を更新。645 pass。
+* `docs/field_observations_seihai.md`: F-62-R。
+
+---
+
 ## 2026-10-18（CL-0145） 抄録の同文判定の前に「Abstract:」を外す（F-63）
 
 ### 概要
