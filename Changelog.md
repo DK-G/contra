@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-18（CL-0144） 無視した引数の名指しを結果の先頭にも出す（F-57-V）
+
+### 概要
+* `src/mcp_server.py`: `handle_tool_call` で、宣言していない引数があれば content[0] の先頭行にも F-57 の名指しを置く（末尾ブロックは従来どおり）。
+* `tests/test_ignored_args_note.py`: 新規 2 件。643 pass。
+* 実測: seihai 10/17 の保存結果では名指しは末尾ブロックに出ていた（「出なかった」は grep の窓による空振り）。呼び手の読み方（JSON の前の見出し）で、before は見出しに無し・after は先頭行に有り。
+* `docs/field_observations_seihai.md`: F-57-V と 10/17 の注記。
+
+---
+
 ## 2026-10-16（CL-0143） byserendipity は id を 1 行に並べ、finalize は W 番号だけの id を受け付ける（F-59）
 
 ### 概要

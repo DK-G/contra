@@ -35,3 +35,31 @@ def test_note_reaches_the_result():
     })
     assert res["content"][-1]["text"].startswith("⚠ delegate_finalize はこの引数を受け付けません")
     assert "materials_max_chars" in res["content"][-1]["text"]
+
+
+def test_note_also_heads_the_first_block():
+    """F-57-V: seihai 10-17 read only the header before the materials JSON and missed the
+    trailing block; the note is repeated at the top of content[0] (the trailing block stays)."""
+    from test_full_batch_submission import _mmr_batch
+    res = StdinMcpServer().handle_tool_call("delegate_finalize", {
+        "theme_overview": "探索の打ち切り規則を設計する。" * 20,
+        "goal": "決着しない側の打ち切り規則", "why_problem": "枠が有限であるため",
+        "approach_type": "application", "assumptions": ["打ち切りは推定量を歪める", "一律は最適でない"],
+        "scope_field": "statistics", "scope_scale": "small", "scope_time_range": "no_limit",
+        "count": 3, "no_history": True, "grounded_only": False, "candidates": _mmr_batch(),
+        "materials_max_chars": 45000,
+    })
+    assert res["content"][0]["text"].startswith("⚠ delegate_finalize はこの引数を受け付けません")
+    assert res["content"][-1]["text"].startswith("⚠ delegate_finalize はこの引数を受け付けません")
+
+
+def test_clean_call_leaves_first_block_alone():
+    from test_full_batch_submission import _mmr_batch
+    res = StdinMcpServer().handle_tool_call("delegate_finalize", {
+        "theme_overview": "探索の打ち切り規則を設計する。" * 20,
+        "goal": "決着しない側の打ち切り規則", "why_problem": "枠が有限であるため",
+        "approach_type": "application", "assumptions": ["打ち切りは推定量を歪める", "一律は最適でない"],
+        "scope_field": "statistics", "scope_scale": "small", "scope_time_range": "no_limit",
+        "count": 3, "no_history": True, "grounded_only": False, "candidates": _mmr_batch(),
+    })
+    assert "F-57" not in res["content"][0]["text"]

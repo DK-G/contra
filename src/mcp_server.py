@@ -778,6 +778,11 @@ class StdinMcpServer:
             ignored = self._ignored_args_note(name, args)
             if ignored and isinstance(result.get("content"), list):
                 result["content"].append({"type": "text", "text": ignored})
+                # F-57-V: callers read the header above the materials JSON, not a block after
+                # 90k chars of it (seihai 10-17 missed the trailing note) — say it up front too.
+                head = result["content"][0] if result["content"] else None
+                if isinstance(head, dict) and head.get("type") == "text" and len(result["content"]) > 1:
+                    head["text"] = ignored + "\n\n" + head.get("text", "")
 
             # Add stdout logs if there are any, for tracing
             sys.stdout = old_stdout
