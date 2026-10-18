@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-18（CL-0145） 抄録の同文判定の前に「Abstract:」を外す（F-63）
+
+### 概要
+* `src/pipeline/collect.py`: `_abstract_key` が先頭の `abstract`／`summary` の見出し語を外してから鍵を作る。
+* `tests/test_same_abstract_dedup.py`: 新規 1 件。644 pass。
+* 実測: 保存結果 42 本・2,408 件で、まとまる組が 12 → 18（新しい 3 組はすべて本物の重複・誤統合 0）。10-15 の対は同じ鍵になった。
+* `output/materials_size_probe/f63_dup_scan.py`: 新旧の鍵の比較スクリプト。
+* `docs/field_observations_seihai.md`: F-63-R。
+
+---
+
 ## 2026-10-18（CL-0144） 無視した引数の名指しを結果の先頭にも出す（F-57-V）
 
 ### 概要

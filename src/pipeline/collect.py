@@ -492,6 +492,7 @@ def _norm_title(title: Optional[str]) -> str:
 
 
 _ABSTRACT_KEY_CHARS = 200
+_ABSTRACT_LABEL = re.compile(r"^(?:abstract|summary)\b[\s:.\-–—]*")
 
 
 def _abstract_key(abstract: Optional[str]) -> str:
@@ -499,8 +500,13 @@ def _abstract_key(abstract: Optional[str]) -> str:
 
     Empty when the abstract is too short to identify a paper (or is not in Latin script), so
     such records are never merged on this key.
+
+    A leading "Abstract"/"Summary" label is dropped first (F-63): a repository copy that opens
+    "Abstract: Under healthy conditions…" kept a key 8 letters out of step with the journal
+    record that opens "Under healthy conditions…" (survey 2026-10-15, W7100622646/W1824152488).
     """
-    a = re.sub(r"[^a-z0-9]+", "", (abstract or "").lower())
+    a = _ABSTRACT_LABEL.sub("", (abstract or "").lower().lstrip())
+    a = re.sub(r"[^a-z0-9]+", "", a)
     return a[:_ABSTRACT_KEY_CHARS] if len(a) >= _ABSTRACT_KEY_CHARS else ""
 
 

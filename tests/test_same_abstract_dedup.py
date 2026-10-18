@@ -140,3 +140,16 @@ def test_flag_restores_the_old_behaviour(monkeypatch):
     assert [w.id for w in out][:2] == ["W1", "W2"]
     out, _ = _run(monkeypatch, [page])
     assert [w.id for w in out][:2] == ["W1", "P0"]
+
+
+def test_leading_abstract_label_does_not_split_the_key():
+    """F-63 (survey 2026-10-15 hAIbit): W7100622646 opens "Abstract: Under healthy conditions…"
+    with "tech-niques"; the journal record W1824152488 opens "Under healthy conditions…"."""
+    body = ("Under healthy conditions, the normal cardiac (sinus) interbeat interval fluctuates in a "
+            "complex manner. Quantitative analysis using {t} adapted from statistical physics reveals "
+            "the presence of long-range power-law correlations extending over thousands of heartbeats.")
+    journal = body.format(t="techniques")
+    for label in ("Abstract: ", "ABSTRACT ", "Abstract—", "Summary. "):
+        assert _abstract_key(label + body.format(t="tech-niques")) == _abstract_key(journal)
+    # a word that merely starts with the label is not a label
+    assert _abstract_key("Abstraction " + journal) != _abstract_key(journal)
