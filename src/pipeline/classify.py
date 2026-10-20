@@ -844,6 +844,27 @@ def _maxmin_diversify(works: List[Work], k: int) -> List[Work]:
     return selected
 
 
+# F-61 (survey 2026-10-14 EX将棋): with materials_lean the echoed candidates carry no concept
+# tags, every pairwise similarity was 0 and MMR reduced to score order — all 3 output slots
+# went to one facet's near-paraphrases while the other facets' passes fell to the count.
+# The candidate's facet is still in the lean echo. Calibrated on the non-lean byserendipity
+# materials of 2026-10-11 (60 candidates, 3 facets): mean level-1+ concept Jaccard is 0.184
+# within a facet and 0.038 across facets, so a shared facet stands in for the within-facet mean.
+_SAME_FACET_SIM = 0.18
+
+
+def _redundancy(w1: Work, w2: Work) -> float:
+    """MMR redundancy: concept Jaccard when both works carry level-1+ tags, else the facet
+    stand-in (F-61). Collection-side MAX-MIN keeps plain concept Jaccard."""
+    has1 = any(t.level >= 1 and t.name for t in w1.concept_tags)
+    has2 = any(t.level >= 1 and t.name for t in w2.concept_tags)
+    if has1 and has2:
+        return _concept_jaccard(w1, w2)
+    f1 = (w1.source_meta or {}).get("serendipity_facet")
+    f2 = (w2.source_meta or {}).get("serendipity_facet")
+    return _SAME_FACET_SIM if f1 and f1 == f2 else 0.0
+
+
 def _mmr_rerank(
     scored: List[Tuple[float, str, dict]],
     id_to_work: Dict[str, Work],
@@ -872,7 +893,7 @@ def _mmr_rerank(
                 if w is None:
                     return -1.0
                 max_sim = max(
-                    _concept_jaccard(w, id_to_work[s[1]])
+                    _redundancy(w, id_to_work[s[1]])
                     for s in selected
                     if s[1] in id_to_work
                 ) if selected else 0.0

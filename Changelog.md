@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-10-20（CL-0149） lean の出力枠を facet 欄で多様化する（F-61）
+
+### 概要
+* `src/pipeline/delegate.py`: `work_from_material` が `facet` を `source_meta` に残す。
+* `src/pipeline/classify.py`: `_redundancy`（概念タグが無ければ同じ facet＝0.18）。`_mmr_rerank` が使う。
+* `src/mcp_server.py`: `materials の大きさ` の行と `materials_lean` の説明文。
+* `tests/test_mmr_facet_standin.py`: 新規 3 件。651 pass。
+* 実測（API なし）: 実 MCP 経路で点差 0.02〜0.04 のとき lean の出力 3 本が 1 切り口 → 3 切り口（概念 MMR と同じ配分）。
+* `docs/field_observations_seihai.md`: F-61-R。
+
+---
+
 ## 2026-10-20（CL-0148） 候補の id を OpenAlex Field ごとに 1 行で出す（F-65 の計器）
 
 ### 概要

@@ -181,6 +181,9 @@ def work_from_material(material: Dict[str, Any]) -> Work:
         concept_tags=tags,
         publication_type=material.get("publication_type"),
         referenced_works=[str(r) for r in (material.get("referenced_works") or [])],
+        # F-61: the facet that retrieved the candidate (byserendipity raw) stands in for the
+        # concept tags that materials_lean drops, so the output picks can still be diversified.
+        source_meta=({"serendipity_facet": str(material["facet"])} if material.get("facet") else {}),
     )
 
 
@@ -206,7 +209,8 @@ def material_from_work(
     chars on 2026-10-10). ``include_concept_names=False`` drops ``concepts``, which repeats the
     names in ``concept_tags`` and which ``delegate_finalize`` never reads.
     ``include_concept_tags=False`` drops the tags too; the only thing finalize does with them is
-    diversify its output picks (MMR), so without them the picks go by score.
+    diversify its output picks (MMR); without them the echoed ``facet`` stands in (F-61),
+    and a material with neither goes by score.
     ``abstract_max_chars`` keeps the head of a longer abstract and records the original length
     under ``abstract_full_chars``; grounding is checked against the echoed (cut) text.
     """

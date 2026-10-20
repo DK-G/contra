@@ -299,7 +299,8 @@ def _materials_lean_prop() -> Dict[str, Any]:
     return {"type": "boolean", "default": False, "description": (
         "Leave `concept_tags` out of the returned materials (F-50). They are about a third of a "
         "byserendipity result and a quarter of a bybridge one; delegate_finalize reads them only "
-        "to diversify its output picks (MMR), so without them the picks go by score. Use when "
+        "to diversify its output picks (MMR); without them byserendipity candidates are diversified "
+        "by their echoed `facet` instead (F-61) and bybridge picks go by score. Use when "
         "the result exceeds your tool-result limit; the `materials の大きさ` line reports the "
         "size per field.")}
 
@@ -386,8 +387,14 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
     parts = "／".join(f"{k} {per_field[k]:,}" for k in named)
     line = f"- materials の大きさ (F-50): 候補 {len(materials)} 件・{total:,} 字（うち {parts}）。"
     if lean:
-        line += ("concept_tags は省いています（materials_lean）＝delegate_finalize の出力枠の"
-                 "多様化は働かず、点数順になります。")
+        if any(m.get("facet") for m in materials):
+            # F-61: the echoed facet stands in for the tags in finalize's MMR.
+            line += ("concept_tags は省いています（materials_lean）＝delegate_finalize の出力枠の"
+                     "多様化は、代わりに facet 欄で行います（同じ facet の候補を似たものと数える）。"
+                     "facet 欄も echo してください。")
+        else:
+            line += ("concept_tags は省いています（materials_lean）＝delegate_finalize の出力枠の"
+                     "多様化は働かず、点数順になります。")
     else:
         line += ("結果が上限を超える場合は materials_lean:true で concept_tags を省けます"
                  "（delegate_finalize が出力枠の多様化にだけ使う欄）。")
