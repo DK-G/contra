@@ -1015,9 +1015,30 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - **既定を変えなかった理由**: (1) 測ったのは「名乗った分野から返ったか」だけで、`structure` を連結した本来の狙い（構造が同じ文献を引く）を落とすかどうかは測っていない。上位 10 件の重なりは平均 6 件で、入れ替わった 4 件が構造の点で良いか悪いかは読んで採点しないと分からない。(2) 呼び手は `structure` を渡さないだけで今日から外せる（`structure` は検索文にしか使われない）。既定（説明文の「ideally structure」）を変えるかは、seihai と性能調査の手順書の書き換えと組になるので人間の判断。
 - 処方候補（未実装）: (a) 説明文を「切り口の疑似要旨が構造を自分の分野の語で書いているなら `structure` は省く」に改める。(b) 切り口ごとに `structure` を使うかを選べる欄（`facets[].use_structure`）。(c) `structure` を疑似要旨の後ろに置く・短く切る（埋め込みの重みが変わるかは未測定）。
 
+### F-65. byserendipity(raw_only) — **ホーム分野の学会の論文が、ホーム除外をすり抜けたように見える。呼び手には理由が確かめられない**（性能調査 2026-10-19 メタグモ「ホーム分野の除外」に採番・2026-10-20 起票） → **すり抜けではなく設計どおりと確認。計器は同日対処済み＝「対処済み」節 F-65-I**
+
+- 観測（性能調査 10-19）: `scope_field: "Computer Science"` で、PacificVis 2026 の W7164993967 と ACM RecSys 2023 の W4386728800 が候補に入った。materials に分野の欄が無く、呼び手からは確かめられなかった。
+- 確認（実 API・2 件を直接取得）: W7164993967 の主トピックは Decision-Making and Behavioral Economics（**Decision Sciences**・score 0.75）、W4386728800 は Ethics and Social Impacts of AI（**Social Sciences**・0.99。Recommender Systems は 0.006）。ホーム除外（`exclude_home_field`）は主トピックの Field を読むので、2 件は**除外の規則どおりに残った**。OpenAlex は掲載先でなく中身で分類する。bybridge の F-32／F-44（同主題が兄弟 Field に入る）と同じ根。
+- 処方を入れなかった側: 掲載先（venue）でホーム分野を判定する除外は入れていない。掲載先と分野の対応表が無く、PacificVis の 1 本は性能調査も「問いにいちばん近い」と判定しており、落とすべきかは採点の側の判断。
+
 ---
 
 ## 対処済み
+
+### F-65-I. byserendipity(raw_only) — **候補の id を OpenAlex Field ごとにまとめた 1 行を出す**（F-65 の計器） — **対処済み 2026-10-20（計器のみ）**
+
+- 変えたもの: `src/mcp_server.py` に `_field_ids_line`。ホーム除外が効いている呼び出しでは、診断ブロックの id 一覧（F-59-R）の次に「候補の OpenAlex Field（…ホーム除外はこの Field で判定…）: Medicine 12: W…, W… ／ …」を件数の多い順で出す。取得・選別・materials は不変。
+- **最初に入れた形（候補ごとの `openalex_field` 欄）は外した**: 実測で、`materials_lean`＋`materials_max_chars: 45000` の下では抄録の先頭が 360 → **295 字**に縮んだ（Field 名が長い＝「Biochemistry, Genetics and Molecular Biology」）。F-60（抄録が短すぎて仕組みが読めない）を悪化させるので、まとめた 1 行に替えた。
+- 実測（実 API・10-17 salon-sites の呼び出し・lean＋45,000・応答は disk キャッシュで両腕同一・履歴は読み書きしない・`output/f65_field_live.py`）:
+
+  | | 結果全体 | 抄録の先頭 | Field の見え方 |
+  |---|---|---|---|
+  | before | 44,819 字 | 360 字 | なし（facet 別内訳の「主な分野」だけ） |
+  | 候補ごとの欄（不採用） | 44,801 字 | 295 字 | 55/55 件に欄 |
+  | **after（まとめた 1 行）** | 44,811 字 | **338 字** | 1 行に 7 Field・55 件（Agri/Bio 15・Biochem 12・Engineering 9・Immunology 8・Physics 8・CS 2・Neuro 1） |
+
+- 検証: 回帰 1 件（`tests/test_field_ids_line.py`）。647 → 648 pass。
+- **残る限界**: 呼び手が「この候補はなぜ残ったか」を引けるようになっただけで、除外の規則は変えていない。抄録の予算から 22 字を使う。
 
 ### F-64-I. byserendipity(raw_only) — **切り口ごとの内訳に、返った候補の主な OpenAlex Field を件数つきで出す**（F-64 の計器） — **対処済み 2026-10-18（計器のみ）**
 

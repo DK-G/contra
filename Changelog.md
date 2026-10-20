@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-20（CL-0148） 候補の id を OpenAlex Field ごとに 1 行で出す（F-65 の計器）
+
+### 概要
+* `src/mcp_server.py`: `_field_ids_line`。byserendipity raw の診断ブロックに、ホーム除外が読んだ Field ごとの id 一覧。
+* `tests/test_field_ids_line.py`: 新規 1 件。648 pass。
+* 実測（実 API）: 10-19 の 2 件は OpenAlex が Decision Sciences／Social Sciences に分類＝除外は規則どおり。候補ごとの欄は抄録の先頭を 360 → 295 字に縮めたので不採用、まとめた 1 行は 338 字。
+* `docs/field_observations_seihai.md`: F-65 と F-65-I。
+
+---
+
 ## 2026-10-18（CL-0147） 切り口ごとの主な分野を内訳に出す（F-64 の計器）
 
 ### 概要

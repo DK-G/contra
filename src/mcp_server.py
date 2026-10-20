@@ -255,6 +255,27 @@ def _short_ids_line(materials: List[Dict[str, Any]]) -> str:
             f"受け付けます）: {', '.join(short)}")
 
 
+def _field_ids_line(works: List[Any]) -> str:
+    """F-65: the candidate ids grouped by the OpenAlex Field the home exclusion read.
+
+    Survey 2026-10-19: two papers from Computer Science venues passed a Computer Science home
+    exclusion, and the caller could not tell why. The exclusion reads the primary-Topic Field,
+    which OpenAlex assigns by content (here Decision Sciences, Social Sciences), and the
+    materials did not carry it. One grouped line, not a per-candidate key: the key cost 65 chars
+    of every abstract head under materials_max_chars 45000 (360 -> 295, measured 2026-10-20).
+    """
+    groups: Dict[str, List[str]] = {}
+    for w in works:
+        name = (w.source_meta or {}).get("primary_topic_field_name") or "不明"
+        wid = str(w.id or "")
+        groups.setdefault(name, []).append(
+            wid[len(_OPENALEX_WORK_PREFIX):] if wid.startswith(_OPENALEX_WORK_PREFIX) else wid)
+    parts = [f"{name} {len(ids)}: {', '.join(ids)}"
+             for name, ids in sorted(groups.items(), key=lambda kv: -len(kv[1]))]
+    return ("- 候補の OpenAlex Field（主トピックから中身で付く。ホーム除外はこの Field で判定するので、"
+            "ホーム分野の学会・雑誌の論文でも別の Field なら残ります）: " + " ／ ".join(parts))
+
+
 def _materials_json(materials: List[Dict[str, Any]]) -> str:
     """Candidate materials as valid JSON with one candidate field per line (F-38).
 
@@ -960,6 +981,7 @@ class StdinMcpServer:
                 + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=cut,
                                               budget_note=budget_note)
                 + ("\n" + _short_ids_line(materials) if materials else "")
+                + ("\n" + _field_ids_line(works) if works and home_ids else "")
             )
             return diag + "\n\n" + _materials_json(materials)
 
