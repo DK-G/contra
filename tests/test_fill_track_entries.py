@@ -143,7 +143,7 @@ def test_fill_track_entries_falls_back_when_mocked_llm_returns_none():
     # F-62: borrowed opening is labelled as such.
     assert result[0].abstract_summary == "（記入なし）原文の冒頭の抜粋: Short abstract."
     assert result[0].usefulness_hypothesis == "（記入なし）"
-    assert result[0].caution == "（個別の注意点は記入なし）テーマの不安点: 論文の条件がゲーム体験へ転用できるか"
+    assert result[0].caution == "（個別の注意点は記入なし。テーマの不安点は入力サマリの「不安点」の行）"
 
 
 def test_unwritten_fields_render_without_a_doubled_heading_or_borrowed_content():
@@ -169,7 +169,7 @@ def test_unwritten_fields_render_without_a_doubled_heading_or_borrowed_content()
     assert filled[0].usefulness_hypothesis == "caller hypothesis"
     assert filled[1].relationship.startswith("（記入なし）") and "L1" in filled[1].relationship
     assert filled[1].usefulness_hypothesis == "（記入なし）"
-    assert filled[1].caution.startswith("（個別の注意点は記入なし）テーマの不安点: ")
+    assert filled[1].caution == "（個別の注意点は記入なし。テーマの不安点は入力サマリの「不安点」の行）"
 
 
 def test_unwritten_summary_names_the_borrowed_opening():

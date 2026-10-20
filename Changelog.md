@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-20（CL-0150） 書かれなかった注意点は concern を写さず入力サマリを指す（F-54-C）
+
+### 概要
+* `src/pipeline/generate.py`: `_structured_caution` の concern ありの埋め草。
+* `tests/test_fill_track_entries.py`: 既存 2 件の期待値を更新。651 pass。
+* 実測（API なし）: concern の文が出力全体で 4 回 → 1 回。
+* `docs/field_observations_seihai.md`: F-54-C。
+
+---
+
 ## 2026-10-20（CL-0149） lean の出力枠を facet 欄で多様化する（F-61）
 
 ### 概要

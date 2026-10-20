@@ -70,7 +70,9 @@ _UNWRITTEN = "（記入なし）"
 def _structured_caution(theme: ThemeInput) -> str:
     # No "注意点: " prefix: every renderer already prints the heading.
     if theme.concern:
-        return f"（個別の注意点は記入なし）テーマの不安点: {theme.concern}"
+        # F-54-C (2026-10-20): the concern was copied in full under every entry (survey 10-17,
+        # 10-19: "not a per-paper caution"), while 入力サマリ already prints it once as 「不安点」.
+        return "（個別の注意点は記入なし。テーマの不安点は入力サマリの「不安点」の行）"
     if theme.assumptions:
         return f"（個別の注意点は記入なし）前提「{theme.assumptions[0]}」が成り立つか要確認。"
     return "（個別の注意点は記入なし）"
