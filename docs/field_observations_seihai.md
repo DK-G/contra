@@ -2769,6 +2769,35 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-18 失敗対処デー）**: bybridge の引数の行（F-57-R が見えない）は保存結果で反証＝名指しは 2 ブロック目に出ていた。0 件は grep の窓（前後 80・120 字）が行の長さより長かったため。見出しの先頭にも出すようにした＝「対処済み」節 F-57-V。byrepo の F-14 再現・bybridge の「シードは主題どおり・交差候補は主題外」（4 回目）は再現として記録。
 
+## 2026-10-19（月・seihai r01 / FJ）の観測
+
+テーマ: 待ち行列に保管した戦略候補の失効・再検証規則（再測定で劣化した候補をいつ外すか／外すこと自体を 2 回目の選抜にしない）。英語で投入。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | structured・github のみ・pool 20・include 5 語（strategy registry／model revalidation／champion challenger／walk-forward／model decay） | 上位 4 件は米の収量予測・ペーパートレード bot・tradingview-mcp・DRL 金 bot（theme 関連度 0.4 以下）。プール内訳: `model revalidation`・`model decay` は README を含め **0 件**、他 3 語は README 言及のみ | **F-14 の再現**（11 回目）。収穫ゼロ |
+| **byserendipity** | raw_only・facet 3（移植待機リスト／医薬品リテスト期間／人事選抜の妥当性減衰）・lean・`materials_max_chars` 45,000 | 56 件（28／14／14）。予算内にインラインで返った（抄録 355 字に切詰め）。全件提出 → anomaly 8・通過 14・出力 5 | 正常。**接地検証失敗 1 件は呼び手の転記ミス**（別呼び出しの前提文を theme_quote に書いた）＝契約が正しく働いた例 |
+| **bybridge** | materials・lean・`materials_max_chars` 45,000 | シード 20 件は主題どおり（Finance 19/20・"When do systematic strategies decay?" 等）。最頻 bridge は Fama-French 1993（上位 10 件で 20%）。交差候補 60 件を採点 → **anomaly 43**・通過 2・出力 1（fallback・Model Confidence Set 0.27）。主題に近い交差候補は同分野の多重比較（MCS・Giacomini-White・SPA・Romano-Wolf）で、全部距離で落ちた | 「シードは主題どおり・交差候補は主題外か同分野」の再現（5 回目） |
+| **bybridge（引数）** | `materials_max_chars` を渡した | F-57 の名指しは**結果の先頭と末尾に出た**（F-57-V の効果を確認）。ただし引数は無視され、結果 97,297 字でファイル退避 | F-57 の再現。名指しは届くようになったが、bybridge に予算引数が無いこと自体は残る |
+
+**新しい様式**: なし（すべて再現）。
+
+## 2026-10-20（火・seihai r02/F2 GP）の観測
+
+テーマ（英語で投入）: 生成器も seed 方針も変えずに毎週回す GP の個体群が週で 4〜5 倍揺れ、固定バーの通過数が 43 → 2 と跳ぶ。現職が無いので 1 週だけ通った 1 本が着席しうる。着席に「再実行でも通る（再現性）」を要求すべきか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 10） | include 5 語（genetic programming / seed variance / replicability / trading strategy / independent runs）・**scope_field を自由文 "genetic programming trading" にした（呼び手側の選択）** | 計器の申告＝**trading strategy 以外の 4 語はプール 0 件（README を含め）**。上位 4 件は jesse・OctoBot・Solana MEV ボット・Packt 教材（関連度 0.17〜0.2）。関連度警告あり | **F-14 の再現（13 回目）**。収穫ゼロ。先週は汎用の進化計算ライブラリが上位だったが、今週は "genetic programming" もプールに入らず暗号資産ボットだけが残った |
+| **byserendipity**（raw_only・facet 3・`materials_lean`・`materials_max_chars` 45,000） | 進化計算の run 間分散／HTS のヒット確認（重複スクリーン）／GWAS の再現と winner's curse | 返却 43/39/39 → ホーム除外・重複後 26/26/26 → 提出 60。結果 42.6k 字でインライン。抄録は 296 字に自動短縮 | 3 facet とも構造どおり。F-50b の予算指定は期待どおり動いた |
+| **delegate_finalize**（byserendipity・60 件全件） | 1 回目は 4 件に散文だけ付けて材料を echo し忘れ（呼び手側の漏れ）→ 照合不能 5 件・題が空で描画。2 回目に 5 件の材料を全欄 echo（`no_history`）| anomaly 6・hollow 39・通過 4・**出力 4**（IDR 0.60／HTS 単複 0.59／GWAS winner's curse 0.58／不偏 OR 推定 0.54）。**接地照合失敗 0**。percentile 0.542（母数 15）| 本日の主収穫。警告文が「引用の誤りではなく材料欄の欠落」と原因を名指しし、同じ引用のまま再投で成立した（F-19 系の警告が有効に働いた） |
+| **bybridge**（materials・`materials_lean`・抄録 300 字） | home=Economics, Econometrics and Finance・include 5 語（genetic programming / trading rules / backtest overfitting / data snooping / replication） | 結果 60.0k 字でファイル退避（`materials_max_chars` は bybridge に渡していない）。シード名簿 Finance 9／AI 8／Mgmt Sci 3。**語彙レッグ主題一致 0/9 = 0%**（語彙側＝Financial Markets 9、semantic 側＝Metaheuristic 9・EA 5）。**最頻 bridge＝Holland "Adaptation in Natural and Artificial Systems"（被引用 47,224）・全体 27%／上位 10 件 30%**・通行 bridge 19 本。交差候補の Field は Engineering 19／Mathematics 12（水文モデル較正・電磁気の GA・会計の資本コスト等）| 最頻 bridge は**主題の基礎文献（GA の原典）だが巨大ハブ**。上位 10 件占有 30% は旧様式（100%）ではない |
+| **delegate_finalize**（bybridge・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 49・hollow 8・通過 1・**出力 1**（Gupta 1965 subset selection・0.40）。分位の母数 3 件 | **「上位は多様化したが収穫はほぼゼロ」の新様式側**。60 件中 49 件は題で分野外と判定（水文・電磁気・会計・交通）＝**呼び手が 49 件に一律の低点を付けた**ため分位の母数が 3 になり、F-15 の「件数で決まる」状態を自分で作った。拾えた 1 件と次点（best-arm identification・MCB）は Ranking & Selection 文献で、主題の Topic ではなく semantic 側の祖先（選択・トーナメント選択）を経由していた |
+
+追加の観測 1 点:
+
+- **bybridge の 2 本のレッグが別の系統を運んだ**: 語彙側（売買ルール・株式アノマリー）由来の交差候補は企業金融・会計、semantic 側（選択・トーナメント選択）由来は R&S 統計と工学の GA 応用。本日の収穫（選択と順位付けの規則）は semantic 側だけから来た。10/06・10/13・10/20 の r02 3 回で、語彙側の経路から本テーマ族に効く交差候補が出たことは無い。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
