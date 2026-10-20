@@ -2853,6 +2853,19 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 
 > **contra 側注記（2026-10-20 失敗対処デー）**: 10-19・10-20 とも新しい様式なし、の判定に同意。再現として記録: byrepo の F-14（11・13 回目。核の語がプール 0 件＝F-41-I の計器どおり。F-41-R／F-43-M／F-29-W で試した処方はいずれも返る上位を変えなかった）、bybridge の「シードは主題どおり・交差候補は主題外か同分野」（5 回目）、bybridge の `materials_max_chars` 無視（F-57。名指しが先頭に出たのは F-57-V の効果の確認）。10-20 の「語彙レッグから収穫が出ない」は F-66 に採番（実装なし）。10-20 の bybridge finalize で分位の母数が 3 になったのは、呼び手が 49 件を anomaly（purpose_sim 下限未満）にしたためで、F-15-I の「母数 N 件しかない」の警告どおり。今日の対処（F-61-R の facet による出力枠の多様化）は byserendipity の lean 材料だけが対象で、bybridge には効かない。
 
+## 2026-10-21（水・seihai r03/F4 決定木）の観測
+
+テーマ（英語で投入）: 比較腕の無い単独のチャンピオン（週 10 取引前後）が 2 週連続で負けた。選抜で上に偏ったバックテスト期待値を基準に、衰えと偶然を小標本で見分ける逐次監視はどう作るか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 10） | include 5 語（cusum / changepoint / strategy decay / sequential test / trading monitoring）・scope_field 自由文 "quantitative finance" | 計器の申告＝**strategy decay・sequential test・trading monitoring は README を含め 0 件**、cusum は README のみ 2 件。上位 4 件は Kats・timemachines・bayesian_changepoint_detection・momentum-transformer（関連度 0.2〜0.4） | **F-14 の再現**。汎用の変化点検出ライブラリだけで、「単独戦略のライブ監視」の実装は 0 件。収穫ゼロ扱い |
+| **byserendipity**（raw_only・facet 3・lean・`materials_max_chars` 45,000） | 外科の RA-CUSUM／Phase I 推定誤差の SPC／野生動物の減少検出 | facet 1・2 は返却 40/44 → 提出 30/30。**facet 3 は OpenAlex 429 でリトライ上限（F-28）**＝別呼び出しで単独再投 → 返却 31 → 提出 22 | 429 は quota 側。単独再投で回復した（手順どおり） |
+| **delegate_finalize**（byserendipity 1 回目・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 0・hollow 43・通過 5・**出力 2**（CRAM の検出までの死亡数 0.37／推定パラメータ下の CUSUM 0.35）。percentile 0.332（母数 17）。接地照合失敗 0 | facet 1・2 は Near/Far とも同じ SPC 文献群に収束し、距離が 0.5〜0.65 に詰まった（呼び手の facet 設計の問題＝2 枚が同じ下位分野） |
+| **delegate_finalize**（byserendipity 2 回目・22 件全件） | 5 件に材料 echo | hollow 13・通過 2・**出力 2**（site selection bias＝選ばれた峰からの平均回帰 0.55／減少判定の誤警報率 0.49）。percentile 0.492（母数 9＝F-15 の件数律速を名指し） | **本日の主収穫**。Very Far の facet が仮説 2（選抜バイアスで基準が高すぎる）を最も直接に運んだ |
+| **bybridge**（materials・lean・`materials_max_chars` を誤って渡した） | include 5 語（backtest overfitting / alpha decay / trading rule profitability / out-of-sample performance / Sharpe ratio） | **結果 93.4k 字でファイル退避**（F-57: `materials_max_chars` は無視と先頭で名指し）。シード 17 件は Finance 17/17・主題どおり（PBO・DSR・Pseudo-Mathematics）・語彙レッグ主題一致 10/11。**最頻 bridge＝Fama-French 1993（被引用 26,584）・全体 38%／上位 10 件 40%**。通行 bridge 28 本。交差候補 60 件の Topic は CSR Reporting 10／Corporate Finance 8／Risk & Portfolio 7／Stock Forecasting 7 | 最頻 bridge は主題ドメインの基礎文献（旧様式の分野外ハブではない）が、**それを引用する側は ESG・企業統治・会計**＝主題外 |
+| **delegate_finalize**（bybridge・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 41・hollow 8・通過 3・**出力 1（fallback）**（P-curve 0.29）。percentile 0.248（母数 11） | **「シードは主題どおり・交差候補は主題外」の 6 回目**。主題外と判定した 29 件のうち **24 件は lexical 経路だけ**、効いた 6 件（Giacomini-White・Hansen SPA・Romano-Wolf・P-curve・Nonstandard Errors・有意水準の決定理論）は**全部 both 経路**＝**F-66 の 4 回目（r03 では初）**。なお呼び手は主題外 41 件に一律 0.10 を付け、分位の母数を自分で 11 に縮めた（10/20 と同じ） |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
