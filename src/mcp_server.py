@@ -472,6 +472,9 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             # F-52: the same paper under another OpenAlex id, merged on its abstract.
             + (f"（抄録が同文の別レコード {r['same_abstract']} 件を統合）"
                if r.get("same_abstract") else "")
+            # F-67: the same title up to punctuation, merged the same way.
+            + (f"（題が句読点を除いて同じ別レコード {r['same_title']} 件を統合）"
+               if r.get("same_title") else "")
         )
         if not sel:
             emptied.append(dom)

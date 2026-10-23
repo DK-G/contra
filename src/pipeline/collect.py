@@ -1085,9 +1085,11 @@ def _collect_track_b_semantic(
         return []
 
     seen_ids: Set[str] = set(used_ids or set())
-    seen_titles: Set[str] = set(used_titles or set())
+    # F-67: titles are compared as punctuation-free keys below, so the history titles are too.
+    seen_titles: Set[str] = {_norm_title_key(t) for t in (used_titles or set())}
     seen_dois: Set[str] = set(used_dois or set())
     seen_abstracts: Dict[str, Any] = {}   # abstract key -> (bucket, position) of the kept record
+    seen_title_at: Dict[str, Any] = {}    # title key -> (bucket, position) of the kept record
     buckets: List[List[Work]] = []
     stats: List[Dict[str, Any]] = []
     valid_facets = 0
@@ -1096,7 +1098,8 @@ def _collect_track_b_semantic(
         client_cfg.gateway_patience_sec = max(0.0, cfg.facet_gateway_patience_sec)
     for facet_no, facet in enumerate(spec.facets, 1):
         rec: Dict[str, Any] = {"domain": facet.domain, "status": "ok",
-                               "returned": 0, "kept": 0, "selected": 0, "same_abstract": 0}
+                               "returned": 0, "kept": 0, "selected": 0, "same_abstract": 0,
+                               "same_title": 0}
         stats.append(rec)
         if not cfg.facet_fair_share and sum(len(b) for b in buckets) >= max_count:
             # Legacy behaviour kept behind the flag: stop once the cap is full (facet unqueried).
@@ -1149,7 +1152,23 @@ def _collect_track_b_semantic(
         valid_facets += 1
         bucket: List[Work] = []
         for w in exclude_home_field(raw, home_field_ids):
-            norm_title = _norm_title(w.title)
+            # F-67 (survey 2026-10-22): a paper and its conference abstract came back as
+            # "Gaze behavior as a visual cue to animacy." and the same title without the period.
+            # Compared without punctuation here only; the history keys keep _norm_title as is.
+            norm_title = _norm_title_key(_norm_title(w.title))
+            held_at = seen_title_at.get(norm_title) if norm_title else None
+            if held_at is not None and w.id not in seen_ids and w.abstract:
+                # Same title as a kept record: one slot, held by the better record (as F-52).
+                # The first-found rule let a DOI-less repository copy keep the slot.
+                rec["same_title"] += 1
+                held_bucket, pos = held_at
+                held = held_bucket[pos]
+                if _record_standing(w) > _record_standing(held):
+                    seen_ids.add(w.id)
+                    w.source_meta = {**(w.source_meta or {}), "serendipity_facet": (
+                        held.source_meta or {}).get("serendipity_facet", f"[{facet_no}] {facet.domain}")}
+                    held_bucket[pos] = w
+                continue
             norm_doi = _norm_doi(w.doi)
             if (w.id not in seen_ids and w.abstract
                     and not (norm_title and norm_title in seen_titles)
@@ -1177,6 +1196,8 @@ def _collect_track_b_semantic(
                     continue
                 if abs_key:
                     seen_abstracts[abs_key] = (bucket, len(bucket))
+                if norm_title:
+                    seen_title_at[norm_title] = (bucket, len(bucket))
                 bucket.append(w)
         rec["kept"] = len(bucket)
         # F-64 (survey 2026-10-17): a facet can come back from a different field than the one it

@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-23（CL-0153） 題が句読点だけ違う別レコードをまとめる（F-67）
+
+### 概要
+* `src/pipeline/collect.py`: semantic 収集の題の照合を句読点抜きの鍵に・題が一致したら DOI のある方が枠を持つ・履歴の題も同じ鍵で照合。
+* `src/mcp_server.py`: facet 別内訳に統合件数。
+* `tests/test_same_abstract_dedup.py`: 新規 3 件。659 pass。
+* 実測（API なし）: 保存結果 19 本・1,088 件に該当 5 組（5 組とも同じ文献）。キャッシュ再生の 55 件は該当なし。
+* `docs/field_observations_seihai.md`: F-67・F-67-R。
+
+---
+
 ## 2026-10-23（CL-0152） 語彙側だけの bridge を走査の後ろへ（F-66）
 
 ### 概要

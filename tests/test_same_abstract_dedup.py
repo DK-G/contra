@@ -153,3 +153,71 @@ def test_leading_abstract_label_does_not_split_the_key():
         assert _abstract_key(label + body.format(t="tech-niques")) == _abstract_key(journal)
     # a word that merely starts with the label is not a label
     assert _abstract_key("Abstraction " + journal) != _abstract_key(journal)
+
+
+# --- F-67: titles that differ only in punctuation are the same paper ------------------------
+
+def _run_titles(monkeypatch, page, used_titles=None):
+    client = _Pages([page])
+
+    class _FakeCollector:
+        def __init__(self, cfg=None):
+            self.client = client
+    monkeypatch.setattr(collect_mod, "Collector", _FakeCollector)
+    theme = ThemeInput(
+        theme_overview="o" * 50, goal="g", why_problem="w", approach_type="design",
+        assumptions=[], scope=Scope(field="computer science", scale="micro", time_range="no_limit"),
+        keywords=Keywords(include=["alpha"], exclude=[]))
+    spec = SerendipitySpec("struct", [SerendipityFacet("facet0", "a" * 40)])
+    return collect_track_b_from_spec(theme, spec, CollectConfig(), max_count=60,
+                                     home_field_ids=["17"], used_titles=used_titles)
+
+
+def test_a_trailing_period_does_not_make_a_second_paper(monkeypatch):
+    # survey 2026-10-22: W4290804254 (J Exp Psychol Gen) and W4311801423 (Journal of Vision),
+    # different DOIs, different abstracts, titles differing by the final period only
+    page = [
+        _raw("W4290804254", "Gaze behavior as a visual cue to animacy.", _abstract(1),
+             doi="https://doi.org/10.1037/xge0001168"),
+        _raw("W4311801423", "Gaze behavior as a visual cue to animacy", _abstract(2),
+             doi="https://doi.org/10.1167/jov.22.14.3242"),
+        _raw("W3", "Gaze behavior as a visual cue to intention", _abstract(3)),
+    ] + _pad("P")
+    ids = [w.id for w in _run_titles(monkeypatch, page)]
+    assert "W4290804254" in ids and "W4311801423" not in ids and "W3" in ids
+
+
+def test_history_titles_still_exclude_after_the_key_change(monkeypatch):
+    # history stores _norm_title (lowercase, punctuation kept); a stored "x." must still hit
+    page = [_raw("W9", "Gaze behavior as a visual cue to animacy.", _abstract(1))] + _pad("P")
+    ids = [w.id for w in _run_titles(
+        monkeypatch, page, used_titles={"gaze behavior as a visual cue to animacy."})]
+    assert "W9" not in ids
+
+
+def test_the_record_with_a_doi_keeps_the_slot_whichever_came_first(monkeypatch):
+    # saved results 2026-09..10: W1609747439 (CDC 2000, DOI) and a DOI-less 2015 copy whose
+    # title ends in "*"; here the copy comes first
+    page = [
+        _raw("W7096280057", "Hierarchical hysteresis switching*", _abstract(1)),
+        _raw("W1609747439", "Hierarchical hysteresis switching", _abstract(2),
+             doi="https://doi.org/10.1109/cdc.2000.912812", cited=11),
+    ] + _pad("P")
+    client = _Pages([page])
+
+    class _FakeCollector:
+        def __init__(self, cfg=None):
+            self.client = client
+    monkeypatch.setattr(collect_mod, "Collector", _FakeCollector)
+    theme = ThemeInput(
+        theme_overview="o" * 50, goal="g", why_problem="w", approach_type="design",
+        assumptions=[], scope=Scope(field="computer science", scale="micro", time_range="no_limit"),
+        keywords=Keywords(include=["alpha"], exclude=[]))
+    stats: List[Dict[str, Any]] = []
+    out = collect_track_b_from_spec(theme, SerendipitySpec("s", [SerendipityFacet("f0", "a" * 40)]),
+                                    CollectConfig(), max_count=60, home_field_ids=["17"],
+                                    stats_out=stats)
+    ids = [w.id for w in out]
+    assert ids[0] == "W1609747439" and "W7096280057" not in ids
+    assert stats[0]["same_title"] == 1
+    assert "題が句読点を除いて同じ別レコード 1 件を統合" in _facet_breakdown_line(stats)
