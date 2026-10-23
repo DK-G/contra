@@ -2950,3 +2950,17 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
+
+## 2026-10-24（土・seihai 週次指針）の観測
+
+テーマ（英語で投入）: 選別バー（2 倍摩擦 net>0・n≥50・CPCV 正の割合≥0.6）の通過 1 回は証拠か。陰性対照（信号を壊したデータで同じ生成器を回す）が無く、seed 由来と窓由来の揺れも分けられない。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 20） | include backtest / permutation test / overfitting / cross-validation / null model | 上位 4 件は finlab_crypto 65.1・jesse 63.9・tradingview-mcp 51.8・machine-learning-for-trading 50.3。`null model` は README を含め **0 件**、`permutation test` は README のみ 3 件・`cross-validation` は README のみ 10 件 | **F-14 の再現**。収穫ゼロ（陰性対照・帰無の通過率を掲げるリポジトリはプールに無い） |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | GWAS／HTS の置換閾値・プロテオミクスの target-decoy・分析化学のブランクと検出限界 | 返却 40/46/43 → 提出 21/21/18（60 件・41.4k 字でインライン・抄録末尾 268 字＝F-60-R が働いた） | 正常。3 facet とも主題にまっすぐ当たった |
+| **delegate_finalize**（byserendipity・60 件全件） | 6 件に材料 echo・54 件は点数のみ | anomaly 0・hollow 0・通過 18・**出力 5**（Bias in FDR estimation 0.55／Artificial decoy libraries 0.52／HTS empirical null 0.48／Decoy databases 0.47／Procedural blanks 0.46）。**接地照合失敗 0** | **本日の主収穫** |
+| **bybridge**（materials・lean・**`materials_max_chars` をまた渡した**） | include backtest overfitting / data snooping / reality check / multiple testing / trading rules | 101k 字でファイル退避（F-57 の名指しは先頭に出た。呼び手の誤りは 4 回目）。シードは主題どおり（PBO・DSR・Anomalies and False Rejections・Pseudo-Mathematics）。**最頻 bridge は Benjamini–Hochberg（主題の基礎文献）・上位 10 件占有 30%**・実使用 bridge 32 本 | 旧様式ではない。**交差候補の上位 5 件は主題そのもの**（Stepwise Multiple Testing／MCS and backtest overfitting／Reality Check for Data Snooping。Field が Mathematics なのでホーム除外を通った＝F-32 の Field 版） |
+| **delegate_finalize**（bybridge・60 件全件） | 6 件に材料 echo・54 件は点数のみ | anomaly 42（ESG・CSR・会計・遺伝子発現ツール）・通過 5・**出力 1（fallback・Mechanical Turk 再現実験 0.30）**。**Reality Check for Data Snooping は「近いが有用」（F-22）で落選** | 「シードは主題どおり・交差候補は主題外」の 9 回目。ただし今回は**主題外ではなく主題内の古典が上位に来て距離で落ちた**＝新しい形（候補の主題適合は改善、遠さは無い） |
+
+**新しい様式**: bybridge の交差候補の上位が「主題の古典（Field ラベルだけ別）」になった 1 点。他は再現。呼び手の誤り（bybridge へ `materials_max_chars`）は 4 回目＝seihai 側の手順メモで止める。
