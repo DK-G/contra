@@ -243,8 +243,10 @@ def test_byserendipity_size_budget_picks_the_abstract_head(facet_pages):
     floor = _fresh_call(facet_pages, _serendipity_args(
         materials_lean=True, materials_abstract_chars=200))["content"][0]["text"]
     budget = (len(lean) + len(floor)) // 2                 # reachable only by cutting abstracts
+    # the fit itself, on the head (F-60 made the tail the default; it is tested below)
     text = _fresh_call(facet_pages, _serendipity_args(
-        materials_lean=True, materials_max_chars=budget))["content"][0]["text"]
+        materials_lean=True, materials_max_chars=budget,
+        materials_abstract_part="head"))["content"][0]["text"]
     mats = _materials(text)
     assert len(text) <= budget and len(mats) == 60
     heads = {len(m["abstract"]) for m in mats}
@@ -258,9 +260,45 @@ def test_byserendipity_size_budget_picks_the_abstract_head(facet_pages):
     assert "抄録は切っていません" in roomy and _materials(roomy) == _materials(full)
 
 
+def test_byserendipity_size_budget_keeps_the_abstract_tail_unless_head_is_asked(facet_pages):
+    """F-60 (survey 2026-10-14..10-22, five times): a ~290-char head was the aim/background, so
+    the caller re-fetched the top abstracts. Under the budget contra now keeps the end."""
+    lean = _fresh_call(facet_pages, _serendipity_args(materials_lean=True))["content"][0]["text"]
+    floor = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_abstract_chars=200))["content"][0]["text"]
+    budget = (len(lean) + len(floor)) // 2
+    full = {m["id"]: m["abstract"] for m in _materials(lean)}
+    tail = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_max_chars=budget))["content"][0]["text"]
+    assert all(full[m["id"]].endswith(m["abstract"]) for m in _materials(tail))
+    assert len(tail) <= budget and len(_materials(tail)) == 60
+    assert "抄録の末尾を" in tail and "materials_abstract_part" in tail
+    head = _fresh_call(facet_pages, _serendipity_args(
+        materials_lean=True, materials_max_chars=budget,
+        materials_abstract_part="head"))["content"][0]["text"]
+    assert all(full[m["id"]].startswith(m["abstract"]) for m in _materials(head))
+    assert "抄録の先頭を" in head and len(head) <= budget
+    # without a budget an explicit cut stays a head, as documented
+    cut = _fresh_call(facet_pages, _serendipity_args(
+        materials_abstract_chars=300))["content"][0]["text"]
+    assert all(full[m["id"]].startswith(m["abstract"]) for m in _materials(cut))
+    assert "受け付けません" not in head                       # the new argument is declared (F-57)
+
+
+def test_abstract_tail_starts_at_a_sentence_only_near_the_window_start():
+    from src.pipeline.delegate import abstract_tail
+    text = "Aim to study x. " + "We find that y drives z. " * 4
+    kept = abstract_tail(text, 60)
+    assert kept.startswith("We find") and text.endswith(kept) and len(kept) > 48
+    long_sentence = "Background words. " + "a" * 200 + ". Short end."
+    kept = abstract_tail(long_sentence, 100)
+    assert len(kept) == 100 and long_sentence.endswith(kept)   # boundary too late: no snap
+    assert abstract_tail("short", 100) == "short"
+
+
 def test_byserendipity_size_budget_that_cannot_be_met_says_so_and_keeps_every_row(facet_pages):
     text = _fresh_call(facet_pages, _serendipity_args(
-        materials_max_chars=5000))["content"][0]["text"]
+        materials_max_chars=5000, materials_abstract_part="head"))["content"][0]["text"]
     mats = _materials(text)
     assert len(mats) == 60 and {len(m["abstract"]) for m in mats} == {200}
     assert "⚠ 大きさの予算 (materials_max_chars 5,000 字) に収まりません" in text
@@ -268,7 +306,8 @@ def test_byserendipity_size_budget_that_cannot_be_met_says_so_and_keeps_every_ro
     # an explicit head is an upper bound the budget never raises
     capped = _fresh_call(facet_pages, _serendipity_args(
         materials_abstract_chars=300, materials_max_chars=10 ** 7))["content"][0]["text"]
-    assert {len(m["abstract"]) for m in _materials(capped)} == {300}
+    lens = {len(m["abstract"]) for m in _materials(capped)}
+    assert max(lens) <= 300 and min(lens) > 270            # tail, snapped to a word start
 
 
 def test_size_budget_is_offered_on_byserendipity_only_for_now():

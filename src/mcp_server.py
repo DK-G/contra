@@ -336,6 +336,22 @@ def _materials_max_chars_prop() -> Dict[str, Any]:
         "upper bound on the head.")}
 
 
+def _materials_abstract_part_prop() -> Dict[str, Any]:
+    return {"type": "string", "enum": ["head", "tail"], "description": (
+        "Which end of a cut abstract to keep (F-60). Default `tail` under materials_max_chars "
+        "(a ~290-char head is mostly the aim/background; measured 2026-10-23, the passage callers "
+        "quoted from full abstracts survived a 290-char tail 74/238 vs a head 47/238), `head` "
+        "otherwise. The tail starts at a sentence when one starts in its first fifth. Grounding "
+        "is checked against what you echo, so source_quote must come from the returned part.")}
+
+
+def _materials_abstract_part(args: Dict[str, Any], budget: Optional[int]) -> str:
+    part = str(args.get("materials_abstract_part") or "").strip().lower()
+    if part in ("head", "tail"):
+        return part
+    return "tail" if budget else "head"
+
+
 def _materials_budget(args: Dict[str, Any]) -> Optional[int]:
     try:
         n = int(args.get("materials_max_chars") or 0)
@@ -368,7 +384,8 @@ def _fit_abstract_cut(render, budget: int, *, upper: int) -> "tuple[Optional[int
 
 
 def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
-                         abstract_cut: Optional[int], budget_note: str = "") -> str:
+                         abstract_cut: Optional[int], budget_note: str = "",
+                         abstract_part: str = "head") -> str:
     """How large the materials JSON is and which fields make it so (F-50).
 
     On 2026-10-10 three results (178k / 223k / 282k chars) exceeded the caller's tool-result
@@ -400,9 +417,14 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
                  "（delegate_finalize が出力枠の多様化にだけ使う欄）。")
     cut_n = sum(1 for m in materials if "abstract_full_chars" in m)
     if abstract_cut:
-        line += (f"抄録は先頭 {abstract_cut:,} 字まで（materials_abstract_chars）＝{cut_n} 件を"
+        where = ("末尾" if abstract_part == "tail" else "先頭")
+        line += (f"抄録は{where} {abstract_cut:,} 字まで＝{cut_n} 件を"
                  "切りました（abstract_full_chars が元の長さ）。source_quote は返した範囲から"
                  "取ってください。")
+        if abstract_part == "tail":
+            line += ("末尾を残したのは、先頭はほとんどが目的・背景で、呼び手が全文から引いた"
+                     "箇所が末尾に残る方が多かったためです（F-60。文の切れ目から始めます。"
+                     "先頭が要るときは materials_abstract_part:\"head\"）。")
     else:
         line += "materials_abstract_chars:N で抄録を先頭 N 字に切れます。"
     line += budget_note
@@ -602,6 +624,7 @@ class StdinMcpServer:
                         "materials_lean": _materials_lean_prop(),
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "materials_max_chars": _materials_max_chars_prop(),
+                        "materials_abstract_part": _materials_abstract_part_prop(),
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
@@ -961,13 +984,15 @@ class StdinMcpServer:
         # F-50: `concepts` repeats the names in concept_tags and finalize never reads it.
         lean, abstract_cut = _materials_options(args)
         budget = _materials_budget(args)
+        part = _materials_abstract_part(args, budget)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
 
         def _build(cut: Optional[int]) -> List[Dict[str, Any]]:
             out = []
             for w in works:
                 m = material_from_work(w, include_references=False, include_concept_names=False,
-                                       include_concept_tags=not lean, abstract_max_chars=cut)
+                                       include_concept_tags=not lean, abstract_max_chars=cut,
+                                       abstract_part=part)
                 facet = (w.source_meta or {}).get("serendipity_facet")
                 out.append({"id": m.pop("id"), "facet": facet, **m} if facet else m)
             return out
@@ -986,7 +1011,7 @@ class StdinMcpServer:
                 "必ず添えてください（各10字以上）。抜粋できない主張は書かないでください——contra が決定論的に"
                 "照合し、照合失敗の散文は棄却されます（スコアは保持）。"
                 + "\n" + _materials_size_note(materials, lean=lean, abstract_cut=cut,
-                                              budget_note=budget_note)
+                                              budget_note=budget_note, abstract_part=part)
                 + ("\n" + _short_ids_line(materials) if materials else "")
                 + ("\n" + _field_ids_line(works) if works and home_ids else "")
             )
@@ -1010,7 +1035,8 @@ class StdinMcpServer:
             if fits:
                 budget_note = (
                     f"\n- 大きさの予算 (materials_max_chars {budget:,} 字): 収まりました＝"
-                    + (f"抄録の先頭を {abstract_cut:,} 字にしました" if abstract_cut
+                    + (f"抄録の{'末尾' if part == 'tail' else '先頭'}を {abstract_cut:,} 字にしました"
+                       if abstract_cut
                        else "抄録は切っていません")
                     + "（候補は全件返しています）。"
                 )

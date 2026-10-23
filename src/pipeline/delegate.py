@@ -14,6 +14,7 @@ so they unit-test without network or LLM access.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace as dc_replace
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -194,6 +195,7 @@ def material_from_work(
     include_concept_names: bool = True,
     include_concept_tags: bool = True,
     abstract_max_chars: Optional[int] = None,
+    abstract_part: str = "head",
 ) -> Dict[str, Any]:
     """Serialize a Work into the candidate-material dict the agent scores and echoes back.
 
@@ -213,6 +215,7 @@ def material_from_work(
     and a material with neither goes by score.
     ``abstract_max_chars`` keeps the head of a longer abstract and records the original length
     under ``abstract_full_chars``; grounding is checked against the echoed (cut) text.
+    ``abstract_part="tail"`` keeps the end instead (F-60, see :func:`abstract_tail`).
     """
     abstract = work.abstract
     full_chars = len(abstract) if isinstance(abstract, str) else 0
@@ -220,7 +223,8 @@ def material_from_work(
     material = {
         "id": work.id,
         "title": work.title,
-        "abstract": abstract[:abstract_max_chars] if cut else abstract,
+        "abstract": ((abstract_tail(abstract, abstract_max_chars) if abstract_part == "tail"
+                      else abstract[:abstract_max_chars]) if cut else abstract),
         "year": work.year,
         "venue": work.venue,
         "doi": work.doi,
@@ -248,6 +252,31 @@ def material_from_work(
     if empty:
         material[UPSTREAM_EMPTY_KEY] = empty
     return material
+
+
+# A sentence boundary: end punctuation, whitespace, then something that can open a sentence.
+_SENTENCE_START = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(\"'])")
+
+
+def abstract_tail(abstract: str, max_chars: int) -> str:
+    """The last ``max_chars`` of an abstract, starting at a sentence when one starts early (F-60).
+
+    Under a size budget of ~290 chars per abstract, the head is mostly the aim/background
+    ("Abstract Aim ..."), and the survey re-fetched the top 6-13 abstracts five times
+    (2026-10-14..10-22). Measured 2026-10-23 on 238 source_quotes that callers took from uncut
+    abstracts (48 sessions): the quoted passage survives a 290-char head in 47 and a 290-char
+    tail in 74 (260: 39 vs 66; 380: 71 vs 97). The window snaps forward to the first sentence
+    start only within its first fifth, which costs no measured quote.
+    """
+    if len(abstract) <= max_chars:
+        return abstract
+    tail = abstract[-max_chars:]
+    m = _SENTENCE_START.search(tail)
+    if m and m.end() <= len(tail) // 5:
+        return tail[m.end():]
+    # no sentence starts early ("used.It", "offspring.6 It"): at least do not open mid-word
+    space = tail.find(" ", 0, 30)
+    return tail[space + 1:] if space >= 0 and not abstract[-max_chars - 1].isspace() else tail
 
 
 def score_row_from_material(material: Dict[str, Any]) -> Dict[str, Any]:

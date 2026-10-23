@@ -7,6 +7,17 @@
 
 ---
 
+## 2026-10-23（CL-0151） 予算のときは抄録の末尾を残す（F-60）
+
+### 概要
+* `src/pipeline/delegate.py`: `abstract_tail`・`material_from_work(abstract_part=...)`。
+* `src/mcp_server.py`: byserendipity に `materials_abstract_part`（既定は予算ありで `tail`・無しで `head`）。予算と大きさの行の文言。
+* `tests/test_raw_output_legibility.py`: 新規 2 件・F-50b の既存 2 件は `head` を明示。653 pass。
+* 実測（API なし）: 呼び手が全文から引いた 238 件のうち 290 字で残る引用 先頭 47 → 末尾 74。キャッシュ再生で結論の手掛かり語を含む抄録 5 → 17／46。
+* `docs/field_observations_seihai.md`: F-60-R。`docs/agent_rules/byserendipity.md` に 1 文。
+
+---
+
 ## 2026-10-20（CL-0150） 書かれなかった注意点は concern を写さず入力サマリを指す（F-54-C）
 
 ### 概要
