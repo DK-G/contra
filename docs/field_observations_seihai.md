@@ -2945,6 +2945,8 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **bybridge**（materials・lean・**`materials_max_chars` をまた誤って渡した**） | include strategy decay / live trading performance / sequential monitoring / backtest overfitting / stopping rule | 84k 字でファイル退避（F-57 の名指しは見出しの先頭に出た＝F-57-V は働いた。呼び手の誤りは 3 回目）。シードは主題どおり（When do systematic strategies decay?・stop-loss の 3 本）。**最頻 bridge は Are Investors Reluctant to Realize Their Losses?（被引用 3,718・主題ドメインの文献）・上位 10 件占有 40%**・実使用 bridge 18 本 | 旧様式ではない。交差候補 60 件の主分野は Decision Sciences 27（行動経済 14）・会計/ガバナンス 16・ML 7。行動経済の disposition effect 系は主題の構造（損失の実現を先送りする）に当たるが、距離が 0.4 台で分位ゲート 0.2 の手前で落ちた |
 | **delegate_finalize**（bybridge・60 件全件） | 3 件に材料 echo・57 件は点数のみ | anomaly 52・通過 1・**出力 1（fallback）**（Contract Design and Self-Control 0.24） | 「シードは主題どおり・交差候補はほぼ主題外」の 8 回目。anomaly 52 は呼び手の採点（主題外を 0.05〜0.17 で付けた）による。**呼び手の誤り**: 抄録が上流で空の 2 件を `upstream_empty` なしで echo した（F-58 の再発） |
 
+> **contra 側注記（2026-10-23 失敗対処デー）**: 10-21〜10-23 とも新しい様式なし、の判定に同意。再現として記録: byrepo の F-14（10-21・10-23。10-23 の flagger は「README の一致だけで関連度 0.2」＝F-48 の形）、bybridge の「シードは主題どおり・交差候補は主題外」（6〜8 回目）、F-66 の 4 回目（10-21）、bybridge へ `materials_max_chars` を渡す呼び手の誤り（F-57・3 回連続。名指しは先頭に出ている＝seihai 側の手順メモの問題）、F-58 の再発（10-23・抄録が上流で空の 2 件を `upstream_empty` なしで echo）、10-21 の byserendipity facet 3 の 429（F-28・単独再投で回復）。**今日の変更で明日から seihai に届くもの**: (1) byserendipity の抄録が予算のとき**末尾**になる（F-60-R。`source_quote` は返った範囲から取る）、(2) bybridge の交差候補から語彙側だけの経路がほぼ消える（F-66-R。診断に「走査の後ろへ」の 1 行）、(3) byserendipity で題が句読点だけ違う写しが 1 枠にまとまる（F-67-R）。(1)(2) が効いたかは seihai の採点で判定する（同じ段は次回まで変えない）。
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
