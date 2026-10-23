@@ -840,6 +840,25 @@ def candidate_route(work: Work, bridge_route: Dict[str, str]) -> str:
     return next(iter(sides)) if len(sides) == 1 else ROUTE_BOTH
 
 
+def lexical_bridges_last(
+    seeds: Sequence[Work], pool: Sequence[str], semantic_ids: Iterable[str],
+) -> "tuple[List[str], int]":
+    """The pool with the bridges that only lexical-leg seeds cite moved to the end (F-66).
+
+    The per-bridge scan walks the pool in order until 60 candidates are in, so this spends the
+    slots on bridges a semantic-leg seed also reaches first; the lexical-only ones still supply
+    the rest and the OR backfill. Measured 2026-10-23 on 15 seihai runs (10-06..10-22, every
+    theme family): the caller scored purpose_sim >= 0.5 on 2/166 lexical-only candidates (1%,
+    none also distant) vs 14/231 semantic-only and 21/503 both. Returns (pool, moved).
+    """
+    route = seed_routes(seeds, [], pool, semantic_ids).bridge_route
+    lexical = [b for b in pool if route.get(b) == ROUTE_LEXICAL]
+    if not lexical or not any(route.get(b) in (ROUTE_SEMANTIC, ROUTE_BOTH) for b in pool):
+        return list(pool), 0
+    moved = set(lexical)
+    return [b for b in pool if b not in moved] + lexical, len(lexical)
+
+
 def render_seed_routes(routes: SeedRoutes, *, lexical_topic_fraction: Optional[float] = None) -> str:
     """The F-46 lines. The warning has no threshold of its own: it fires when the F-13-L line
     already found the two legs' Topics apart AND candidates arrived through one leg's bridges
@@ -1111,6 +1130,7 @@ __all__ = [
     "filter_live_bridges",
     "render_diagnostics",
     "seed_routes",
+    "lexical_bridges_last",
     "candidate_route",
     "render_seed_routes",
     "head_window_note",

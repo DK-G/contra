@@ -35,6 +35,7 @@ from src.pipeline.bridge_diagnostics import (
     render_candidate_filing,
     render_seed_routes,
     seed_routes,
+    lexical_bridges_last,
     filter_live_bridges,
     render_diagnostics,
     resolve_work_labels,
@@ -694,6 +695,7 @@ class StdinMcpServer:
                         "materials_lean": _materials_lean_prop(),
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
+                        "lexical_bridges_last": {"type": "boolean", "description": "When the semantic seed leg ran, scan the bridges cited ONLY by lexical-leg seeds after the others, so the 60 cross-candidate slots go first to bridges a semantic-leg seed also reaches; the lexical-only bridges fill what is left (F-66: on 15 seihai runs the caller rated purpose_sim >= 0.5 on 2 of 166 lexical-only candidates). Set false for the old pool order.", "default": True},
                         "bridge_liveness": {"type": "boolean", "description": "Drop bridge-pool ids that OpenAlex no longer resolves (one batched call, fails open). referenced_works keeps the ids of merged/deleted records, and such a phantom is a bibliographic scar rather than a shared ancestor: the measured worst case, W4285719527, resolves to nothing yet sits in 4.9M reference lists and captured 59/60 candidates, collapsing the output into the globally most-cited works. Set false to restore the old behaviour.", "default": True},
                         "raw_only": {"type": "boolean", "description": "If true, skip LLM selection/generation and return the raw cross-domain candidate list (no API key needed beyond OpenAlex).", "default": False},
                         "structured": {"type": "boolean", "description": "When raw_only is true, format the deterministic bridge candidates into the full 4-part Track B document (key-free structured assembly; no LLM). The agent can then refine the prose/scores.", "default": False},
@@ -1390,6 +1392,12 @@ class StdinMcpServer:
                 bridges = live_bridges
                 bridge_pool = [b for b in bridge_pool if b in bridges]
 
+        # F-66: spend the per-bridge scan on bridges a semantic-leg seed also cites first.
+        lexical_moved = 0
+        if sem_report is not None and bool(args.get("lexical_bridges_last", True)):
+            bridge_pool, lexical_moved = lexical_bridges_last(
+                seeds, bridge_pool, {w.id for w in sem_seeds})
+
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
@@ -1450,6 +1458,11 @@ class StdinMcpServer:
                         routes,
                         lexical_topic_fraction=(align.get("legs") or {}).get("lexical_topic_fraction"),
                     ) + "\n" if routes is not None else "")
+                + (f"- 語彙側だけの bridge は走査の後ろへ (F-66): {lexical_moved} 本。交差候補の枠は "
+                   "semantic 側のシードも引用する bridge から先に埋め、残りを語彙側だけの bridge で"
+                   "埋めました（15 回の実地で、語彙側だけを経由した候補に呼び手が purpose_sim 0.5 "
+                   "以上を付けたのは 166 件中 2 件）。従来の順は lexical_bridges_last:false。\n"
+                   if lexical_moved else "")
                 + diag_line
             )
         if diagnostics:

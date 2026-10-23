@@ -166,3 +166,48 @@ def test_the_route_tag_survives_diagnostics_off(monkeypatch):
 def test_one_leg_means_no_split_is_claimed(monkeypatch):
     text = _run(monkeypatch, semantic=False)
     assert "bridge の供給元" not in text and "seed_route" not in text
+
+
+# --- F-66: lexical-only bridges are scanned last ----------------------------------------------
+
+def test_lexical_only_bridges_move_to_the_end_in_their_own_order():
+    from src.pipeline.bridge_diagnostics import lexical_bridges_last
+    seeds, _cands, bridges = _small()          # A1 A2 A3 lexical, B1 B2 semantic, X both
+    pool, moved = lexical_bridges_last(seeds, bridges, {"S1"})
+    assert moved == 3
+    assert pool == ["B1", "B2", "X", "ORPHAN", "A1", "A2", "A3"]
+    # nothing to reorder: no semantic seed, or no lexical-only bridge
+    assert lexical_bridges_last(seeds, bridges, set()) == (list(bridges), 0)
+    assert lexical_bridges_last(seeds, ["B1", "X"], {"S1"}) == (["B1", "X"], 0)
+
+
+def _scan_order(monkeypatch, **extra):
+    seen = {}
+
+    def _capture(*a, **k):
+        seen["bridges"] = list(k.get("bridges") or [])
+        return [_work("C1", ["A1"]), _work("C2", ["A2"]), _work("C3", ["B1"])]
+    _run(monkeypatch, semantic=True, **extra)            # installs the other fakes
+    monkeypatch.setattr(mcp_mod, "collect_citation_candidates", _capture)
+    from src.openalex import client as _client
+    _client.reset_run_stats()
+    text = mcp_mod.StdinMcpServer().handle_tool_call("bybridge_collect", {
+        "theme_overview": "t" * 200, "goal": "g", "why_problem": "w",
+        "approach_type": "application", "assumptions": ["a", "b"], "scope_field": "economics",
+        "no_history": True, "min_seeds": 0, "seed_count": 4, "bridge_count": 3,
+        "materials": True, **extra,
+    })["content"][0]["text"]
+    return seen["bridges"], text
+
+
+def test_the_scan_gets_the_semantic_bridges_first_and_says_so(monkeypatch):
+    order, text = _scan_order(monkeypatch)
+    assert set(order[:2]) == {"B1", "B2"} and set(order[2:]) == {"A1", "A2"}
+    assert "語彙側だけの bridge は走査の後ろへ (F-66): 2 本" in text
+    assert "受け付けません" not in text                    # the argument is declared (F-57)
+
+
+def test_lexical_bridges_last_false_keeps_the_pool_order(monkeypatch):
+    order, text = _scan_order(monkeypatch, lexical_bridges_last=False)
+    assert set(order[:2]) == {"A1", "A2"}
+    assert "走査の後ろへ" not in text

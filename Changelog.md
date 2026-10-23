@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-10-23（CL-0152） 語彙側だけの bridge を走査の後ろへ（F-66）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `lexical_bridges_last`。
+* `src/mcp_server.py`: bybridge が semantic レッグのあるときに適用・診断 1 行・引数 `lexical_bridges_last`（既定 true）。
+* `tests/test_bridge_seed_routes.py`: 新規 3 件。656 pass。
+* 集計（API なし）: 15 回・900 件で、語彙側だけの候補に呼び手が purpose_sim 0.5 以上を付けたのは 166 件中 2 件（semantic だけ 14/231・両方 21/503）。
+* 実測（実 API・$0.0151）: seihai 10-23 の引数で交差候補の経路 語彙だけ 13 → 0。抜けたのは汎用 ML の文献、入ったのは大半が企業統治（収穫増は未確認）。
+* `docs/field_observations_seihai.md`: F-66-R。
+
+---
+
 ## 2026-10-23（CL-0151） 予算のときは抄録の末尾を残す（F-60）
 
 ### 概要
