@@ -2878,6 +2878,18 @@ before 側は seihai の 8/27 の表を**文言まで再現**した。順位（1
 | **bybridge**（materials・lean・**`materials_max_chars` を再び誤って渡した**） | include 5 語（technical trading rules / data snooping / strategy search / multiple testing / backtest overfitting） | 84.7k 字でファイル退避（**F-57 の名指しは働いた**。呼び手の誤りの再発＝seihai 側の手順メモの問題）。シード 20 件は Finance 16/20・主題どおり（White Reality Check 系・Harvey-Liu-Zhu・Anomalies and False Rejections）。**最頻 bridge＝Fama-French 1993（被引用 26,589）・全体 28%／上位 10 件 20%**。通行 bridge 29 本。経路は both 58／lexical のみ 2 | 旧様式（共有 bridge 1 本）ではない |
 | **delegate_finalize**（bybridge・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 48・hollow 8・通過 0・**出力 1（fallback）**（Model Confidence Set 0.16）。percentile 0.2（母数 4） | **「シードは主題どおり・交差候補は主題外（ガバナンス・会計・ゲノミクス）」の 7 回目**。効いた候補（Romano-Wolf・Hansen SPA・Reality Check・MCS）は全部ホーム分野の多重検定文献＝距離が 0.2〜0.3 で、交差の価値が無い。**本日は F-66（lexical 経路だけが主題外）の形ではなかった**＝主題外 48 件も both 経路 |
 
+## 2026-10-23（金・seihai r05/F9 LLM）の観測
+
+テーマ（英語で投入）: 統計的停止規則が 4 週沈黙し、暦の後詰めは人間へ上げるだけ（応答期限なし）で、負けている挑戦腕が席を持ち続ける。既定動作（期限内に人間が覆さなければ止める）付きのエスカレーションをどう設計するか（H-12）。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 20・`keyword_fair_share`） | include auto-rollback / canary analysis / kill switch / dead man switch / trading bot | 上位 5 件は freqtrade・binance-trading-bot・ai-hedge-fund・gitops-istio・flagger。auto-rollback・canary analysis・kill switch は名前/説明/topics 一致 0（README の言及のみ 4 件ずつ） | **F-14 の再現**。flagger は「未応答なら既定でロールバック」の実装として主題に近いが、関連度 0.2・一致は README のみ |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | process safety の alarm と interlock／臨床試験 DMC の害による中止／鉄道の vigilance device | 返却 41/30/43 → 提出 23/15/22（60 件・41.7k 字でインライン） | 正常。3 facet とも主題にまっすぐ当たった |
+| **delegate_finalize**（byserendipity・60 件全件） | 5 件に材料 echo・55 件は点数のみ | anomaly 11・hollow 0・通過 14・**出力 5**（Railway Vigilance Devices 0.53／operator response vs interlock 0.51／Overestimating human response 0.49／Using alarms as a layer of protection 0.44／Stopping guidelines vs rules 0.39）。**接地照合失敗 0** | **本日の主収穫** |
+| **bybridge**（materials・lean・**`materials_max_chars` をまた誤って渡した**） | include strategy decay / live trading performance / sequential monitoring / backtest overfitting / stopping rule | 84k 字でファイル退避（F-57 の名指しは見出しの先頭に出た＝F-57-V は働いた。呼び手の誤りは 3 回目）。シードは主題どおり（When do systematic strategies decay?・stop-loss の 3 本）。**最頻 bridge は Are Investors Reluctant to Realize Their Losses?（被引用 3,718・主題ドメインの文献）・上位 10 件占有 40%**・実使用 bridge 18 本 | 旧様式ではない。交差候補 60 件の主分野は Decision Sciences 27（行動経済 14）・会計/ガバナンス 16・ML 7。行動経済の disposition effect 系は主題の構造（損失の実現を先送りする）に当たるが、距離が 0.4 台で分位ゲート 0.2 の手前で落ちた |
+| **delegate_finalize**（bybridge・60 件全件） | 3 件に材料 echo・57 件は点数のみ | anomaly 52・通過 1・**出力 1（fallback）**（Contract Design and Self-Control 0.24） | 「シードは主題どおり・交差候補はほぼ主題外」の 8 回目。anomaly 52 は呼び手の採点（主題外を 0.05〜0.17 で付けた）による。**呼び手の誤り**: 抄録が上流で空の 2 件を `upstream_empty` なしで echo した（F-58 の再発） |
+
 ## 追記のしかた
 
 seihai 側の日次・週次ルーティンは、当日の失敗を上記の該当する失敗様式（F-01 等）の表に1行足す。**新しい様式なら新しい F-xx を起こす**。既知の様式の N 回目の再現は、**それ自体が価値のあるデータ**（「シードを変えても再現した」が M-16 の前提を否定したように）なので、省略せず記録する。
