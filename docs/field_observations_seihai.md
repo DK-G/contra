@@ -864,6 +864,7 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
   | 10/09 相当・実運用の損失の切り分け（今夜の実走・両レッグの取得込み） | 4 | 株価予測の機械学習（Stock Market Forecasting Methods）。兄弟 Field の金融計量の塊（Risk and Portfolio Optimization 12 件・Forecasting Techniques and Applications 11 件）は、どのシード候補とも Topic を共有せず残る |
 
   ⇒ **この what-if を除外規則にする根拠は無い**。4 テーマのうち主題を正しく外すのは 10/02 だけで、10/05 は別の理由（シード 1 本の Topic 誤分類）で漂流を外し、10/06・10/09 では seihai が「兄弟 Field の同主題」と数えた塊にほとんど触れない。「同じ Topic」は主題であることの証拠にも、主題でないことの証拠にもならなかった。**除外を広げる処方は見送り**。残る手掛かりは、兄弟 Field の同主題が Decision Sciences の少数の Topic（Stock Market Forecasting Methods／Forecasting Techniques and Applications／Risk and Portfolio Optimization）に繰り返し現れること（10/02・10/06・10/09）だが、これはテーマ族（金融計量）に固有で、一般の規則にはならない。
+- **2026-10-25 追記（5 例目・seihai 10-24 週次指針の保存結果。API なし）**: 交差候補の上位 5 件は主題の古典（Stepwise Multiple Testing／MCS and backtest overfitting／Formalized Data Snooping／A Reality Check for Data Snooping／Multiple hypothesis testing in experimental economics）で、**5 件とも Field は Mathematics**、Topic は Statistical Methods in Clinical Trials・Statistical Methods and Inference・Advanced Causal Inference Techniques。**`topic_seen` は 60 件すべて none**＝上の what-if（名簿またはシード候補に 1 件以上ある Topic を除外）で外れるのは **0 件**。10/06（勝者の呪い・Romano–Wolf と Hansen が臨床試験統計の Topic）と同じ形で、主題の検定論は OpenAlex では医学統計・一般統計の Topic に入り、金融の名簿とは Topic を共有しない。**Topic による除外の拡大を見送った 10/09 の結論はこの例でも変わらない**。60 件の Field は Business 21・Mathematics 14・CS 8・生化学 6 ほか。Topic の最頻は Corporate Social Responsibility Reporting 9（ESG）。
 
 ### F-46. bybridge — **bridge プールが、取得レッグごとに別々の祖先文献の集まりに割れる**（seihai 2026-10-06 の「新しい様式の候補」に採番・**計器は同日対処済み＝「対処済み」節 F-46-I。割れそのものは未対処**）
 
@@ -3004,3 +3005,5 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 | **delegate_finalize**（bybridge・60 件全件） | 6 件に材料 echo・54 件は点数のみ | anomaly 42（ESG・CSR・会計・遺伝子発現ツール）・通過 5・**出力 1（fallback・Mechanical Turk 再現実験 0.30）**。**Reality Check for Data Snooping は「近いが有用」（F-22）で落選** | 「シードは主題どおり・交差候補は主題外」の 9 回目。ただし今回は**主題外ではなく主題内の古典が上位に来て距離で落ちた**＝新しい形（候補の主題適合は改善、遠さは無い） |
 
 **新しい様式**: bybridge の交差候補の上位が「主題の古典（Field ラベルだけ別）」になった 1 点。他は再現。呼び手の誤り（bybridge へ `materials_max_chars`）は 4 回目＝seihai 側の手順メモで止める。
+
+> **contra 側注記（2026-10-25 失敗対処デー）**: (1) bybridge の「主題の古典が上位（Field は Mathematics）」は **F-44 の 5 例目**として F-44 に記録した。`topic_seen` は 60 件すべて none で、Topic による除外の拡大は 0 件しか外さない＝10/09 の見送りの結論のまま。呼び手が「近いが有用」で落としたのは F-22（距離×構造の設計上の帰結）どおり。主題の古典を拾いたい日は `home_topic_exclusion` ではなく近傍側（シード名簿そのもの・byserendipity の Near）から取る前提は変わらない。(2) byrepo は **F-14 の再現**として記録のみ（`null model` は README を含め 0 件＝プールに無い。順位側の処方 F-41-R・F-43-M・F-29-W・F-48 はいずれも返る中身を変えなかった）。(3) bybridge への `materials_max_chars` は 4 回目。F-57-R の名指しは結果の先頭に出ている。bybridge に予算を入れるかは F-57 の実測（抄録を全部捨てても 47k 字）により人間の判断待ちのまま。(4) byserendipity と delegate_finalize は正常。抄録の末尾残し（F-60-R）は働いた。今日 F-68-R で、末尾を残した抄録は「…」で始まり、summary を書かない場合の概要は「原文の末尾の抜粋」と名乗るようになった。
