@@ -270,7 +270,9 @@ def test_byserendipity_size_budget_keeps_the_abstract_tail_unless_head_is_asked(
     full = {m["id"]: m["abstract"] for m in _materials(lean)}
     tail = _fresh_call(facet_pages, _serendipity_args(
         materials_lean=True, materials_max_chars=budget))["content"][0]["text"]
-    assert all(full[m["id"]].endswith(m["abstract"]) for m in _materials(tail))
+    cut = [m for m in _materials(tail) if "abstract_full_chars" in m]
+    assert cut and all(m["abstract"].startswith("…") for m in cut)       # F-68: marked as a tail
+    assert all(full[m["id"]].endswith(m["abstract"].removeprefix("…")) for m in _materials(tail))
     assert len(tail) <= budget and len(_materials(tail)) == 60
     assert "抄録の末尾を" in tail and "materials_abstract_part" in tail
     head = _fresh_call(facet_pages, _serendipity_args(
@@ -283,6 +285,31 @@ def test_byserendipity_size_budget_keeps_the_abstract_tail_unless_head_is_asked(
         materials_abstract_chars=300))["content"][0]["text"]
     assert all(full[m["id"]].startswith(m["abstract"]) for m in _materials(cut))
     assert "受け付けません" not in head                       # the new argument is declared (F-57)
+
+
+def test_tail_cut_material_names_its_unwritten_summary_as_the_end():
+    """F-68 (survey 2026-10-24): finalize labelled the summary of a tail-cut abstract
+    「原文の冒頭の抜粋」 while it showed the paper's last sentences."""
+    from src.core.models import Work
+    from src.pipeline.delegate import material_from_work, work_from_material
+    from src.pipeline.generate import GenerationConfig, fill_track_entries
+    from src.core.models import OutputEntry, ThemeInput, Scope, Keywords
+    abstract = "Aim to study x in birds. " * 20 + "These results demonstrate that y drives z. " * 6
+    work = Work(id="W1", title="t", year=2024, venue="v", doi=None, cited_by_count=1, abstract=abstract)
+    tail = material_from_work(work, abstract_max_chars=200, abstract_part="tail")
+    head = material_from_work(work, abstract_max_chars=200, abstract_part="head")
+    assert len(tail["abstract"]) <= 200 and tail["abstract"].startswith("…These results")
+    assert head["abstract"] == abstract[:200]
+    theme = ThemeInput(theme_overview="o", goal="g", why_problem="w", approach_type="design",
+                       assumptions=[], scope=Scope(field="Biology", scale="small", time_range="recent"),
+                       keywords=Keywords(include=["x"]), concern="")
+    def summary(material):
+        entry = OutputEntry(work=work_from_material(material), relationship="", abstract_summary="",
+                            caution="", track="B", label="l")
+        return fill_track_entries([entry], GenerationConfig(), theme=theme, mode="structured")[0].abstract_summary
+    assert summary(tail).startswith("（記入なし）原文の末尾の抜粋: …These results")
+    assert summary(head).startswith("（記入なし）原文の冒頭の抜粋: Aim to study")
+    assert summary(material_from_work(work)).startswith("（記入なし）原文の冒頭の抜粋: ")
 
 
 def test_abstract_tail_starts_at_a_sentence_only_near_the_window_start():

@@ -342,8 +342,9 @@ def _materials_abstract_part_prop() -> Dict[str, Any]:
         "Which end of a cut abstract to keep (F-60). Default `tail` under materials_max_chars "
         "(a ~290-char head is mostly the aim/background; measured 2026-10-23, the passage callers "
         "quoted from full abstracts survived a 290-char tail 74/238 vs a head 47/238), `head` "
-        "otherwise. The tail starts at a sentence when one starts in its first fifth. Grounding "
-        "is checked against what you echo, so source_quote must come from the returned part.")}
+        "otherwise. The tail starts at a sentence when one starts in its first fifth and opens with "
+        "'…' (F-68: echo it, so delegate_finalize can name an unwritten summary as the end). "
+        "Grounding is checked against what you echo, so source_quote must come from the returned part.")}
 
 
 def _materials_abstract_part(args: Dict[str, Any], budget: Optional[int]) -> str:

@@ -34,7 +34,7 @@ from src.pipeline.bridges import (
     shared_bridge_count,
 )
 from src.pipeline.concept_distance import ThemeProfile, near_domain_signal
-from src.pipeline.generate import GenerationConfig, fill_track_entries
+from src.pipeline.generate import TAIL_CUT_MARK, GenerationConfig, fill_track_entries
 
 
 def _l01_jaccard(work: Work, profile: Optional[ThemeProfile]) -> float:
@@ -215,7 +215,8 @@ def material_from_work(
     and a material with neither goes by score.
     ``abstract_max_chars`` keeps the head of a longer abstract and records the original length
     under ``abstract_full_chars``; grounding is checked against the echoed (cut) text.
-    ``abstract_part="tail"`` keeps the end instead (F-60, see :func:`abstract_tail`).
+    ``abstract_part="tail"`` keeps the end instead (F-60, see :func:`abstract_tail`), opened by
+    ``TAIL_CUT_MARK`` (F-68).
     """
     abstract = work.abstract
     full_chars = len(abstract) if isinstance(abstract, str) else 0
@@ -223,7 +224,11 @@ def material_from_work(
     material = {
         "id": work.id,
         "title": work.title,
-        "abstract": ((abstract_tail(abstract, abstract_max_chars) if abstract_part == "tail"
+        # F-68: a kept tail opens with TAIL_CUT_MARK (inside the same length), so whoever reads
+        # the echo -- the caller, and finalize's unwritten-summary label -- sees it is not the
+        # paper's opening.
+        "abstract": ((TAIL_CUT_MARK + abstract_tail(abstract, abstract_max_chars - 1)
+                      if abstract_part == "tail"
                       else abstract[:abstract_max_chars]) if cut else abstract),
         "year": work.year,
         "venue": work.venue,

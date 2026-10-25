@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-25（CL-0154） 末尾を残した抄録の概要を「末尾の抜粋」と名乗る（F-68）
+
+### 概要
+* `src/pipeline/delegate.py`: 末尾を残す materials の抄録を「…」＋末尾 N−1 字に。
+* `src/pipeline/generate.py`: `TAIL_CUT_MARK`。書かれなかった概要は印つきなら「原文の末尾の抜粋」。
+* `tests/test_raw_output_legibility.py`: 末尾テストを印に合わせ、新規 1 件。660 pass。
+* 実測（実 API・byserendipity 収集 2 回）: 切った 57 件が before 印 0 → after 57、finalize の名乗りが「冒頭」→「末尾」。
+* `docs/field_observations_seihai.md`: F-68・F-68-R。
+
 ## 2026-10-23（CL-0153） 題が句読点だけ違う別レコードをまとめる（F-67）
 
 ### 概要

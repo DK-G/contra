@@ -66,6 +66,12 @@ def _structured_summary(abstract: str | None, cfg: GenerationConfig) -> str:
 # filler now says the field is unwritten and names where the text it shows came from.
 _UNWRITTEN = "（記入なし）"
 
+# F-68 (survey 2026-10-24): the unwritten summary of a tail-cut abstract was labelled
+# 「原文の冒頭の抜粋」 while showing the paper's last sentences. Materials open a kept tail with
+# this mark (delegate.material_from_work); it rides in the text, so it survives an echo that
+# drops abstract_full_chars.
+TAIL_CUT_MARK = "…"
+
 
 def _structured_caution(theme: ThemeInput) -> str:
     # No "注意点: " prefix: every renderer already prints the heading.
@@ -309,8 +315,10 @@ def fill_track_entries(
                 summary = _structured_summary(entry.work.abstract, cfg)
                 # F-62: the unwritten summary is the source's own opening (usually English),
                 # which read as a contra-written overview. Name it as borrowed text (F-54-R).
+                # F-68: a tail-cut abstract (materials_abstract_part tail) is the source's end.
                 if entry.work.abstract and summary != "abstract欠損":
-                    summary = f"{_UNWRITTEN}原文の冒頭の抜粋: {summary}"
+                    where = "末尾" if entry.work.abstract.startswith(TAIL_CUT_MARK) else "冒頭"
+                    summary = f"{_UNWRITTEN}原文の{where}の抜粋: {summary}"
         if not hypothesis:
             hypothesis = _UNWRITTEN
         if not caution:
@@ -326,4 +334,4 @@ def fill_track_entries(
     return result
 
 
-__all__ = ["GenerationConfig", "fill_track_entries"]
+__all__ = ["GenerationConfig", "TAIL_CUT_MARK", "fill_track_entries"]
