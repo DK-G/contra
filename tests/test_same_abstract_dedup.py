@@ -220,4 +220,46 @@ def test_the_record_with_a_doi_keeps_the_slot_whichever_came_first(monkeypatch):
     ids = [w.id for w in out]
     assert ids[0] == "W1609747439" and "W7096280057" not in ids
     assert stats[0]["same_title"] == 1
-    assert "題が句読点を除いて同じ別レコード 1 件を統合" in _facet_breakdown_line(stats)
+    assert "題が句読点・版の添え書きを除いて同じ別レコード 1 件を統合" in _facet_breakdown_line(stats)
+
+
+# --- F-69: a working paper and its later version --------------------------------------------
+
+def test_a_preliminary_label_does_not_split_the_abstract_key():
+    """survey 2026-10-21 EX将棋: W7097503115 opens "Preliminary and incomplete We study…",
+    its 2014 version W7100969747 opens "We study…"."""
+    body = ("We study the survival probability of an homogeneous group of economic agents by "
+            "adopting the reduced-form approach and assuming an affine evolution of the default "
+            "intensities. We consider both the cases of continuous and discrete-times observations.")
+    assert _abstract_key("Preliminary and incomplete " + body) == _abstract_key(body)
+    assert _abstract_key("Preliminary draft: " + body) == _abstract_key(body)
+    assert _abstract_key("Preliminary results show that " + body) != _abstract_key(body)
+
+
+def test_a_version_tail_after_a_period_does_not_make_a_second_paper(monkeypatch):
+    # survey 2026-10-21: W7096298808 (2006, "…. Working paper") and W7100199310 (2008,
+    # "…. Finance and Stochastics"), no DOI on either, abstracts reworded
+    page = [
+        _raw("W7096298808", "Valuation of default sensitive claims under imperfect information. "
+             "Working paper", _abstract(1)),
+        _raw("W7100199310", "Valuation of default sensitive claims under imperfect information. "
+             "Finance and Stochastics", _abstract(2), cited=5),
+        _raw("W2110204999", "Inference of R0 and Transmission Heterogeneity from the Size "
+             "Distribution of Stuttering Chains", _abstract(3), doi="https://doi.org/10.1371/x"),
+        _raw("W7098870287", "Inference of R0 and transmission heterogeneity from the size "
+             "distribution of stuttering chains. PLoS Comput Biol 2013", _abstract(4)),
+    ] + _pad("P")
+    ids = [w.id for w in _run_titles(monkeypatch, page)]
+    assert "W7100199310" in ids and "W7096298808" not in ids        # the more cited version
+    assert "W2110204999" in ids and "W7098870287" not in ids        # the DOI record
+
+
+def test_numbered_parts_and_short_heads_are_not_cut():
+    from src.pipeline.collect import _title_match_key
+    one = _title_match_key("Characteristics of Elite Population Selected on Ratio. Part I")
+    two = _title_match_key("Characteristics of Elite Population Selected on Ratio. Part II")
+    assert one != two
+    assert _title_match_key("Deep learning. A review") != _title_match_key("Deep learning. Applications")
+    # a period inside a title with a long tail is not a version tail
+    t = "Slower recovery. In space before collapse of connected populations of yeast cells"
+    assert _title_match_key(t) == "slower recovery in space before collapse of connected populations of yeast cells"

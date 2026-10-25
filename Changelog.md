@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-25（CL-0155） working paper と後の版をまとめる（F-69）
+
+### 概要
+* `src/pipeline/collect.py`: `_title_match_key`（題の末尾の短い「. 添え書き」を切る）・`_abstract_key` の見出し語に「preliminary and incomplete」「preliminary draft」。
+* `src/mcp_server.py`: facet 別内訳の統合の文言。
+* `tests/test_same_abstract_dedup.py`: 新規 3 件。663 pass。
+* 実測（API なし）: 保存結果 21 本・1,179 件で題の統合 0 → 3 組（3 組とも同じ文献）。10-21 の実物 6 件の再生で 6 → 4 件。
+* `docs/field_observations_seihai.md`: F-69・F-69-R。
+
 ## 2026-10-25（CL-0154） 末尾を残した抄録の概要を「末尾の抜粋」と名乗る（F-68）
 
 ### 概要

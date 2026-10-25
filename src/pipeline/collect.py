@@ -492,7 +492,10 @@ def _norm_title(title: Optional[str]) -> str:
 
 
 _ABSTRACT_KEY_CHARS = 200
-_ABSTRACT_LABEL = re.compile(r"^(?:abstract|summary)\b[\s:.\-–—]*")
+# F-69 (survey 2026-10-21): a working-paper record opened "Preliminary and incomplete We study…"
+# while its later version opened "We study…" (W7097503115/W7100969747).
+_ABSTRACT_LABEL = re.compile(
+    r"^(?:(?:abstract|summary|preliminary and incomplete|preliminary draft)\b[\s:.\-–—]*)+")
 
 
 def _abstract_key(abstract: Optional[str]) -> str:
@@ -655,6 +658,24 @@ def _strip_openalex_id(raw: Optional[str]) -> str:
 _BRIDGE_SEED_SHARE = 4          # a single seed may claim at most cap // 4 of the bridge pool
 _DUP_REF_JACCARD = 0.9          # ref-set overlap above which two seed records are the same work
 _DUP_REF_MIN = 10               # ...but only when both sides cite enough refs for that to mean something
+
+
+# F-69 (survey 2026-10-21): a version record carries its status or citation after a period
+# ("…imperfect information. Working paper" / "…information. Finance and Stochastics",
+# "…stuttering chains. PLoS Comput Biol 2013"). A short tail after ". " is cut like the
+# subtitle after ':' (_norm_title), unless it numbers a part ("Part II", "I. Traits…").
+_TITLE_TAIL = re.compile(r"\.\s+([^.]{1,60})$")
+_TITLE_TAIL_PART = re.compile(r"^(?:part|vol|volume|chapter|section|[ivx]+|\d)\b", re.I)
+
+
+def _title_match_key(title: Optional[str]) -> str:
+    """The key semantic collection compares titles by (F-67 punctuation, F-69 version tail)."""
+    t = str(title or "")
+    m = _TITLE_TAIL.search(t)
+    if (m and len(m.group(1).split()) <= 6 and len(t[:m.start()].split()) >= 4
+            and not _TITLE_TAIL_PART.match(m.group(1))):
+        t = t[:m.start()]
+    return _norm_title_key(_norm_title(t))
 
 
 def _norm_title_key(title: Optional[str]) -> str:
@@ -1086,7 +1107,7 @@ def _collect_track_b_semantic(
 
     seen_ids: Set[str] = set(used_ids or set())
     # F-67: titles are compared as punctuation-free keys below, so the history titles are too.
-    seen_titles: Set[str] = {_norm_title_key(t) for t in (used_titles or set())}
+    seen_titles: Set[str] = {_title_match_key(t) for t in (used_titles or set())}
     seen_dois: Set[str] = set(used_dois or set())
     seen_abstracts: Dict[str, Any] = {}   # abstract key -> (bucket, position) of the kept record
     seen_title_at: Dict[str, Any] = {}    # title key -> (bucket, position) of the kept record
@@ -1155,7 +1176,8 @@ def _collect_track_b_semantic(
             # F-67 (survey 2026-10-22): a paper and its conference abstract came back as
             # "Gaze behavior as a visual cue to animacy." and the same title without the period.
             # Compared without punctuation here only; the history keys keep _norm_title as is.
-            norm_title = _norm_title_key(_norm_title(w.title))
+            # F-69: and without a short version tail ("… . Working paper").
+            norm_title = _title_match_key(w.title)
             held_at = seen_title_at.get(norm_title) if norm_title else None
             if held_at is not None and w.id not in seen_ids and w.abstract:
                 # Same title as a kept record: one slot, held by the better record (as F-52).

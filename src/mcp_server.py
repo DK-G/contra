@@ -474,7 +474,7 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             + (f"（抄録が同文の別レコード {r['same_abstract']} 件を統合）"
                if r.get("same_abstract") else "")
             # F-67: the same title up to punctuation, merged the same way.
-            + (f"（題が句読点を除いて同じ別レコード {r['same_title']} 件を統合）"
+            + (f"（題が句読点・版の添え書きを除いて同じ別レコード {r['same_title']} 件を統合）"
                if r.get("same_title") else "")
         )
         if not sel:

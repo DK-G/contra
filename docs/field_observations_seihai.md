@@ -1035,9 +1035,27 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: 3 件とも「（記入なし）原文の冒頭の抜粋: These results demonstrate that…」で、中身は抄録の**末尾**（W7212185497 は全文 1,485 字の最後の文、W2702183138 は文の途中から）。F-60-R（10-23・予算で切るときは末尾を残す）と F-62-R（10-18・書かれなかった概要は原文の冒頭と名乗る）の組み合わせで生じた表示と中身の食い違い。
 
+### F-69. byserendipity(raw_only) — **同じ論文の working paper と後の版が別 id で 2 枠を取る（題も抄録も完全一致しない）**（性能調査 2026-10-21 EX将棋「重複よけ」に採番・2026-10-25 起票） → **3 組中 2 組は同日対処＝「対処済み」節 F-69-R。1 組（題が変わった版）は残**
+
+- 観測: W7097503115（2013・抄録が「Preliminary and incomplete We study…」）と W7100969747（2014・「We study…」）／W7096298808（題の末尾「. Working paper」）と W7100199310（同題の末尾「. Finance and Stochastics」）／W7096945385（「2004b) Completeness of a reduced-form credit risk model… . Working paper」）と W1966247368（2006・題「Replication of Contingent Claims in a Reduced-Form Credit Risk Model…」）。どれも片方か両方に DOI が無い。F-67-R（句読点だけ違う題）と F-52-R（抄録の書き出し）のどちらにも掛からない。
+
 ---
 
 ## 対処済み
+
+### F-69-R. byserendipity(raw_only) — **題の末尾の短い版の添え書き（「. Working paper」「. PLoS Comput Biol 2013」）と、抄録の先頭の「Preliminary and incomplete」を照合から外す** — **対処済み 2026-10-25（既定の変更・収集段の照合の鍵だけ）**
+
+- 発端（性能調査 10-21 EX将棋）: F-69。
+- 実物（単件取得 6 回・無料）: 1 組目は抄録の先頭の「Preliminary and incomplete」を除くと書き出し 200 字（英数字）が一致する。2 組目は題の「. 」より前が一致し、抄録は言い回しが違う。3 組目は題も抄録も違い、版の関係は題からは読めない。
+- 変えたもの（byserendipity の**収集段の照合**＝`collect._collect_track_b_semantic` の題の鍵と `_abstract_key`。materials の形・採点・出力段は不変。**今日の F-68 は同じツールの出力段**＝materials 化と finalize の名乗り）:
+  1. `_title_match_key`: 題の最後の「. 」の後ろが 6 語以下で、前が 4 語以上なら、後ろを切ってから F-67 の鍵にする（`_norm_title` が ':' の後ろの副題を切るのと同じ扱い）。後ろが「Part／Vol／Chapter／Section／ローマ数字／数字」で始まるときは切らない（「Part I」と「Part II」を同じにしない）。履歴の題も同じ鍵で照合する。履歴に書く題の鍵は変えない。
+  2. `_abstract_key` の先頭の見出し語に「preliminary and incomplete」「preliminary draft」を足した（F-63 の「Abstract」「Summary」と同じ扱い）。
+  3. facet 別内訳の文言を「題が句読点・版の添え書きを除いて同じ別レコード N 件を統合」に。
+- 実測:
+  - **保存結果（Claude Code の記録から抽出した byserendipity の結果 21 本・1,179 件。API なし）**: 題の照合で新たにまとまる組 **0 → 3**。3 組とも同じ文献（10-21 の 2 組目／「Turn-timing in signed conversations: …」2015 Frontiers〔DOI あり〕と「Turn-timing in signed conversations. Coordinating…」2016〔DOI なし〕／「Inference of R0 … stuttering chains」PLoS Comput Biol 2013〔DOI あり〕と同題「. PLoS Comput Biol 2013」付き 2016〔DOI なし〕）。題に短い「. 」の後ろを持つ候補は 16 件あり、残る 13 件は他と衝突しなかった。保存結果の抄録は既に切られているので、抄録の鍵の変化はここでは数えられない。
+  - **実物 6 件を実際の収集関数に通した再生（偽クライアントに実 OpenAlex の JSON を返させる・API 0 回）**: before 6 件 → after **4 件**（1 組目・2 組目がそれぞれ 1 枠に。3 組目は 2 件のまま）。
+- 検証: 新規 3 件（「Preliminary and incomplete」／「. Working paper」と「. 雑誌名」、「. 雑誌名 年」と DOI のある方／「Part I」「Part II」・短い頭・長い後ろは切らない）。663 pass。
+- **残る限界**: (1) 3 組目（版で題が変わった）はまとめない。(2) 両方とも DOI 無し・被引用 0 なら先に来た方が枠を持つので、今回の 2 組はどちらも古い working paper が残った（`_record_standing` に年を足すのは F-52/F-67 と共有の規則を変えるので、同じ段の 2 件目として次回以降）。(3) 「X. A review」のように 2 語以下の後ろを持つ別の論文同士は、頭が 4 語以上で一致すればまとまる（':' の副題で以前から起きていたのと同じ範囲）。
 
 ### F-68-R. byserendipity(raw_only)／delegate_finalize — **末尾を残した抄録は先頭に「…」を付けて返し、finalize はそれを見て「原文の末尾の抜粋」と名乗る** — **対処済み 2026-10-25（既定の変更・描画と materials の 1 字）**
 
