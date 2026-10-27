@@ -1044,9 +1044,26 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: 「セレンディピティ・スコア: 0.5（距離 0.86 × 構造 0.58）」の 0.58 は purpose_sim、その候補の structural_depth は 0.66（10-24）。10-26 も「構造 0.72」＝purpose_sim（structural_depth は 0.81）。点数の定義（`classify`: serendipity = purpose_sim × mechanism_dist）どおりの値で、取り違えたのは名前。
 
+### F-71. byserendipity(raw_only) — **遠い分野の中心の手法論文が計算機の雑誌に載ると、OpenAlex の Field が Computer Science になり、scope_field=Computer Science のホーム除外でその分野の切り口から落ちる。内訳には「除外・重複後 9」としか出ず、狙いが除外の中にあったことは読めない**（性能調査 2026-10-26 メタグモ「ホーム除外」に採番・2026-10-27 起票） → **計器は同日対処＝「対処済み」節 F-71-I。除外の規則（Field 単位）は変えていない**
+
+- 観測: 生態音響の切り口は 27 件返って除外後 9 件。狙った長時間の偽色スペクトログラムの論文 2 本（W2800788874・W2732185036）は主トピックの Field が Computer Science だった（調査側が手元の `works?search=` で確認）。F-65（ホーム分野の学会の論文が別 Field で残る）の裏返し＝除外は中身の Field で判定するので、掲載先でも呼び手の分野名でもなく OpenAlex の分類で落ちる。
+- 判断待ち（人間）: 除外された上位を「近いが遠い分野の切り口から来た」として残す opt-in（例: 切り口の類似度順で上位 N 件は除外しない）を足すか。F-32-R・F-44 と同じく、ホーム除外を緩めると主題の論文の再掲も増える。今回は計器だけで、呼び手が id で取り直せるようにした。
+
 ---
 
 ## 対処済み
+
+### F-71-I. byserendipity(raw_only) — **facet 別内訳に、ホーム除外で落ちた件数と、類似度順の先頭 3 件（id・題・Field）を出す**（F-71 の計器） — **対処済み 2026-10-27（計器のみ）**
+
+- 発端（性能調査 10-26 メタグモ）: F-71。
+- 変えたもの（**byserendipity の収集段の集計**＝`collect._collect_track_b_semantic` の facet ごとの記録に `home_excluded`／`home_excluded_head` を足し、`mcp_server._facet_breakdown_line` が描く。除外の規則・候補・materials・採点は不変。**今日の F-70 は finalize の描画**で別のツール・段）:
+  - 形: `返却 45 / ホーム除外・重複後 26 / 提出 26（ホーム除外 10 件・類似度順の先頭: W2044579322「Visualization of Long-duration Acoustic Recordings of the Environment」（Computer Science） / W2800788874「…」（Computer Science） / …）`。除外が 0 件なら何も足さない。題は 70 字で切る。
+- 実測（実 OpenAlex `search.semantic` 1 回・21 時台・`output/home_excluded_probe/probe_f71.py`。10-26 の切り口の文は記録に無いので、生態音響の偽色スペクトログラムを英語で書き直した 1 facet・scope_field Computer Science）:
+  - before（同じ結果を従来の行で読むと）: `返却 45 / ホーム除外・重複後 26 / 提出 26` ＝何が落ちたか分からない。
+  - after: 上の形。**10-26 の狙いの 1 本 W2800788874 が先頭 3 件の 2 番目に名指しされた**。先頭 1 番目・3 番目も同じ系統（長時間の録音の可視化）で、除外 10 件のうち少なくとも 3 件が切り口の狙いそのものだった。
+  - 書き直す前の 1 回目（偽色スペクトログラムを計算機寄りの語で書いた文）は `棄却 (home_converged)` で、除外より前の検証で切り口ごと捨てられた。
+- 検証: 新規 2 件（`tests/test_home_excluded_note.py`）。667 pass。
+- 残る限界: (1) `棄却 (home_converged)` の切り口は除外の前で止まるので、何が返ったかは今回の計器にも出ない（同じ段の 2 件目＝次回以降）。(2) 狙いを残すかどうかは呼び手の判断で、contra は名指しするだけ（F-71 の判断待ち）。
 
 ### F-70-R. delegate_finalize ほか Track B の描画 — **点数の行は 2 つ目の因子を「目的の一致（purpose_sim）」と名乗り、structural_depth は別に「構造の深さ（点数には入らない）」と並べる** — **対処済み 2026-10-27（描画のみ）**
 

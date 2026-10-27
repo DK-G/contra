@@ -438,6 +438,23 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
     return line
 
 
+def _home_excluded_note(r: Dict[str, Any]) -> str:
+    """F-71: "（ホーム除外 N 件・類似度順の先頭: W1「…」(Field) / …）" for one facet, or ""."""
+    n = r.get("home_excluded") or 0
+    if not n:
+        return ""
+    head = []
+    for h in r.get("home_excluded_head") or []:
+        wid = str(h.get("id") or "").rsplit("/", 1)[-1]
+        title = str(h.get("title") or "")
+        if len(title) > 70:
+            title = title[:69] + "…"
+        field = f"（{h['field']}）" if h.get("field") else ""
+        head.append(f"{wid}「{title}」{field}")
+    return (f"（ホーム除外 {n} 件" + ("・類似度順の先頭: " + " / ".join(head) if head else "")
+            + "）")
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -467,6 +484,9 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
         parts.append(
             f"[{i}] {dom}: " + (f"ok{note} / " if note else "")
             + f"返却 {r.get('returned', 0)} / ホーム除外・重複後 {r.get('kept', 0)} / 提出 {sel}"
+            # F-71: what the home exclusion took, so a far field's central paper filed under
+            # the home Field is visible (the caller can fetch it by id if it is the target).
+            + _home_excluded_note(r)
             # F-64: the field the facet actually came back from, to read against its name.
             + (f"（主な分野 {r['top_field']['name']} {r['top_field']['count']}/{r.get('kept', 0)}）"
                if r.get("top_field") else "")

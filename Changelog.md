@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-27（CL-0157） ホーム除外で落ちた件数と先頭を内訳に出す（F-71）
+
+### 概要
+* `src/pipeline/collect.py`: facet ごとの `home_excluded`（件数）と `home_excluded_head`（類似度順の先頭 3 件の id・題・Field）。
+* `src/mcp_server.py`: `_home_excluded_note`。facet 別内訳に「（ホーム除外 N 件・類似度順の先頭: …）」。
+* `tests/test_home_excluded_note.py`: 新規 2 件。667 pass。
+* 実測（実 API 1 回）: 10-26 の狙い W2800788874 が先頭 3 件に名指しされた。
+* `docs/field_observations_seihai.md`: F-71・F-71-I。
+
 ## 2026-10-27（CL-0156） 点数の行の「構造」を「目的の一致（purpose_sim）」に（F-70）
 
 ### 概要

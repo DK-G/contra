@@ -1072,6 +1072,10 @@ def _is_400(exc: Exception) -> bool:
     return status == 400 if status is not None else "400" in str(exc)
 
 
+# F-71: how many home-excluded records each facet names in the breakdown (semantic order).
+HOME_EXCLUDED_HEAD = 3
+
+
 def _collect_track_b_semantic(
     theme: ThemeInput,
     collector: "Collector",
@@ -1172,7 +1176,18 @@ def _collect_track_b_semantic(
             continue
         valid_facets += 1
         bucket: List[Work] = []
-        for w in exclude_home_field(raw, home_field_ids):
+        kept_home = exclude_home_field(raw, home_field_ids)
+        # F-71 (survey 2026-10-26): the far facet's two target papers sat in a Computer Science
+        # journal, so the home exclusion dropped them, and the breakdown only said "kept 9".
+        # Name how many the exclusion took and the first few in the endpoint's (similarity) order.
+        kept_ids = {w.id for w in kept_home}
+        dropped = [w for w in raw if w.id not in kept_ids]
+        rec["home_excluded"] = len(dropped)
+        rec["home_excluded_head"] = [
+            {"id": w.id, "title": w.title or "", "field": (w.source_meta or {}).get(
+                "primary_topic_field_name") or ""}
+            for w in dropped[:HOME_EXCLUDED_HEAD]]
+        for w in kept_home:
             # F-67 (survey 2026-10-22): a paper and its conference abstract came back as
             # "Gaze behavior as a visual cue to animacy." and the same title without the period.
             # Compared without punctuation here only; the history keys keep _norm_title as is.
