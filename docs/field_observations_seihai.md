@@ -3079,3 +3079,17 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 > **contra 側注記（2026-10-27 失敗対処デー）**: (1) byrepo の回復（`purged-cross-validation` 関連度 1.0 が首位）は、include を手法名にしたことで核の語を名前/説明に持つリポジトリがプールに入ったためで、F-41-I の計器（`cpcv` は README のみ 6 件）の読みと一致する。contra 側の変更は 10/25 以降無い＝道具の改善ではなく呼び方の効果。(2) bybridge は 10/26 と同じ様式の再現（主題の基礎がハブ・交差候補は主題の再掲か分野外）。「Stock Market Forecasting Methods 21 件が兄弟 Field で除外を通過」は **F-44 の 6 例目**（同主題の Topic が兄弟 Field に分類されると素通り）。(3) bybridge への `materials_max_chars` は 5 回目。F-57-R の名指しは出ている。bybridge に予算を入れるか（F-57・抄録を全部捨てても 47k 字）は人間の判断待ちのまま。(4) delegate_finalize の「構造」の値の読み違いを防ぐため、10/27 の F-70-R で点数の行は「距離 × 目的の一致（purpose_sim）／構造の深さ（structural_depth・点数には入らない）」と書くようになった。seihai の記録の「structural_depth の付け方で hollow 35」の読みは、新しい行で候補ごとに確かめられる。(5) パターン B の「予算 30,000 字は抄録を最小 200 字にしても 32,209 字で収まらない」は F-50b の警告どおりの挙動（全件は返る）。
 
 （同日・パターンB のリサーチ）**byserendipity**（raw_only・facet 2・lean・30,000）: 警報設計の誤警報／採餌の離脱判断 → 47 件。**予算 30,000 字は抄録を最小 200 字にしても 32,209 字で収まらない**と警告（全件は返った）。**delegate_finalize**（47 件全件・3 件に材料 echo）: anomaly 0・hollow 35・通過 3・**出力 2**（transient abnormality の watchful waiting 0.53／trip point＋timer 0.48）。3 件目は `not_selected(no_material)`（ゲートは通過・材料を echo していない点数だけの候補）。新しい様式なし。
+
+## 2026-10-28（水・seihai r03 / F4 解釈可能ML）の観測
+
+テーマ（英語で投入）: 木の 2-of-3 投票生成器が 12 本中 1 本だけ事前登録バーを通し（DSR 0.39）、ライブ週 10 取引で着席した。文法は尽きかけ（既評価 294）。この 1 本の優位のうちどれだけが「尽きかけた Rashomon 集合からの best-of-12」による勝者の呪いか、ライブでどう監視するか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 10） | include backtest overfitting / deflated sharpe / winner's curse / rashomon / strategy selection | 上位 5 件＝purged-cross-validation（0.4）・Forven・trends-research・ML for Trading・pypbo。**`winner's curse`・`rashomon`・`strategy selection` は README を含めプール 0 件**の警告 | **収穫ゼロ（様式 iii）**＝本日の問い（選抜後の期待値の縮小・勝者の呪い）を扱う実装は 0 件。既知の CPCV/PBO 実装の再掲。10/27 の回復は include を手法名にした効果で、本日は問いの語（winner's curse）に寄せたため再び空 |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | Near＝臨床の drop-the-loser 二段階試験／Far＝GWAS の winner's curse／Very Far＝育種の BLUP と選抜応答 | 返却 33/39/38 → 60 件（41.5k 字・インライン） | 正常。3 facet とも主題の構造（選抜された最良の効果推定の偏り）をそのまま返した |
+| **delegate_finalize**（byserendipity・60 件全件） | 6 件に材料 echo・54 件は点数のみ | anomaly 8・hollow 0・通過 15・**出力 3**（Henderson 1975 BLUP under selection 0.43／GWAS replication variability 2017 0.41／multi-arm two-stage「shrinkage だけが MSE を下げる」2017 0.37）。**Inference on Winners（QJE）は分位落ち**（距離 0.36＝経済学で近い・律速は距離）。点数だけで送った 7 件がゲート通過・`not_selected(no_material)` | 正常。呼び手の誤り＝材料 echo を 6 件に絞った（F-15-U2 の再現） |
+| **bybridge**（materials・lean） | include backtest overfitting / data snooping / deflated Sharpe ratio / technical trading rules / out-of-sample decay。**`materials_max_chars` を渡した（6 回目・F-57 の警告で無視）** | **99,520 字でファイル退避**（materials 91.1k・うち abstract 55.6k）。シード 17 件主題どおり（Finance 16）・語彙レッグ主題一致 100%。**最頻 bridge＝Benjamini–Hochberg「Controlling the False Discovery Rate」（被引用 109,200）・上位 10 件の 40%**・全体 22%・使われた bridge 31 本 | **新しい観測**: 最頻 bridge が主題の基礎（金融）ではなく**統計の汎用ハブ（FDR）**。それを経由して DESeq2・limma・PLINK・STRING（ゲノミクスの道具論文）・幼児教育介入・ESG が交差候補に入った（呼び手の採点で anomaly 32/60）。主題に近い候補は SPA・MCS・Stepwise／Illusion of Sparsity で、いずれも近傍（距離 0.3〜0.45）で分位・floor 落ち |
+| **delegate_finalize**（bybridge・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 32・hollow 0・通過 7・**出力 1（fallback・Illusion of Sparsity 0.23）**・分位母数 28 | 「交差候補は主題の再掲か分野外」の再現。分野外の供給源が今回は FDR ハブ経由 |
+
+**新しい様式 1 件**: bybridge の最頻 bridge が主題の基礎文献ではなく分野横断の統計ハブ（BH-FDR）になり、その経由でゲノミクスの道具論文が並んだ（8/14 S-38 の「巨大ハブ吸着」に近いが、占有率は 40%＝旧様式の 100% ではない）。呼び手の誤り＝bybridge へ `materials_max_chars`（6 回目）。
