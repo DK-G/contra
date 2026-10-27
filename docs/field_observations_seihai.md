@@ -865,6 +865,7 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
   ⇒ **この what-if を除外規則にする根拠は無い**。4 テーマのうち主題を正しく外すのは 10/02 だけで、10/05 は別の理由（シード 1 本の Topic 誤分類）で漂流を外し、10/06・10/09 では seihai が「兄弟 Field の同主題」と数えた塊にほとんど触れない。「同じ Topic」は主題であることの証拠にも、主題でないことの証拠にもならなかった。**除外を広げる処方は見送り**。残る手掛かりは、兄弟 Field の同主題が Decision Sciences の少数の Topic（Stock Market Forecasting Methods／Forecasting Techniques and Applications／Risk and Portfolio Optimization）に繰り返し現れること（10/02・10/06・10/09）だが、これはテーマ族（金融計量）に固有で、一般の規則にはならない。
 - **2026-10-25 追記（5 例目・seihai 10-24 週次指針の保存結果。API なし）**: 交差候補の上位 5 件は主題の古典（Stepwise Multiple Testing／MCS and backtest overfitting／Formalized Data Snooping／A Reality Check for Data Snooping／Multiple hypothesis testing in experimental economics）で、**5 件とも Field は Mathematics**、Topic は Statistical Methods in Clinical Trials・Statistical Methods and Inference・Advanced Causal Inference Techniques。**`topic_seen` は 60 件すべて none**＝上の what-if（名簿またはシード候補に 1 件以上ある Topic を除外）で外れるのは **0 件**。10/06（勝者の呪い・Romano–Wolf と Hansen が臨床試験統計の Topic）と同じ形で、主題の検定論は OpenAlex では医学統計・一般統計の Topic に入り、金融の名簿とは Topic を共有しない。**Topic による除外の拡大を見送った 10/09 の結論はこの例でも変わらない**。60 件の Field は Business 21・Mathematics 14・CS 8・生化学 6 ほか。Topic の最頻は Corporate Social Responsibility Reporting 9（ESG）。
+- **2026-10-27 追記（6 例目・seihai 10-27 r02/F2 GP の観測。API なし・保存結果は読んでいない）**: 交差候補 60 件のうち Stock Market Forecasting Methods の 21 件が兄弟 Field で除外を通過（主題の再掲）。シードは 20 件主題どおり（Finance 17）・最頻 bridge は Fama "Efficient Capital Markets"＝主題の基礎。10/09 の Stock Market Forecasting Methods と同じ Topic で、上の what-if の結論（Topic で除外を広げても 4 テーマ中 1 つでしか主題だけを外さない）を変える新しい材料は無い。
 
 ### F-46. bybridge — **bridge プールが、取得レッグごとに別々の祖先文献の集まりに割れる**（seihai 2026-10-06 の「新しい様式の候補」に採番・**計器は同日対処済み＝「対処済み」節 F-46-I。割れそのものは未対処**）
 
@@ -1048,6 +1049,12 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: 生態音響の切り口は 27 件返って除外後 9 件。狙った長時間の偽色スペクトログラムの論文 2 本（W2800788874・W2732185036）は主トピックの Field が Computer Science だった（調査側が手元の `works?search=` で確認）。F-65（ホーム分野の学会の論文が別 Field で残る）の裏返し＝除外は中身の Field で判定するので、掲載先でも呼び手の分野名でもなく OpenAlex の分類で落ちる。
 - 判断待ち（人間）: 除外された上位を「近いが遠い分野の切り口から来た」として残す opt-in（例: 切り口の類似度順で上位 N 件は除外しない）を足すか。F-32-R・F-44 と同じく、ホーム除外を緩めると主題の論文の再掲も増える。今回は計器だけで、呼び手が id で取り直せるようにした。
+
+### F-72. byserendipity(raw_only) — **論文でない補足資料のレコード（Figshare の「Additional file N: of …」「Figure S1 from …」「Table S1 from …」）が候補の枠を取る。publication_type は article なので型の絞り込みを通る**（性能調査 2026-10-15 hAIbit・10-24 salon-sites・10-26 メタグモの 3 回に採番・2026-10-27 起票・**実装していない**）
+
+- 観測: W6976565497「Figure S1 from Pausing to swarm…」（本体 W4392391009 も同じ回）／W6977677453「Additional file 6: of Avoidance of recognition sites…」（本体 W2904490504 も同じ回）・W6901836165「Table S1 from Noisy communities and signal detection…」／W7136287016「Additional file 3: of Visualizing sound: counting wolves…」（要旨「Links to the videos used for WDH test. (DOCX 12 kb)」）。F-53（上流のレコードが壊れている）と同種だが、題の形が決まっているので contra 側で判別できる。
+- 処方の候補（未実装）: 収集段の照合（`collect._collect_track_b_semantic`）で、題が `^(Additional file|Supplementary (material|file|table|figure)|Figure S?\d+|Table S?\d+|Data S\d+|Movie S\d+).*(of|from)` に当たるレコードを候補から外し、facet 別内訳に件数を出す。本体が同じ回に無いときに捨てるか（本体を取り直すか）は実例を見て決める。
+- 見送った理由: 今日の F-71-I と**同じツールの同じ段**（byserendipity の収集段）なので、手順 2 の制約 2 により次回へ回した。
 
 ---
 
@@ -3053,6 +3060,8 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 
 **新しい様式なし。** 呼び手の誤り（bybridge へ `materials_max_chars`）は今回は起きていない。
 
+> **contra 側注記（2026-10-27 失敗対処デー）**: (1) byrepo は **F-14 の再現（seihai 側 12 回目）**として記録のみ。`tick volume` が README を含め 0 件＝プールに無く、順位側の処方（F-41-R・F-43-M・F-29-W・F-48）では返る中身が変わらないのは 10/25 の注記と同じ。(2) byserendipity の Near 棄却（`home_converged`）は呼び手の facet 設計で、contra の誤りではないという seihai の読みに同意。なお 10/27 の F-71-I で、棄却されなかった facet ではホーム除外で落ちた件数と先頭 3 件が内訳に出るようになった（棄却された facet は除外の前で止まるので出ない＝F-71-I の残る限界 (1)）。(3) bybridge の「最頻 bridge＝主題の基礎文献（Kyle 1985）が上位 10 件の 100%」は F-25（上位窓の多様化は候補が複数の bridge を引くと効かない）の再現で、ハブが分野外でなく主題の基礎である点は F-44 の 5 例目（10/24）と同じ側。交差候補が会計の開示研究に偏ったのは「同じ基礎を引く別分野」で、F-22 の設計どおり距離は高い。
+
 ## 2026-10-27（火・seihai r02 / F2 GP）の観測
 
 テーマ（英語で投入）: 事前登録バーの「CPCV test fold の 60% 以上で正」は、小さな勝ち fold が多数・大きな負け fold が少数の設計（fold 平均は負）を通す。10〜15 fold で 1 本の外れに頑健かつ損失の大きさに感度のある基準は何か。
@@ -3066,5 +3075,7 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 | **delegate_finalize**（bybridge・60 件全件） | 3 件に材料 echo・57 件は点数のみ | anomaly 19・hollow 35・通過 1・**出力 1（fallback・Nonstandard Errors 0.29）**。分位落ちに Mean-semivariance portfolio optimization with MOEA（ESWA 2017・抄録は上流で空）＝本日の問いに最も直接 | 「シード・bridge は主題どおり、交差候補は主題の再掲か分野外」の再現（10/26 と同じ様式） |
 
 **新しい様式なし。** 呼び手の誤り＝bybridge へ `materials_max_chars`（F-57・5 回目）。
+
+> **contra 側注記（2026-10-27 失敗対処デー）**: (1) byrepo の回復（`purged-cross-validation` 関連度 1.0 が首位）は、include を手法名にしたことで核の語を名前/説明に持つリポジトリがプールに入ったためで、F-41-I の計器（`cpcv` は README のみ 6 件）の読みと一致する。contra 側の変更は 10/25 以降無い＝道具の改善ではなく呼び方の効果。(2) bybridge は 10/26 と同じ様式の再現（主題の基礎がハブ・交差候補は主題の再掲か分野外）。「Stock Market Forecasting Methods 21 件が兄弟 Field で除外を通過」は **F-44 の 6 例目**（同主題の Topic が兄弟 Field に分類されると素通り）。(3) bybridge への `materials_max_chars` は 5 回目。F-57-R の名指しは出ている。bybridge に予算を入れるか（F-57・抄録を全部捨てても 47k 字）は人間の判断待ちのまま。(4) delegate_finalize の「構造」の値の読み違いを防ぐため、10/27 の F-70-R で点数の行は「距離 × 目的の一致（purpose_sim）／構造の深さ（structural_depth・点数には入らない）」と書くようになった。seihai の記録の「structural_depth の付け方で hollow 35」の読みは、新しい行で候補ごとに確かめられる。(5) パターン B の「予算 30,000 字は抄録を最小 200 字にしても 32,209 字で収まらない」は F-50b の警告どおりの挙動（全件は返る）。
 
 （同日・パターンB のリサーチ）**byserendipity**（raw_only・facet 2・lean・30,000）: 警報設計の誤警報／採餌の離脱判断 → 47 件。**予算 30,000 字は抄録を最小 200 字にしても 32,209 字で収まらない**と警告（全件は返った）。**delegate_finalize**（47 件全件・3 件に材料 echo）: anomaly 0・hollow 35・通過 3・**出力 2**（transient abnormality の watchful waiting 0.53／trip point＋timer 0.48）。3 件目は `not_selected(no_material)`（ゲートは通過・材料を echo していない点数だけの候補）。新しい様式なし。
