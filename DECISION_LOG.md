@@ -4,7 +4,16 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
-## 2026-10-25 — 題の末尾の短い版の添え書きと抄録の「Preliminary」を照合から外す（F-69）
+## 2026-10-27 — 点数の 2 つ目の因子を「目的の一致（purpose_sim）」と名乗る（F-70）
+
+**決定**: Track B の点数の行は「距離 × 目的の一致（purpose_sim）」と書き、審査の structural_depth があれば「構造の深さ（hollow ゲートにだけ使い、点数には入らない）」として同じ行に別に並べる。点数の定義は変えない。
+
+**根拠**: 性能調査 10-24・10-26 の 2 回、読み手が「構造」を structural_depth と取り違えた。手順書と引数では「構造」は structural_depth を指す。値は正しく、名前だけが違っていた。
+
+**却下した代替**: (a) 「構造」の欄に structural_depth を出す——点数の積と表示が合わなくなる（0.86 × 0.66 ≠ 0.5）。(b) 点数を距離 × structural_depth に変える——F-22 の設計（SOLVENT の purpose × mechanism）を変える判断で、表示の取り違えで動かす理由にならない。
+
+**検証**: 新規 2 件、665 pass。API なし。
+の短い版の添え書きと抄録の「Preliminary」を照合から外す（F-69）
 
 **決定**: byserendipity の semantic 収集で、題の最後の「. 」の後ろが 6 語以下（前が 4 語以上・後ろが Part/Vol/数字などで始まらない）なら切ってから照合し、抄録の鍵は先頭の「Preliminary and incomplete」「Preliminary draft」を見出し語として外す。
 

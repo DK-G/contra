@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-10-27（CL-0156） 点数の行の「構造」を「目的の一致（purpose_sim）」に（F-70）
+
+### 概要
+* `src/core/models.py`: `OutputEntry.structural_depth`（既定 None）。
+* `src/pipeline/classify.py`: 出力行に審査の structural_depth を写す（`_depth_or_none`）。
+* `src/core/output_spec.py`: 点数の行を「距離 × 目的の一致＝purpose_sim」に、structural_depth は「構造の深さ（点数には入らない）」として別に。
+* `src/mcp_server.py`: LLM 経路 2 か所と「近いが有用」の説明文の名前を揃えた。
+* `tests/test_score_line_names_purpose.py`: 新規 2 件。665 pass。
+* `docs/field_observations_seihai.md`: F-70・F-70-R。
+
 ## 2026-10-25（CL-0155） working paper と後の版をまとめる（F-69）
 
 ### 概要

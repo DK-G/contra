@@ -136,6 +136,9 @@ class OutputEntry:
     distance_score: float = 0.0
     structure_score: float = 0.0
     serendipity_score: float = 0.0
+    # F-70: the judge's structural_depth (hollow gate only; NOT a factor of serendipity_score,
+    # whose second factor is purpose_sim = structure_score). None when it was not judged.
+    structural_depth: Optional[float] = None
     # The 4-part "役に立つ可能性の仮説" (usefulness hypothesis). See plan.md §7.
     usefulness_hypothesis: str = ""
 

@@ -906,7 +906,7 @@ class StdinMcpServer:
         for i, entry in enumerate(entries, 1):
             lines.append(f"### {i}. {entry.work.title}")
             lines.append(f"- **接続点**: {entry.label}")
-            lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 構造: {entry.structure_score:.2f})")
+            lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 目的の一致(purpose_sim): {entry.structure_score:.2f})")
             lines.append(f"- 年: {entry.work.year} | 掲載: {entry.work.venue} | 被引用: {entry.work.cited_by_count}")
             lines.append(f"- リンク: {entry.work.id}")
             lines.append("")
@@ -1643,7 +1643,7 @@ class StdinMcpServer:
             lines.append(f"### {i}. {entry.work.title}")
             lines.append(f"- **接続点**: {entry.label}")
             lines.append(f"- **共有bridge**: {shared_bridge_count(entry.work, bridges)}本 / 異分野ブリッジ: {int((entry.work.source_meta or {}).get('bridge_betweenness', 0) or 0)}")
-            lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 構造: {entry.structure_score:.2f})")
+            lines.append(f"- **セレンディピティ・スコア**: {entry.serendipity_score:.2f} (距離: {entry.distance_score:.2f} / 目的の一致(purpose_sim): {entry.structure_score:.2f})")
             lines.append(f"- 年: {entry.work.year} | 掲載: {entry.work.venue} | 被引用: {entry.work.cited_by_count}")
             lines.append(f"- リンク: {entry.work.id}")
             lines.append("")
@@ -1801,7 +1801,7 @@ class StdinMcpServer:
                 "\n★『近いが有用』" + f"{len(near_useful)} 件"
                 + "（purpose_sim が高く、距離で落選）: "
                 + " / ".join(f"{wid}{lbl}" for wid, lbl in near_useful)
-                + "\n  セレンディピティ・スコアは 距離 × 構造 なので、"
+                + "\n  セレンディピティ・スコアは 距離 × 目的の一致（purpose_sim）なので、"
                   "近いがゆえに有用な文献は閾値をどう動かしても通りません"
                   "（F-22・設計上の帰結）。採否の最終判断は呼び手にあります"
                   "——落選を理由に有用な文献を捨てないでください。"

@@ -922,6 +922,12 @@ def _update_diag(diag: Optional[dict], **kw) -> None:
 _NEAR_USEFUL_PURPOSE = 0.70
 
 
+def _depth_or_none(s: Dict) -> Optional[float]:
+    """F-70: structural_depth for display, or None when the judge did not score it."""
+    d = s.get("structural_depth")
+    return round(float(d), 2) if isinstance(d, (int, float)) else None
+
+
 def _serendipity_cause(purpose_sim, mechanism_dist, purpose_sim_uncapped=None) -> Dict[str, Any]:
     """Name the binding factor of a serendipity rejection (F-22). Never a verdict on value."""
     if not isinstance(purpose_sim, (int, float)) or not isinstance(mechanism_dist, (int, float)):
@@ -1159,6 +1165,7 @@ def _quality_gate_and_build(
                 distance_score=round(mech_dist, 2),
                 structure_score=round(s["purpose_sim"], 2),
                 serendipity_score=round(ser, 2),
+                structural_depth=_depth_or_none(s),
                 usefulness_hypothesis=s["serendipity_rationale"],
             )]
         print(f"[info] Track B: 0件（ゲート未通過、fallback閾値 {_FALLBACK_FLOOR} 未満）")
@@ -1213,6 +1220,7 @@ def _quality_gate_and_build(
             distance_score=round(mech_dist, 2),
             structure_score=round(s["purpose_sim"], 2),
             serendipity_score=round(serendipity, 2),
+            structural_depth=_depth_or_none(s),
             usefulness_hypothesis=s.get("serendipity_rationale", ""),
         ))
     _update_diag(diag, status="ok", scored=scored_n, anomaly=anomaly_count, hollow=hollow_count,

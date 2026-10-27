@@ -1040,9 +1040,23 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: W7097503115（2013・抄録が「Preliminary and incomplete We study…」）と W7100969747（2014・「We study…」）／W7096298808（題の末尾「. Working paper」）と W7100199310（同題の末尾「. Finance and Stochastics」）／W7096945385（「2004b) Completeness of a reduced-form credit risk model… . Working paper」）と W1966247368（2006・題「Replication of Contingent Claims in a Reduced-Form Credit Risk Model…」）。どれも片方か両方に DOI が無い。F-67-R（句読点だけ違う題）と F-52-R（抄録の書き出し）のどちらにも掛からない。
 
+### F-70. delegate_finalize ほか Track B の描画 — **点数の行の「構造」が、渡した purpose_sim を指している。手順書と引数では「構造」は structural_depth（Gentner の構造対応）を指す**（性能調査 2026-10-24 salon-sites・2026-10-26 メタグモ「出力の表示」に採番・2026-10-27 起票） → **同日対処済み＝「対処済み」節 F-70-R**
+
+- 観測: 「セレンディピティ・スコア: 0.5（距離 0.86 × 構造 0.58）」の 0.58 は purpose_sim、その候補の structural_depth は 0.66（10-24）。10-26 も「構造 0.72」＝purpose_sim（structural_depth は 0.81）。点数の定義（`classify`: serendipity = purpose_sim × mechanism_dist）どおりの値で、取り違えたのは名前。
+
 ---
 
 ## 対処済み
+
+### F-70-R. delegate_finalize ほか Track B の描画 — **点数の行は 2 つ目の因子を「目的の一致（purpose_sim）」と名乗り、structural_depth は別に「構造の深さ（点数には入らない）」と並べる** — **対処済み 2026-10-27（描画のみ）**
+
+- 発端（性能調査 10-24・10-26）: F-70。
+- 変えたもの（**finalize の描画**＝`output_spec._render_track_b_entry`。LLM 経路の 2 か所（`mcp_server` byserendipity／bybridge）の「構造:」と「近いが有用」の説明文の「距離 × 構造」も同じ名前に。点数・ゲート・選別・材料は不変）:
+  1. `OutputEntry.structural_depth`（既定 None）を足し、`classify` が出力行を作るときに審査の structural_depth を写す（無ければ None）。
+  2. 行の形: `（距離 0.86 × 目的の一致 0.58＝purpose_sim）／構造の深さ 0.66（structural_depth・hollow ゲートにだけ使い、点数には入らない）`。structural_depth が無い候補は後半を出さない。
+- 実測（10-24 の値を再現した 8 件の finalize・API なし）: before `（距離 0.86 × 構造 0.58）` → after `（距離 0.86 × 目的の一致 0.58＝purpose_sim）／構造の深さ 0.66（…点数には入らない）`。
+- 検証: 新規 2 件（`tests/test_score_line_names_purpose.py`）。665 pass。
+- 残る限界: 手順書（`docs/agent_rules/`）と seihai 側の手順メモで「構造」を purpose_sim の意味で使っている箇所があれば、それは読み手の側の言葉で、今回は触っていない。
 
 ### F-69-R. byserendipity(raw_only) — **題の末尾の短い版の添え書き（「. Working paper」「. PLoS Comput Biol 2013」）と、抄録の先頭の「Preliminary and incomplete」を照合から外す** — **対処済み 2026-10-25（既定の変更・収集段の照合の鍵だけ）**
 

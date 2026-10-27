@@ -233,10 +233,15 @@ def _render_track_b_entry(section_idx: int, entry_idx: int, entry: OutputEntry) 
     lines.append(f"### {entry_idx + 1}. {entry.work.title}")
     lines.append("")
     lines.append(f"- **接続点**: {entry.label or '—'}")
-    lines.append(
+    # F-70: the second factor is purpose_sim, not the judge's structural_depth; calling it
+    # "構造" made readers take it for structural_depth (Gentner), the hollow gate's input.
+    score_line = (
         f"- **セレンディピティ・スコア**: {entry.serendipity_score} "
-        f"（距離 {entry.distance_score} × 構造 {entry.structure_score}）"
+        f"（距離 {entry.distance_score} × 目的の一致 {entry.structure_score}＝purpose_sim）"
     )
+    if entry.structural_depth is not None:
+        score_line += f"／構造の深さ {entry.structural_depth}（structural_depth・hollow ゲートにだけ使い、点数には入らない）"
+    lines.append(score_line)
     lines.append(f"- 年: {entry.work.year}  |  掲載: {entry.work.venue}  |  被引用: {entry.work.cited_by_count}")
     lines.append(f"- リンク: {_link_for_work(entry.work)}")
     lines.append("")
