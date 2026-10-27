@@ -3007,3 +3007,33 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 **新しい様式**: bybridge の交差候補の上位が「主題の古典（Field ラベルだけ別）」になった 1 点。他は再現。呼び手の誤り（bybridge へ `materials_max_chars`）は 4 回目＝seihai 側の手順メモで止める。
 
 > **contra 側注記（2026-10-25 失敗対処デー）**: (1) bybridge の「主題の古典が上位（Field は Mathematics）」は **F-44 の 5 例目**として F-44 に記録した。`topic_seen` は 60 件すべて none で、Topic による除外の拡大は 0 件しか外さない＝10/09 の見送りの結論のまま。呼び手が「近いが有用」で落としたのは F-22（距離×構造の設計上の帰結）どおり。主題の古典を拾いたい日は `home_topic_exclusion` ではなく近傍側（シード名簿そのもの・byserendipity の Near）から取る前提は変わらない。(2) byrepo は **F-14 の再現**として記録のみ（`null model` は README を含め 0 件＝プールに無い。順位側の処方 F-41-R・F-43-M・F-29-W・F-48 はいずれも返る中身を変えなかった）。(3) bybridge への `materials_max_chars` は 4 回目。F-57-R の名指しは結果の先頭に出ている。bybridge に予算を入れるかは F-57 の実測（抄録を全部捨てても 47k 字）により人間の判断待ちのまま。(4) byserendipity と delegate_finalize は正常。抄録の末尾残し（F-60-R）は働いた。今日 F-68-R で、末尾を残した抄録は「…」で始まり、summary を書かない場合の概要は「原文の末尾の抜粋」と名乗るようになった。
+
+## 2026-10-26（月・seihai r01 / FJ）の観測
+
+テーマ（英語で投入）: USDJPY M1 の出来高バーストに伴う一時的な価格圧力を、静かな局面でだけ逆張りする設計（流動性供給プレミアム・0.5 pips のスプレッド）。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 20） | include mean reversion / forex / intraday / liquidity / tick volume | 上位 4 件は ib_async 53.7・rolling-panda-san/notebooks 52.5・statarb 52.5・tradingview-mcp 51.8。`tick volume` は README を含め **0 件**、`intraday`・`liquidity` は README のみ | **F-14 の再現（seihai 側 12 回目）** |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | Near＝板の価格インパクト減衰／Far＝水文学のピーク減衰／Very Far＝圧受容器反射のリセット | **Near は `home_converged` で棄却**、Far 35→23・Very Far 45→29（52 件・41.6k 字でインライン） | 正常。Near の棄却は呼び手の facet 設計（ホーム内の語彙で書いた）で、contra の誤りではない |
+| **delegate_finalize**（byserendipity・52 件全件） | 5 件に材料 echo・47 件は点数のみ | anomaly 12・hollow 0・通過 12・**出力 4**（Pulsatile pressure 0.47／Rapid resetting 0.44／Extent of resetting 0.41／Recession non-stationary 0.37）・接地検証失敗 0 | 正常 |
+| **bybridge**（materials・lean・`materials_abstract_chars 300`・`materials_max_chars` は渡していない） | include foreign exchange / intraday / liquidity provision / price reversal / order flow | 58.7k 字でファイル退避（bridge_signals 15.5k）。シード 20/20 Finance・主題どおり。**最頻 bridge＝Kyle 1985（主題の基礎文献）が上位 10 件の 100%**・全体 30%・使われた bridge 27 本 | 上位窓の多様化は働かず（F-25 の説明どおり）。ハブは分野外でなく主題の基礎 |
+| **delegate_finalize**（bybridge・60 件全件） | 3 件に材料 echo・57 件は点数のみ | anomaly 53（開示・企業統治・配当）・hollow 1・通過 0・**出力 1（fallback・Almgren–Chriss 0.16）** | 「シードは主題どおり・交差候補は主題外」の再現。同じ基礎（Kyle）を引く別分野が会計の開示研究に偏った |
+
+**新しい様式なし。** 呼び手の誤り（bybridge へ `materials_max_chars`）は今回は起きていない。
+
+## 2026-10-27（火・seihai r02 / F2 GP）の観測
+
+テーマ（英語で投入）: 事前登録バーの「CPCV test fold の 60% 以上で正」は、小さな勝ち fold が多数・大きな負け fold が少数の設計（fold 平均は負）を通す。10〜15 fold で 1 本の外れに頑健かつ損失の大きさに感度のある基準は何か。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo**（structured・github・pool 12） | include cpcv / purged cross-validation / backtest overfitting / walk-forward / deflated sharpe・`scope_field` も手法名 | 上位 4 件は purged-cross-validation（関連度 1.0・81.0）・llm-quant・How-To-Backtest-Correctly・Forven。**主題の実装が上位**。ただし `cpcv` を名前/説明/topics に持つものはプール 0 件（README のみ 6 件）の警告 | **F-14 からの回復**（先週・先々週は収穫ゼロ）。違いは include を手法名にしたこと。fold の集約（割合か平均か）を扱うかは README からは不明 |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | Near 寄り＝メタ分析の vote counting／Far＝貯水池の reliability・vulnerability／Very Far＝bet hedging・幾何平均適応度 | 返却 30/42/35 → 60 件（41.3k 字・インライン・抄録末尾 262 字） | 正常 |
+| **delegate_finalize**（byserendipity・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 16・**hollow 35**・通過 2・**出力 2**（Moy 1986 RRV 0.59／Hashimoto 1982 0.54）・分位母数 9。Hedges & Olkin 1980（vote counting）が 0.533 vs 閾値 0.541 で「近いが有用」 | 正常。hollow 35 は呼び手の structural_depth の付け方（2 週続けて分位母数が小さい） |
+| **bybridge**（materials・lean） | include backtest overfitting / cross-validation / trading strategy / out-of-sample / skewness。**`materials_max_chars` を渡した（5 回目・F-57 の警告で無視）** | **84,019 字でファイル退避**（materials 70.1k・うち bridge_signals 15.1k）。シード 20 件主題どおり（Finance 17）・語彙レッグ主題一致 58%（先週 0%）。**最頻 bridge＝Fama "Efficient Capital Markets"（主題の基礎）・上位 10 件の 50%**・全体 18%・使われた bridge 26 本 | 交差候補 60 件＝主題の再掲（Stock Market Forecasting Methods 21 件が兄弟 Field で除外を通過）＋経営・会計 20 件 |
+| **delegate_finalize**（bybridge・60 件全件） | 3 件に材料 echo・57 件は点数のみ | anomaly 19・hollow 35・通過 1・**出力 1（fallback・Nonstandard Errors 0.29）**。分位落ちに Mean-semivariance portfolio optimization with MOEA（ESWA 2017・抄録は上流で空）＝本日の問いに最も直接 | 「シード・bridge は主題どおり、交差候補は主題の再掲か分野外」の再現（10/26 と同じ様式） |
+
+**新しい様式なし。** 呼び手の誤り＝bybridge へ `materials_max_chars`（F-57・5 回目）。
+
+（同日・パターンB のリサーチ）**byserendipity**（raw_only・facet 2・lean・30,000）: 警報設計の誤警報／採餌の離脱判断 → 47 件。**予算 30,000 字は抄録を最小 200 字にしても 32,209 字で収まらない**と警告（全件は返った）。**delegate_finalize**（47 件全件・3 件に材料 echo）: anomaly 0・hollow 35・通過 3・**出力 2**（transient abnormality の watchful waiting 0.53／trip point＋timer 0.48）。3 件目は `not_selected(no_material)`（ゲートは通過・材料を echo していない点数だけの候補）。新しい様式なし。
