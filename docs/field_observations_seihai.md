@@ -3093,3 +3093,21 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 | **delegate_finalize**（bybridge・60 件全件） | 4 件に材料 echo・56 件は点数のみ | anomaly 32・hollow 0・通過 7・**出力 1（fallback・Illusion of Sparsity 0.23）**・分位母数 28 | 「交差候補は主題の再掲か分野外」の再現。分野外の供給源が今回は FDR ハブ経由 |
 
 **新しい様式 1 件**: bybridge の最頻 bridge が主題の基礎文献ではなく分野横断の統計ハブ（BH-FDR）になり、その経由でゲノミクスの道具論文が並んだ（8/14 S-38 の「巨大ハブ吸着」に近いが、占有率は 40%＝旧様式の 100% ではない）。呼び手の誤り＝bybridge へ `materials_max_chars`（6 回目）。
+
+## 2026-10-29（木・seihai r04 / F5 microstructure）の観測
+
+テーマ（英語で投入）: 列挙済みの有限な設計集合 344 本を全部評価し終えたあと、週ごとに伸びる窓で同じ集合から 20 本を測り直して現職と比べている（新しい設計は 7 週ゼロ）。この反復の測り直しに情報は残るか、反復で偽の着席の危険がどれだけ積もるか、いつ止めて仮説空間を広げるべきか。
+
+| ツール | 呼び方 | 結果 | 様式 |
+|---|---|---|---|
+| **byrepo** | 省略（S-62・コード成果物を問わないテーマ） | — | — |
+| **byserendipity**（raw_only・facet 3・lean・45,000） | Near＝臨床試験の群逐次デザイン（alpha spending）／Far＝A/B 基盤の online FDR（alpha-investing・LORD）／Very Far＝化合物ライブラリの飽和と再スクリーニング | 返却 35/19/36 → 60 件（41.5k 字・インライン）。facet [2] だけ返却 19 と少ない | 3 facet とも主題に当たった |
+| **delegate_finalize**（byserendipity・60 件全件） | 8 件に材料 echo・52 件は点数のみ | anomaly 5・hollow 0・通過 16・**出力 5**（化合物コレクションの再スクリーニング対新規合成の損益分岐 1997 0.59／replication-promotion criteria 1997 0.49／Armitage 1969 0.47／α-investing 2008 0.46／alpha spending 1994 0.45）・**接地検証失敗 0** | 正常 |
+| **bybridge**（materials・lean・`materials_abstract_chars` 280。**`materials_max_chars` は渡していない**） | include data snooping / technical trading rules / multiple testing / backtest overfitting / sequential testing | **58,668 字でファイル退避**（materials 49.7k・うち bridge_signals 15.1k が abstract 12.8k より大きい）。シード 20 件（Field 一致 55%）は**主題どおりどころか中心そのもの**＝Armitage 1969 "Repeated Significance Tests on Accumulating Data"・"Repeated Hypothesis Testing on a Growing Data Set"（1982）・"Risk inflation of sequential tests controlled by alpha investing"（2014）・Harvey-Liu-Zhu 2015 ほか。最頻 bridge＝Fama 1970 "Efficient Capital Markets"（交差候補の 13%・**上位 10 件の 50%**）・次点 LSTM（被引用 102k） | **新しい様式**（下記） |
+| **delegate_finalize**（bybridge・60 件全件） | 1 件に材料 echo・59 件は点数のみ | **anomaly 54**・hollow 0・通過 1・**出力 1（fallback・Limit laws for record values 1973・0.31）**・分位母数 6 | 交差候補はほぼ全部主題外（LSTM 系 8・企業の為替エクスポージャ・ポートフォリオ選択・喘息の臨床試験 2） |
+
+**新しい様式 1 件（bybridge）**: **主題の中心にあるシードほど bridge を供給しない。** 逐次検定のシード 3 本（1969・1982・2014）は bridge 寄与が**各 1 本**で、bridge の 31% は参照文献リストの長い金融 ML のシード 2 本（"Enhancing stock market anomalies with machine learning" 18 本・"Causal Factor Investing" 16 本）から来た。交差候補はその参照文献（効率的市場仮説・ICAPM・LSTM）経由で並んだ。名簿は主題どおりでも、**bridge プールは参照文献の多いシードに比例して埋まる**ので、主題の重心と bridge の重心がずれる。「シードは主題どおり・交差候補は主題外」の 8 回目だが、今回は原因がシード名簿ではなく**シードごとの参照数の偏り**として見えた（候補: bridge をシードあたり均等配分する）。
+
+**大きさ**: `materials_max_chars` を渡さず `materials_abstract_chars` 280＋lean にしても 58.7k 字でファイル退避した。抄録より bridge_signals（15.1k）の方が重い。bybridge 側にも全体の字数予算（F-50b 相当）が要る。
+
+**呼び手の誤り 1 件**: bybridge の fallback 候補（抄録が上流で空）を `abstract: null` で echo し、`upstream_empty` を落とした（F-19-V の警告が出た）。
