@@ -3111,3 +3111,11 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 **大きさ**: `materials_max_chars` を渡さず `materials_abstract_chars` 280＋lean にしても 58.7k 字でファイル退避した。抄録より bridge_signals（15.1k）の方が重い。bybridge 側にも全体の字数予算（F-50b 相当）が要る。
 
 **呼び手の誤り 1 件**: bybridge の fallback 候補（抄録が上流で空）を `abstract: null` で echo し、`upstream_empty` を落とした（F-19-V の警告が出た）。
+
+## 2026-10-30（金・seihai r05 / F9 LLM）の観測
+
+テーマ: 摩擦 2 倍で死ぬ M1 設計（前週の r05 選別で 40 本中 32 本）——1 回の取引あたりのエッジをコストに対して厚くする設計（no-trade 帯・コストを見た閾値・回転を下げる）。
+
+- **byrepo（structured・github・pool 20・`keyword_fair_share`）**: **F-14 の再現**。`no-trade region`／`slippage`／`turnover` を名前/説明/topics に掲げるリポジトリはプールに 0 件（README のみ 4／10／4 件）。上位 5 件は平均分散ポートフォリオ最適化（Jiangki/ledge 68.7）・汎用バックテスタ（ml4t/backtest）など。**収穫ゼロ**（コストを見た信号設計の実装アンカーは無し）。
+- **byserendipity（raw_only・facet 3＝ヒステリシス制御／(s,S) 在庫／採餌の移動コスト・60 件全件提出）**: 正常。通過 15・出力 5・**接地検証失敗 0**。制御工学 facet が主題に当たった（ブレーキ/スロットルのヒステリシスがチャタを消して追従を落とさない・M/M/1 の切替コストで最適政策が粘着する・狭すぎる帯で切替が過剰になる buck converter）。採餌 facet は返却 39 のうちホーム除外 10・残 9 で、ホーム除外の上位がまさに主題の文献（"Two-mode control of Brownian Motion with quadratic loss and switching costs"・"A Method for Computing Double Band Policies…"＝Economics に分類）だった＝**Very Far のつもりの facet が主題の中心へ収束した**（home_converged は立っていない）。
+- **bybridge（materials・lean・abstract 250）**: **旧様式ではないが、交差候補が主題そのもの**。最頻 bridge＝Brock-Lakonishok-LeBaron "Simple Technical Trading Rules…"（主題ドメインの基礎文献）・上位 10 件の **100%**・全体 47%・実使用 bridge 24 本。交差候補 60 件の Topic は **"Stock Market Forecasting Methods" が 43 件**（Field は Decision Sciences）＝F-32 のホーム Topic 除外は名簿が占める Topic（Financial Markets and Investment Strategies 等）しか見ないので、名簿に無い主題の兄弟 Topic が素通りした。私の採点で anomaly 53・出力は fallback 1（surrogate data 法・0.30）。抄録が上流で空 33/60。**大きさ**: `materials_max_chars` は渡さず（F-57 を守った）lean＋abstract 250 で 54.2k 字・ファイル退避（前回 58.7k と同様、bybridge 側に全体の字数予算が無い）。
