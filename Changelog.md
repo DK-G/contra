@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-10-30（CL-0159） 履歴の鍵を名前で固定できるようにする（F-74）
+
+### 概要
+* `src/mcp_server.py`: `_history_hash`・`_history_key_prop`。byserendipity／bybridge／delegate_finalize に `history_key`。見出しと `履歴記録` の行に鍵を明記。
+* `tests/test_history_key.py`: 新規 5 件。689 pass。
+* 実測（API なし）: 説明を書き直した次回の除外 0 件 → 1 件。
+* `docs/field_observations_seihai.md`: F-74・F-74-R。
+
 ## 2026-10-30（CL-0158） 補足資料のレコードを byserendipity の候補から外す（F-72）
 
 ### 概要

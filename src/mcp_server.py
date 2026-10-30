@@ -191,6 +191,21 @@ def _build_theme_input(args: Dict[str, Any]) -> ThemeInput:
 # same report. These helpers wire the same per-theme history into the MCP handlers, keyed by
 # compute_theme_hash(theme_overview). `no_history` disables it; optional used_ids/used_titles/
 # used_dois args merge agent-managed exclusions on top of the file history.
+# F-74 (survey 2026-10-28): a caller who rewrites theme_overview each run gets a new hash, so the
+# earlier runs' output is invisible and comes back. `history_key` names the file instead.
+
+def _history_hash(theme: ThemeInput, args: Dict[str, Any]) -> str:
+    key = str(args.get("history_key") or "").strip()
+    return compute_theme_hash(key or theme.theme_overview)
+
+
+def _history_key_prop() -> Dict[str, Any]:
+    return {"type": "string", "description": (
+        "Optional name of the cross-run history to use instead of the theme_overview hash (F-74). "
+        "Pass the same short name (e.g. the project's name) on the collect call and on "
+        "delegate_finalize when theme_overview is rewritten between runs; otherwise each rewrite "
+        "starts an empty history and earlier output comes back.")}
+
 
 def _history_exclusions(theme: ThemeInput, args: Dict[str, Any], *, history_dir=None):
     """Load prior-run exclusions (file history ∪ agent-supplied) unless ``no_history``."""
@@ -198,7 +213,7 @@ def _history_exclusions(theme: ThemeInput, args: Dict[str, Any], *, history_dir=
     used_titles = {str(x) for x in (args.get("used_titles") or [])}
     used_dois = {str(x) for x in (args.get("used_dois") or [])}
     if not args.get("no_history"):
-        h = load_history(compute_theme_hash(theme.theme_overview),
+        h = load_history(_history_hash(theme, args),
                          **({} if history_dir is None else {"history_dir": history_dir}))
         used_ids |= set(h.used_ids)
         used_titles |= set(h.used_titles)
@@ -219,7 +234,7 @@ def _history_adopt(theme: ThemeInput, args: Dict[str, Any], entries, *, history_
         return 0
     titles = [_norm_title(e.work.title) for e in entries if e.work]
     dois = [_norm_doi(e.work.doi) for e in entries if e.work and e.work.doi]
-    theme_hash = compute_theme_hash(theme.theme_overview)
+    theme_hash = _history_hash(theme, args)
     save_history(
         ThemeHistory(theme_hash=theme_hash, used_ids=[], generated_at=""),
         ids, titles, dois,
@@ -666,6 +681,7 @@ class StdinMcpServer:
                         "materials_max_chars": _materials_max_chars_prop(),
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
+                        "history_key": _history_key_prop(),
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
                         "used_titles": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed title exclusions, merged with the file history."},
                         "used_dois": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed DOI exclusions, merged with the file history."}
@@ -741,6 +757,7 @@ class StdinMcpServer:
                         "llm_model": {"type": "string", "description": "LLM model for selection/generation when raw_only is false.", "default": "gpt-4o-mini"},
                         "output_floor": {"type": "number", "description": "Lower floor for quality filtering (set to 0.0 to return best fallback).", "default": 0.0},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, cross-domain candidates already surfaced for this theme are excluded and adopted ones recorded (data/history/), so re-runs return NEW papers.", "default": False},
+                        "history_key": _history_key_prop(),
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed work-id exclusions, merged with the file history."},
                         "diagnostics": {"type": "boolean", "description": "Include the run diagnostics block: the near-field seeds actually used (title/venue/DOI/citations), the seed roster's provenance line (F-13: Field / Subfield / Topic distribution plus the semantic leg's supply), which bridges the cross-domain candidates travelled through, and how far they concentrate on one bridge. Needed to tell a seed-search failure apart from giant-hub absorption. Set false for counts only.", "default": True},
                         "seed_field_scope": {"type": "boolean", "description": "Scope every lexical seed query (and its generic-search fallback) to the theme's home Field via primary_topic.field.id, so homograph collisions cannot pull the seed roster into another discipline (F-13). Fail-open when scope.field does not resolve. false restores the unscoped legacy search.", "default": True},
@@ -782,6 +799,7 @@ class StdinMcpServer:
                         "emit_fallback": {"type": "boolean", "description": "If false, a run with nothing above output_floor reports saturation instead of a weak single-best (M3).", "default": True},
                         "grounded_only": {"type": "boolean", "description": "Grounding contract (default true): agent prose (relationship/serendipity_rationale) must carry verbatim theme_quote + source_quote; contra verifies them in code and drops ungrounded prose (scores kept, failure named in the output). Set false to restore the old trust-the-prose behaviour.", "default": True},
                         "no_history": {"type": "boolean", "description": "Skip recording adopted papers to this theme's history. By default the entries that pass the post-gate are recorded (data/history/, keyed by theme_overview hash) so the matching raw-collect on the next run excludes them.", "default": False},
+                        "history_key": _history_key_prop(),
                         "candidates": {
                             "type": "array",
                             "description": (
@@ -1027,6 +1045,8 @@ class StdinMcpServer:
         budget = _materials_budget(args)
         part = _materials_abstract_part(args, budget)
         hist_note = f"・履歴除外 {len(used_ids)} 件" if used_ids else ""
+        if args.get("history_key") and not args.get("no_history"):
+            hist_note += f"・history_key {str(args['history_key']).strip()!r}"
 
         def _build(cut: Optional[int]) -> List[Dict[str, Any]]:
             out = []
@@ -1872,7 +1892,10 @@ class StdinMcpServer:
         # delegation loop's cross-run dedup: raw-collect excludes, finalize records).
         adopted = _history_adopt(theme, args, entries)
         if adopted:
-            diag_line += f" / 履歴記録 {adopted} 件"
+            diag_line += f" / 履歴記録 {adopted} 件" + (
+                f"（history_key {str(args['history_key']).strip()!r}）" if args.get("history_key")
+                # F-74: said here because the caller only finds out on the next run.
+                else "（theme_overview の hash に記録。説明を書き換えると次回は除外されません＝固定するなら history_key）")
         diag_line += extra
         # F-54: the delegated path left the appendix as "取得日: TBD / 検索条件: TBD / フィルタ条件:
         # TBD". finalize knows its own date and the gates it applied; it never searched, so the
