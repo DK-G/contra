@@ -60,6 +60,9 @@ class CollectConfig:
     # repository copy titled "SUMMARY" or "….pdf", no DOI or a deposit DOI), which the
     # id / title / DOI checks cannot see. False restores the old behaviour.
     same_abstract_dedup: bool = True
+    # F-72: in the semantic Track B collection, a record titled as a supplement of a paper
+    # ("Additional file 3: of …", "Figure S1 from …") is not a candidate. False keeps them.
+    supplement_title_exclusion: bool = True
     # F-33 (2026-09-25): the bybridge semantic seed leg re-sends a 504 until this many seconds
     # have passed (OpenAlexConfig.gateway_patience_sec). The endpoint's 504s come in streaks
     # that clear within minutes and are not charged to the daily budget; the leg supplied 0
@@ -1075,6 +1078,20 @@ def _is_400(exc: Exception) -> bool:
 # F-71: how many home-excluded records each facet names in the breakdown (semantic order).
 HOME_EXCLUDED_HEAD = 3
 
+# F-72 (survey 10-15, 10-24, 10-26): Figshare files each supplement of a paper as its own work, with
+# publication_type article, so the type filter passes them. The title says what it is: a numbered
+# file, figure or table OF or FROM a paper. In 2,943 saved candidates this matches 8 records, all
+# supplements, and nothing else ("Tables of critical values …" and "Data from: …" stay).
+SUPPLEMENT_TITLE = re.compile(
+    r"^\s*(?:additional\s+files?|supplement(?:ary|al)\s+(?:materials?|files?|tables?|figures?|data|information)"
+    r"|supporting\s+information|(?:figure|fig\.?|table|movie|video|data|appendix)(?=\s+s?\d))"
+    r"(?:\s+s?\d+[a-z]?)?\s*[:.]?\s+(?:of|from|for)\s", re.I)
+SUPPLEMENT_EXCLUDED_HEAD = 3
+
+
+def is_supplement_title(title: Optional[str]) -> bool:
+    return bool(title and SUPPLEMENT_TITLE.match(title))
+
 
 def _collect_track_b_semantic(
     theme: ThemeInput,
@@ -1187,6 +1204,15 @@ def _collect_track_b_semantic(
             {"id": w.id, "title": w.title or "", "field": (w.source_meta or {}).get(
                 "primary_topic_field_name") or ""}
             for w in dropped[:HOME_EXCLUDED_HEAD]]
+        # F-72: a supplement record does not take a slot. Named, because its title says which
+        # paper it belongs to and the paper itself may not have come back.
+        if cfg.supplement_title_exclusion:
+            supplements = [w for w in kept_home if is_supplement_title(w.title)]
+            if supplements:
+                rec["supplement_excluded"] = len(supplements)
+                rec["supplement_excluded_head"] = [
+                    {"id": w.id, "title": w.title or ""} for w in supplements[:SUPPLEMENT_EXCLUDED_HEAD]]
+                kept_home = [w for w in kept_home if not is_supplement_title(w.title)]
         for w in kept_home:
             # F-67 (survey 2026-10-22): a paper and its conference abstract came back as
             # "Gaze behavior as a visual cue to animacy." and the same title without the period.

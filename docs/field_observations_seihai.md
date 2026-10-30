@@ -1050,7 +1050,7 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: 生態音響の切り口は 27 件返って除外後 9 件。狙った長時間の偽色スペクトログラムの論文 2 本（W2800788874・W2732185036）は主トピックの Field が Computer Science だった（調査側が手元の `works?search=` で確認）。F-65（ホーム分野の学会の論文が別 Field で残る）の裏返し＝除外は中身の Field で判定するので、掲載先でも呼び手の分野名でもなく OpenAlex の分類で落ちる。
 - 判断待ち（人間）: 除外された上位を「近いが遠い分野の切り口から来た」として残す opt-in（例: 切り口の類似度順で上位 N 件は除外しない）を足すか。F-32-R・F-44 と同じく、ホーム除外を緩めると主題の論文の再掲も増える。今回は計器だけで、呼び手が id で取り直せるようにした。
 
-### F-72. byserendipity(raw_only) — **論文でない補足資料のレコード（Figshare の「Additional file N: of …」「Figure S1 from …」「Table S1 from …」）が候補の枠を取る。publication_type は article なので型の絞り込みを通る**（性能調査 2026-10-15 hAIbit・10-24 salon-sites・10-26 メタグモの 3 回に採番・2026-10-27 起票・**実装していない**）
+### F-72. byserendipity(raw_only) — **論文でない補足資料のレコード（Figshare の「Additional file N: of …」「Figure S1 from …」「Table S1 from …」）が候補の枠を取る。publication_type は article なので型の絞り込みを通る**（性能調査 2026-10-15 hAIbit・10-24 salon-sites・10-26 メタグモの 3 回に採番・2026-10-27 起票） → **2026-10-30 に対処済み＝「対処済み」節 F-72-R**
 
 - 観測: W6976565497「Figure S1 from Pausing to swarm…」（本体 W4392391009 も同じ回）／W6977677453「Additional file 6: of Avoidance of recognition sites…」（本体 W2904490504 も同じ回）・W6901836165「Table S1 from Noisy communities and signal detection…」／W7136287016「Additional file 3: of Visualizing sound: counting wolves…」（要旨「Links to the videos used for WDH test. (DOCX 12 kb)」）。F-53（上流のレコードが壊れている）と同種だが、題の形が決まっているので contra 側で判別できる。
 - 処方の候補（未実装）: 収集段の照合（`collect._collect_track_b_semantic`）で、題が `^(Additional file|Supplementary (material|file|table|figure)|Figure S?\d+|Table S?\d+|Data S\d+|Movie S\d+).*(of|from)` に当たるレコードを候補から外し、facet 別内訳に件数を出す。本体が同じ回に無いときに捨てるか（本体を取り直すか）は実例を見て決める。
@@ -1059,6 +1059,26 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 ---
 
 ## 対処済み
+
+### F-72-R. byserendipity(raw_only) — **題が「番号つきの補足資料 of／from／for 論文」の形のレコードは候補の枠を取らせず、facet 別内訳に名指しする** — **対処済み 2026-10-30（既定の変更・収集段の 1 つの除外）**
+
+- 発端（性能調査 10-15 hAIbit・10-24 salon-sites・10-26 メタグモの 3 回）: F-72。
+- どのくらい起きているか（API なし・`output/f72_scan_supplement_titles.py`。Claude Code に保存された materials 72 回分・候補 2,943 件）: 今回の規則に当たるのは **8 件で、8 件とも補足資料**（Additional file 6 件・Figure S1・Table S1）。論文の誤判定は 0 件。広めの字面で引いて規則には当てなかった組: 「Tables of critical values for two group interim analyses」「Data from: …」（Dryad のデータ）。
+- 変えたもの（**byserendipity の収集段の照合の前**＝`collect._collect_track_b_semantic`。採点・materials の形・ホーム除外は不変）:
+  1. `is_supplement_title`: `Additional file(s) [N]`／`Supplementary|Supplemental Material|File|Table|Figure|Data|Information [N]`／`Supporting Information [N]`／`Figure|Fig.|Table|Movie|Video|Data|Appendix [S]N` の直後に `of|from|for` が続く題。
+  2. 当たったレコードはホーム除外の後に候補から外し、facet 別内訳に `（補足資料のレコード 1 件を除外: W7136287016「Additional file 3: of Visualizing sound: …」）`（先頭 3 件）。題に本体の論文の名前が入っているので、呼び手は要るなら本体を引ける。
+  3. `CollectConfig(supplement_title_exclusion=False)` で戻せる（MCP の引数は足していない）。
+- 実測（実 MCP 経路・実 API・当時の呼び出しの引数をそのまま再生・`no_history`）:
+
+  | 再生した呼び出し | before（規則を切る） | after |
+  |---|---|---|
+  | **10-26 メタグモ** | 候補 54 件・W7136287016 あり・切り口 [2] の除外後 13 | 候補 **53** 件・W7136287016 なし・切り口 [2] の除外後 12。**抜けたのはこの 1 件だけで、入れ替わりなし**。内訳に名指しされた |
+  | 10-24 salon-sites | 60 件・該当なし | 60 件・同じ（当時の W6977677453・W6901836165 は今夜の返却に無かった＝**再現せず**） |
+  | 10-15 hAIbit | —（after のみ） | 該当なし（W6976565497 は今夜の返却に無かった＝**再現せず**） |
+
+  semantic 検索の返却は日によって変わるので、効果の実測としては 10-26 の 1 件だけ。OpenAlex 9 回。
+- 検証: 新規 17 件（`tests/test_supplement_title_exclusion.py`・規則の当たり 7／外れ 8・枠を取らず名指し・フラグで戻す）。684 pass。
+- **残る限界**: (1) 枠は 60 を超えたときだけ別の候補に回る。今回の 54→53 のように枠に余裕があると、外した分は単に減る。(2) 本体を取り直さない（本体が同じ回に無いと、呼び手が名指しから引かない限り出てこない）。保存結果では 3 回に 2 回は本体も同じ回にいた。(3) 「Data from: …」は外していない（抄録は論文と同文のことが多く、本体があれば F-52-R でまとまる）。(4) 番号も of／from も無い補足資料（「S1 Table」「Dataset」単独）は当たらない。保存結果の 2,943 件には無かった。(5) bybridge には当てていない（観測が無い）。
 
 ### F-71-I. byserendipity(raw_only) — **facet 別内訳に、ホーム除外で落ちた件数と、類似度順の先頭 3 件（id・題・Field）を出す**（F-71 の計器） — **対処済み 2026-10-27（計器のみ）**
 

@@ -455,6 +455,19 @@ def _home_excluded_note(r: Dict[str, Any]) -> str:
             + "）")
 
 
+def _supplement_excluded_note(r: Dict[str, Any]) -> str:
+    """F-72: "（補足資料のレコード N 件を除外: W1「Additional file 3: of …」 / …）", or ""."""
+    n = r.get("supplement_excluded") or 0
+    if not n:
+        return ""
+    head = []
+    for h in r.get("supplement_excluded_head") or []:
+        title = str(h.get("title") or "")
+        head.append(str(h.get("id") or "").rsplit("/", 1)[-1] + "「"
+                    + (title[:89] + "…" if len(title) > 90 else title) + "」")
+    return f"（補足資料のレコード {n} 件を除外: " + " / ".join(head) + "）"
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -487,6 +500,8 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             # F-71: what the home exclusion took, so a far field's central paper filed under
             # the home Field is visible (the caller can fetch it by id if it is the target).
             + _home_excluded_note(r)
+            # F-72: a supplement names its paper; the paper itself may not be among the candidates.
+            + _supplement_excluded_note(r)
             # F-64: the field the facet actually came back from, to read against its name.
             + (f"（主な分野 {r['top_field']['name']} {r['top_field']['count']}/{r.get('kept', 0)}）"
                if r.get("top_field") else "")

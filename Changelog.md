@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-30（CL-0158） 補足資料のレコードを byserendipity の候補から外す（F-72）
+
+### 概要
+* `src/pipeline/collect.py`: `is_supplement_title`。semantic 収集でホーム除外の後に外し、facet ごとに `supplement_excluded`／`supplement_excluded_head`。`CollectConfig.supplement_title_exclusion`（既定 true）。
+* `src/mcp_server.py`: `_supplement_excluded_note`。facet 別内訳に名指し。
+* `tests/test_supplement_title_exclusion.py`: 新規 17 件。684 pass。
+* 実測: 保存結果 2,943 件で 8 件・全部補足資料。実 API の 10-26 再生で 54→53 件（W7136287016 だけが抜けた）。
+* `docs/field_observations_seihai.md`: F-72-R。
+
 ## 2026-10-27（CL-0157） ホーム除外で落ちた件数と先頭を内訳に出す（F-71）
 
 ### 概要
