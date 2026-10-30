@@ -859,6 +859,43 @@ def lexical_bridges_last(
     return [b for b in pool if b not in moved] + lexical, len(lexical)
 
 
+def seed_pool_coverage(seeds: Sequence[Work], pool: Iterable[str]) -> Dict[str, Any]:
+    """How the bridge pool splits across the roster (F-73).
+
+    seihai 2026-10-29: the seeds at the centre of the question cited 0-1 pooled bridges, two
+    reference-heavy seeds off to the side cited 18 and 16. The pool takes references several
+    seeds share first, so a seed whose references nobody else cites gets only what is left.
+    """
+    pset = set(pool or [])
+    contrib: List[int] = []
+    shared: Dict[str, int] = {}
+    absent: List[Dict[str, Any]] = []
+    for s in seeds or []:
+        refs = set(s.referenced_works or [])
+        hit = refs & pset
+        contrib.append(len(hit))
+        for b in hit:
+            shared[b] = shared.get(b, 0) + 1
+        if refs and not hit:
+            absent.append({"title": str(s.title or "(no title)"), "refs": len(refs)})
+    total = sum(contrib)
+    return {"pool": len(pset), "shared": sum(1 for v in shared.values() if v >= 2),
+            "top2_share": (sum(sorted(contrib, reverse=True)[:2]) / total) if total else 0.0,
+            "absent": absent}
+
+
+def render_seed_pool_coverage(cov: Dict[str, Any], *, head: int = 3) -> str:
+    line = (f"- シード別の bridge 枠 (F-73): プール {cov['pool']} 本のうち複数シードが共有 {cov['shared']} 本"
+            f"・上位 2 シードの寄与 {cov['top2_share'] * 100:.0f}%")
+    absent = cov["absent"]
+    if absent:
+        names = " / ".join(
+            f"「{a['title'][:60]}」（参照 {a['refs']} 本）" for a in sorted(absent, key=lambda a: -a["refs"])[:head])
+        line += (f"。参照を持つのにプールに 0 本のシード {len(absent)} 件: {names}"
+                 "＝共有の多い参照から先に枠を取るので、これらのシードからは交差候補が来ません")
+    return line
+
+
 def render_seed_routes(routes: SeedRoutes, *, lexical_topic_fraction: Optional[float] = None) -> str:
     """The F-46 lines. The warning has no threshold of its own: it fires when the F-13-L line
     already found the two legs' Topics apart AND candidates arrived through one leg's bridges
@@ -1130,6 +1167,8 @@ __all__ = [
     "filter_live_bridges",
     "render_diagnostics",
     "seed_routes",
+    "seed_pool_coverage",
+    "render_seed_pool_coverage",
     "lexical_bridges_last",
     "candidate_route",
     "render_seed_routes",

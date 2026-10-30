@@ -34,6 +34,8 @@ from src.pipeline.bridge_diagnostics import (
     candidate_route,
     render_candidate_filing,
     render_seed_routes,
+    render_seed_pool_coverage,
+    seed_pool_coverage,
     seed_routes,
     lexical_bridges_last,
     filter_live_bridges,
@@ -1524,6 +1526,9 @@ class StdinMcpServer:
                    if lexical_moved else "")
                 + diag_line
             )
+        if diagnostics:
+            # F-73: which seeds the pool reaches, on the order the scan walked.
+            diag_line = render_seed_pool_coverage(seed_pool_coverage(seeds, bridge_pool)) + "\n" + diag_line
         if diagnostics:
             # F-23/F-24 instrument: the concentration meter above cannot tell the caller
             # WHY the pool is spread the way it is. Naming the retrieval quota makes the
