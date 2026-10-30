@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-10-30（CL-0160） シード別の bridge 枠を診断に出す。順番配分は外れた（F-73）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `seed_pool_coverage`・`render_seed_pool_coverage`。
+* `src/mcp_server.py`: bybridge の診断に 1 行。
+* `tests/test_seed_pool_coverage.py`: 新規 4 件。693 pass。
+* what-if（実装していない）: シードの順番配分を 3 テーマで盲検採点。上位 5 件の平均は微増、点数 0.35 以上の件数は不変、1 テーマで主題外が 29→54。
+* `docs/field_observations_seihai.md`: F-73・F-73-I。
+
 ## 2026-10-30（CL-0159） 履歴の鍵を名前で固定できるようにする（F-74）
 
 ### 概要

@@ -867,6 +867,8 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - **2026-10-25 追記（5 例目・seihai 10-24 週次指針の保存結果。API なし）**: 交差候補の上位 5 件は主題の古典（Stepwise Multiple Testing／MCS and backtest overfitting／Formalized Data Snooping／A Reality Check for Data Snooping／Multiple hypothesis testing in experimental economics）で、**5 件とも Field は Mathematics**、Topic は Statistical Methods in Clinical Trials・Statistical Methods and Inference・Advanced Causal Inference Techniques。**`topic_seen` は 60 件すべて none**＝上の what-if（名簿またはシード候補に 1 件以上ある Topic を除外）で外れるのは **0 件**。10/06（勝者の呪い・Romano–Wolf と Hansen が臨床試験統計の Topic）と同じ形で、主題の検定論は OpenAlex では医学統計・一般統計の Topic に入り、金融の名簿とは Topic を共有しない。**Topic による除外の拡大を見送った 10/09 の結論はこの例でも変わらない**。60 件の Field は Business 21・Mathematics 14・CS 8・生化学 6 ほか。Topic の最頻は Corporate Social Responsibility Reporting 9（ESG）。
 - **2026-10-27 追記（6 例目・seihai 10-27 r02/F2 GP の観測。API なし・保存結果は読んでいない）**: 交差候補 60 件のうち Stock Market Forecasting Methods の 21 件が兄弟 Field で除外を通過（主題の再掲）。シードは 20 件主題どおり（Finance 17）・最頻 bridge は Fama "Efficient Capital Markets"＝主題の基礎。10/09 の Stock Market Forecasting Methods と同じ Topic で、上の what-if の結論（Topic で除外を広げても 4 テーマ中 1 つでしか主題だけを外さない）を変える新しい材料は無い。
 
+- **再現（seihai 10-30 r05・7 例目）**: 交差候補 60 件の Topic のうち "Stock Market Forecasting Methods" が 43 件（Field は Decision Sciences）。名簿に無い主題の兄弟 Topic が素通りした。最頻 bridge は Brock-Lakonishok-LeBaron で上位 10 件の 100%。再生で同じ形を確認（F-73 の表）。除外の拡大は実装していない。
+
 ### F-46. bybridge — **bridge プールが、取得レッグごとに別々の祖先文献の集まりに割れる**（seihai 2026-10-06 の「新しい様式の候補」に採番・**計器は同日対処済み＝「対処済み」節 F-46-I。割れそのものは未対処**）
 
 - 観測（seihai 2026-10-06）: bridge 単位の集中度は 42%（上位 10 件 30%）と穏やかなのに、交差候補 60 件の約 45 件が企業金融。factor zoo 系の語彙シード 2 本が bridge 寄与 27 本・26 本、semantic 由来の主題どおりのシードは 0〜5 本。
@@ -1060,9 +1062,43 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: EX将棋は回ごとに説明を書き直すので、10-14 と 10-21 の出力は別の hash（`49b5656cdcfa1f4d`・`316635245d4d6592`）に入り、今回の説明からは見えない。調査側が台帳から W 番号 23 件を `used_ids` で手渡しして「履歴除外 23 件」と出た。手渡しを忘れると前回の出力が再び出る。
 
+### F-73. bybridge — **主題の中心にあるシードほど bridge プールに入らない。プールは複数シードの共有する参照から先に枠を取るので、誰とも共有しない参照を持つシードは残りの枠しかもらえない**（seihai 2026-10-29 の「新しい様式」に採番・2026-10-30 起票） → **計器は同日対処＝「対処済み」節 F-73-I。処方（シードの順番配分）は試して外れた＝下記。プールの作り方は変えていない**
+
+- 観測（seihai 10-29）: 逐次検定のシード 3 本は bridge 寄与が各 1 本で、bridge の 31% は参照の多い金融 ML のシード 2 本（18 本・16 本）から来た。seihai の候補は「bridge をシードあたり均等配分する」。
+- どのくらい起きているか（API なし・`output/f73_scan_seed_skew.py`・保存結果の 34 回の「bridge 寄与」）: 上位 2 シードの寄与は多くの回で 20〜30%、30% 以上は 10-01・10-05（47%）・10-11・10-28・10-29（46%）など 8 回。**10-29 だけの現象ではない。**
+- **機序（実 API の再生で判明）**: seihai の見立て（参照数の偏り）は半分。10-29 の再生では複数シードが共有する参照が 88 本あり、共有層だけでプール 50 本の大半（42 本）を取る。順番配分の層に残る枠は少なく、**参照 10 本の「Risk inflation of sequential tests…」も参照 42 本のシードもプールに 0 本**。一方で「Repeated Significance Tests…」（参照 8 本）は OpenAlex に載っている参照そのものが少なく、1 本は実力に近い。F-07 のシードごとの枠（50÷4）は共有層では最初に引用した 1 シードに数えるので、この偏りを止めない。
+- **試して外れた処方（順番配分）**: 全シードを順番に回し、各シードの共有数の多い参照から 50 本取って走査する what-if（`output/f73_whatif.py`・F-66 の後ろ回しあり／なしの 2 通り）を、seihai の 3 回（10-28 F4・10-29 F5・10-30 F9）の引数で実 API 再生した。応答はキャッシュ。候補の和集合（72／102／108 件）をシャッフルして、どちらの並びかを伏せた別エージェント（テーマごとに 1 回）に purpose_sim／mechanism_dist を付けさせた。
+
+  | テーマ | 並び | anomaly（purpose < 0.2） | purpose ≥ 0.5 | 点数 ≥ 0.35 | 最高点 | 上位 5 件の平均 | 最頻 bridge の上位 10 件占有 |
+  |---|---|---|---|---|---|---|---|
+  | 10-28 F4 | 現行 | 37 | 8 | 1 | 0.40 | 0.258 | 40% |
+  | | 順番配分 | 34 | 9 | 1 | 0.40 | 0.282 | 30% |
+  | | 順番配分＋F-66 | 34 | 9 | 1 | 0.40 | 0.282 | 30% |
+  | 10-29 F5 | 現行 | 56 | 2 | 2 | 0.45 | 0.254 | 30% |
+  | | 順番配分 | 49 | 4 | 2 | 0.45 | 0.290 | 40% |
+  | | 順番配分＋F-66 | 56 | 2 | 2 | 0.45 | 0.262 | 20% |
+  | 10-30 F9 | 現行 | 29 | 1 | 0 | 0.09 | 0.087 | **100%** |
+  | | 順番配分 | **54** | 2 | 0 | 0.18 | 0.114 | 20% |
+  | | 順番配分＋F-66 | 41 | 3 | 0 | 0.18 | 0.125 | 60% |
+
+  **読み方**: 上位 5 件の平均は 3 テーマとも少し上がり、10-30 の最高点も上がった（「Optimal Portfolio Rebalancing with Transaction Costs」など主題の取引費用の論文が入った。ただし 0.18 で出力には届かない）。しかし**出力に届く水準（点数 0.35 以上）の件数はどのテーマも増えず**、10-28・10-29 の最高点の候補は現行にも入っている。10-30 は主題外が 29→54 件に増えた。採点者はテーマごとに 1 回だけで、ばらつきは測っていない。**既定を変える根拠に届かないので実装していない。** 走査は 60 件で止まるので、効くのはプールの中身より先頭の並びである（通行のあった bridge は 12〜33 本）。
+- 判断材料: 名簿に主題外のシードが混じる日（10-29 は回帰テストの論文 3 本）は、順番配分がそれにも枠を配る。シードの主題の近さで枠を配る案が次の候補だが、近さの計器は語彙と semantic のレッグ別にしか無い。
+
 ---
 
 ## 対処済み
+
+### F-73-I. bybridge — **プールのうち複数シードが共有する本数・上位 2 シードの寄与・参照を持つのにプールに 0 本のシードを診断に出す**（F-73 の計器） — **対処済み 2026-10-30（計器のみ）**
+
+- 発端（seihai 10-29）: F-73。
+- 変えたもの（**bybridge の診断の 1 行**＝`bridge_diagnostics.seed_pool_coverage`／`render_seed_pool_coverage`。プール・走査・候補・materials は不変。F-72・F-74 とは別のツール・段）: 走査が受け取った順のプールで数える。0 本のシードは参照の多い順に先頭 3 件を題と参照数つきで。`diagnostics:false` では出ない。
+- 実測（実 MCP 経路・キャッシュした応答で再生・ラベル解決の 1 回だけ API）:
+  - before: 各シードの「bridge 寄与 N 本」を 20 行読んで呼び手が足し上げる（10-29 の seihai はそうして見つけた）。
+  - after 10-29 F5: `プール 50 本のうち複数シードが共有 42 本・上位 2 シードの寄与 34%。参照を持つのにプールに 0 本のシード 4 件: 「Randomized Play-the-Winner Rule…」（参照 42 本） / 「Risk inflation of sequential tests…」（参照 10 本） / 「Repeated Hypothesis Testing…」…`
+  - after 10-30 F9: `プール 45 本のうち…共有 34 本・上位 2 シードの寄与 46%。…0 本のシード 5 件: 「Foreign Exchange Market Structure, Players, and Evolution」（参照 55 本） / 「Financial statecraft…」 / 「Multi-agent simulation of financial market with transaction…」…`
+  - after 10-28 F4: `プール 50 本のうち…共有 50 本・上位 2 シードの寄与 24%`（0 本のシードなし）。
+- 検証: 新規 4 件（`tests/test_seed_pool_coverage.py`）。693 pass。
+- **残る限界**: 数えるのはシードのレコード単位で、重複レコード（「Triangle Momentum」2 件）の参照も共有に数える。プールの内訳は語らず、走査で実際に使われたかは「交差候補が通った bridge」の行を読む。
 
 ### F-74-R. byserendipity／bybridge／delegate_finalize — **`history_key` を渡すと、履歴の鍵が theme_overview の hash でなくその名前になる。渡さないときは記録の行に、説明を書き換えると見えなくなることを書く** — **対処済み 2026-10-30（opt-in・既定の鍵は不変）**
 
@@ -3153,3 +3189,6 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **byrepo（structured・github・pool 20・`keyword_fair_share`）**: **F-14 の再現**。`no-trade region`／`slippage`／`turnover` を名前/説明/topics に掲げるリポジトリはプールに 0 件（README のみ 4／10／4 件）。上位 5 件は平均分散ポートフォリオ最適化（Jiangki/ledge 68.7）・汎用バックテスタ（ml4t/backtest）など。**収穫ゼロ**（コストを見た信号設計の実装アンカーは無し）。
 - **byserendipity（raw_only・facet 3＝ヒステリシス制御／(s,S) 在庫／採餌の移動コスト・60 件全件提出）**: 正常。通過 15・出力 5・**接地検証失敗 0**。制御工学 facet が主題に当たった（ブレーキ/スロットルのヒステリシスがチャタを消して追従を落とさない・M/M/1 の切替コストで最適政策が粘着する・狭すぎる帯で切替が過剰になる buck converter）。採餌 facet は返却 39 のうちホーム除外 10・残 9 で、ホーム除外の上位がまさに主題の文献（"Two-mode control of Brownian Motion with quadratic loss and switching costs"・"A Method for Computing Double Band Policies…"＝Economics に分類）だった＝**Very Far のつもりの facet が主題の中心へ収束した**（home_converged は立っていない）。
 - **bybridge（materials・lean・abstract 250）**: **旧様式ではないが、交差候補が主題そのもの**。最頻 bridge＝Brock-Lakonishok-LeBaron "Simple Technical Trading Rules…"（主題ドメインの基礎文献）・上位 10 件の **100%**・全体 47%・実使用 bridge 24 本。交差候補 60 件の Topic は **"Stock Market Forecasting Methods" が 43 件**（Field は Decision Sciences）＝F-32 のホーム Topic 除外は名簿が占める Topic（Financial Markets and Investment Strategies 等）しか見ないので、名簿に無い主題の兄弟 Topic が素通りした。私の採点で anomaly 53・出力は fallback 1（surrogate data 法・0.30）。抄録が上流で空 33/60。**大きさ**: `materials_max_chars` は渡さず（F-57 を守った）lean＋abstract 250 で 54.2k 字・ファイル退避（前回 58.7k と同様、bybridge 側に全体の字数予算が無い）。
+
+> **contra 側注記（2026-10-30 失敗対処デー）**: (1) byrepo の 10-28・10-30 は **F-14 の再現**として記録のみ（`winner's curse`・`rashomon` はプール 0 件／`no-trade region` は README のみ）。プールに無い語を順位側では出せないのは 10/25 の注記と同じ。(2) 10-29 の「シードごとの参照数の偏り」は F-73 に採番。機序は半分当たりで、主因は共有層がプールの大半を取ること。提案の均等配分は 3 テーマの盲検で点数 0.35 以上の件数を増やさなかったので入れていない（F-73 の表）。明日から診断に「シード別の bridge 枠」の 1 行が出る。(3) 10-30 の "Stock Market Forecasting Methods" 43 件は F-44 の 7 例目。(4) bybridge の大きさ（10-29 58.7k 字・10-30 54.2k 字）と 10-28 の `materials_max_chars`（6 回目）は F-57 の判断待ちのまま。seihai の「bybridge にも字数予算が要る」という要望は、抄録を全部捨てても 45,000 字を超える実測（F-57）があるので、落とす欄を seihai 側で決める必要がある。(5) 今日の byserendipity の変更: 補足資料のレコードが候補から外れ、内訳に名指しされる（F-72-R）。
+
