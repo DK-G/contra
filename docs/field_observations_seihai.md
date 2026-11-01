@@ -3192,3 +3192,15 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 
 > **contra 側注記（2026-10-30 失敗対処デー）**: (1) byrepo の 10-28・10-30 は **F-14 の再現**として記録のみ（`winner's curse`・`rashomon` はプール 0 件／`no-trade region` は README のみ）。プールに無い語を順位側では出せないのは 10/25 の注記と同じ。(2) 10-29 の「シードごとの参照数の偏り」は F-73 に採番。機序は半分当たりで、主因は共有層がプールの大半を取ること。提案の均等配分は 3 テーマの盲検で点数 0.35 以上の件数を増やさなかったので入れていない（F-73 の表）。明日から診断に「シード別の bridge 枠」の 1 行が出る。(3) 10-30 の "Stock Market Forecasting Methods" 43 件は F-44 の 7 例目。(4) bybridge の大きさ（10-29 58.7k 字・10-30 54.2k 字）と 10-28 の `materials_max_chars`（6 回目）は F-57 の判断待ちのまま。seihai の「bybridge にも字数予算が要る」という要望は、抄録を全部捨てても 45,000 字を超える実測（F-57）があるので、落とす欄を seihai 側で決める必要がある。(5) 今日の byserendipity の変更: 補足資料のレコードが候補から外れ、内訳に名指しされる（F-72-R）。
 
+
+## 2026-10-31（土・seihai 週次指針）の観測
+
+テーマ: 選別器そのものを前向きの実績で評価する（選別時の値のどれだけが次の段階に残るか・席ごとの記録・何席で結論するか）。
+
+- **byrepo（structured・github・pool 20・`keyword_fair_share`）**: **F-14 の再現**。`forward test`／`live trading decay`／`out-of-sample` を名前/説明/topics に掲げるリポジトリはプールに 0 件（README のみ 3／2／11 件）。`live trading decay` は GitHub 全体で 2 件しかない。上位は汎用フレームワーク。**収穫ゼロ**。
+- **byserendipity（raw_only・facet 3＝予測モデル・運用者の選定／第 II 相 → 第 III 相／育種の実現反応・60 件全件提出）**: 正常。通過 15・出力 6・**接地検証失敗 0**。ただし **Near facet の主題に最も当たった 3 本がホーム除外で落ちた**（W2062380566 Inevitable Disappointment…・W2736311865 Does Past Performance Matter…・W2782873027）。facet 別内訳の行に名前が出るので OpenAlex から抄録を取って読めた＝内訳の表示は機能している。
+- **bybridge（materials・lean・abstract 250）**: **旧様式ではないが、収穫はシードの側で交差候補には無い**。最頻 bridge＝Fama-French 1993（主題の基礎文献）・上位 10 件の 60%・全体の 47%・実使用 bridge 38 本。交差候補 60 件は Business, Management and Accounting 30 件（ガバナンス・ESG・開示）。通過 0・fallback 1。**一方、シードには主題に直接当たる文献があった**（All That Glitters Is Not Gold・When do systematic strategies decay?・Real-Time Profitability of Published Anomalies）。**シードは出力に載らず、診断ブロックの題でしか見えない**ので、呼び手が読まなければ失われる。
+- **bybridge のレコードの取り違え**: 候補 W3125464453 は題が「Fact, Fiction, and Momentum Investing」（J Portfolio Management）で、抄録は qPCR・NGS による外来性因子の検出（Topic は Cytomegalovirus and herpesvirus research・Field は Medicine）。**OpenAlex 側のレコードの混線と思われる。Field 判定がこの抄録側に引かれて、ホーム除外を通っている。**
+- **大きさ**: `materials_lean` と `materials_abstract_chars: 250` でも結果は 56,970 字でファイル保存になった（bridge_signals が 15,453 字）。
+
+**呼び手の誤り 2 件**: (1) byserendipity で、点数だけ送った候補のうち 8 件がゲートを全部通って `no_material` で落ちた（F-15-U2・10/28 の 7 件と同じ。W3208241247 など読みたかったものが含まれた）。材料は通過しそうな候補全部に付ける。(2) bybridge で材料付きを 4 件にしたため、anomaly 除外後の母数が 8 件になり、分位ゲートが件数で決まった（診断に出ている・F-15。ただし 52 件は実際に purpose_sim < 0.20 なので結果は変わらない見込み）。
