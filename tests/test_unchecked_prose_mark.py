@@ -13,7 +13,7 @@ THEME_TEXT = "警報の妥当性を見せると反応が変わるかを知りた
 def _theme() -> ThemeInput:
     from src.mcp_server import _build_theme_input
     return _build_theme_input({"theme_overview": THEME_TEXT, "goal": "g", "why_problem": "w", "approach_type": "experiment",
-                               "assumptions": ["a"], "scope_field": "Psychology", "scope_scale": "pilot",
+                               "assumptions": ["a", "b"], "scope_field": "Psychology", "scope_scale": "small",
                                "scope_time_range": "last_10_years", "keywords_include": ["alarm"],
                                "keywords_exclude": [], "concern": "c"})
 
