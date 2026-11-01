@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-01（CL-0163） finalize の呼び手が書いた概要と注意点に未照合の印を付ける（F-77）
+
+### 概要
+* `src/pipeline/delegate.py`: `UNCHECKED_PROSE_MARK`・`_marked_unchecked`。呼び手が書いた `summary`／`caution` の先頭に「（呼び手の記述・原文と未照合）」。
+* `src/mcp_server.py`: `grounded_only` の説明に 1 文。
+* `tests/test_unchecked_prose_mark.py`: 新規 3 件。702 pass。
+* 実測（API なし）: 性能調査 10-31 の呼び出しを記録から再生。試して外れた処方: 原文に無い数字の検出は 8 件すべて誤検出。
+* `docs/field_observations_seihai.md`: F-77・F-77-R、seihai 10-31 への注記。
+
 ## 2026-11-01（CL-0162） bybridge の診断にシードの id を出す（F-76）
 
 ### 概要

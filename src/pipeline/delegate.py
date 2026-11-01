@@ -556,6 +556,17 @@ def normalize_agent_scores(
     return works, scores, by_id
 
 
+# F-77: the grounding contract covers relationship and serendipity_rationale. Survey 2026-10-31: a
+# caution saying "general participants, not students" reached the output though the abstract says
+# only "256 participants". No quote comes with these fields, so the output says they were not checked.
+UNCHECKED_PROSE_MARK = "（呼び手の記述・原文と未照合）"
+
+
+def _marked_unchecked(prose: Any) -> str:
+    text = str(prose or "")
+    return UNCHECKED_PROSE_MARK + text if text else ""
+
+
 def finalize_delegated_document(
     materials: Sequence[Dict[str, Any]],
     theme: ThemeInput,
@@ -610,8 +621,8 @@ def finalize_delegated_document(
         seeded.append(dc_replace(
             entry,
             relationship=str(material.get("relationship") or "") or entry.relationship,
-            abstract_summary=str(material.get("summary") or "") or entry.abstract_summary,
-            caution=str(material.get("caution") or "") or entry.caution,
+            abstract_summary=_marked_unchecked(material.get("summary")) or entry.abstract_summary,
+            caution=_marked_unchecked(material.get("caution")) or entry.caution,
         ))
     filled = fill_track_entries(seeded, config or GenerationConfig(), theme=theme, mode="structured")
     section = OutputSection(title=section_title, track="B", entries=filled)
