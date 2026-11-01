@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-01（CL-0162） bybridge の診断にシードの id を出す（F-76）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `render_diagnostics` のシード一覧の後に、全シードの W 番号と「交差候補にも最終出力にも入らない」の 1 行。
+* `tests/test_bridge_diagnostics.py`: 新規 1 件。699 pass。
+* 実測: seihai 10-31 の呼び出しを実 API で再生。主題に当たるシード 3 本の id が出て、`read_works` で読めた。
+* `docs/field_observations_seihai.md`: F-76・F-76-R。W3125464453 は F-53 に併記。
+
 ## 2026-11-01（CL-0161） id を渡すと抄録の全文を返す read_works を足す（F-75）
 
 ### 概要

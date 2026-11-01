@@ -139,6 +139,14 @@ def test_render_diagnostics_truncates_long_seed_lists_but_says_so():
     assert "Seed 29" in out and "Seed 30" not in out
 
 
+def test_every_seed_id_is_readable_even_with_a_doi_or_past_the_row_limit():
+    # F-76: seihai 10-31 found 3 on-topic seeds by title; the row showed the DOI, not the id.
+    seeds = [_w("https://openalex.org/W7", ["B1"], doi="10.1/s")] + [_w(f"S{i}", ["B1"]) for i in range(2)]
+    line = next(x for x in render_diagnostics(seeds, [], {"B1"}, seed_limit=1).splitlines() if "F-76" in x)
+    assert line.endswith("read_works に渡すと全文が読めます: W7, S0, S1")
+    assert "F-76" not in render_diagnostics([], [], {"B1"})
+
+
 def test_render_diagnostics_survives_zero_candidates():
     seeds = [_w("S1", ["B1"], title="Seed one")]
     out = render_diagnostics(seeds, [], {"B1"})

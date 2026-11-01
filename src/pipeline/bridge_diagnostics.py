@@ -1133,6 +1133,14 @@ def render_diagnostics(
         )
     if len(rows) > seed_limit:
         lines.append(f"…他 {len(rows) - seed_limit} 件")
+    if rows:
+        # F-76: a seed never reaches the materials or the output, and its row shows the DOI when
+        # there is one, so a seed worth reading (seihai 10-31: 3 on-topic, 0 candidates passed)
+        # had no id to read it by.
+        lines.append(
+            "- シードは交差候補にも最終出力にも入りません（F-76）。主題に当たるシードはここで拾ってください。"
+            f"read_works に渡すと全文が読めます: {', '.join(short_id(r.id) for r in rows)}"
+        )
 
     used = [u for u in usage if u.candidate_citers > 0]
     lines.append("")
