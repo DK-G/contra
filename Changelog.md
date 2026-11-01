@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-01（CL-0161） id を渡すと抄録の全文を返す read_works を足す（F-75）
+
+### 概要
+* `src/mcp_server.py`: 新しいツール `read_works`（`_execute_read_works`）。`ids.openalex` 1 回で最大 50 件。抄録は切らず、材料の形で返す。Field の行つき。予算で抄録を切ったときの「materials の大きさ」の行から案内する。
+* `docs/agent_rules/byserendipity.md`: 手順 3 の前に 1 文。
+* `tests/test_read_works.py`: 新規 5 件。698 pass。
+* 実測（実 API 1 回）: 10-31 salon-sites の当たりの決め手の 2 文が返る。seihai 10-31 のホーム除外 3 本も同じ呼び出しで読めた。
+* `docs/field_observations_seihai.md`: F-75・F-75-R。
+
 ## 2026-10-30（CL-0160） シード別の bridge 枠を診断に出す。順番配分は外れた（F-73）
 
 ### 概要

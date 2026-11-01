@@ -48,7 +48,8 @@ from src.pipeline.bridges import (
     hybrid_bridge_rank_key,
     shared_bridge_count,
 )
-from src.openalex.client import OpenAlexError, low_budget_caveat, reset_run_stats, run_stats_caveat
+from src.openalex.client import OpenAlexClient, OpenAlexError, low_budget_caveat, reset_run_stats, run_stats_caveat
+from src.openalex.parser import normalize_results
 from src.pipeline.classify import _PURPOSE_LEVELS, select_track_b
 from src.pipeline.collect import (
     CollectConfig,
@@ -294,6 +295,18 @@ def _field_ids_line(works: List[Any]) -> str:
             "ホーム分野の学会・雑誌の論文でも別の Field なら残ります）: " + " ／ ".join(parts))
 
 
+# F-75: one ids.openalex filter call takes this many ids.
+_READ_WORKS_MAX_IDS = 50
+
+
+def _short_work_id(raw: Any) -> str:
+    """``W123`` from ``W123`` or its URL form; "" for anything else."""
+    text = str(raw or "").strip()
+    if text.startswith(_OPENALEX_WORK_PREFIX):
+        text = text[len(_OPENALEX_WORK_PREFIX):]
+    return text if re.fullmatch(r"W\d+", text) else ""
+
+
 def _materials_json(materials: List[Dict[str, Any]]) -> str:
     """Candidate materials as valid JSON with one candidate field per line (F-38).
 
@@ -444,6 +457,7 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
             line += ("末尾を残したのは、先頭はほとんどが目的・背景で、呼び手が全文から引いた"
                      "箇所が末尾に残る方が多かったためです（F-60。文の切れ目から始めます。"
                      "先頭が要るときは materials_abstract_part:\"head\"）。")
+        line += "全文が要る候補は read_works に id を渡すと読めます（F-75）。"
     else:
         line += "materials_abstract_chars:N で抄録を先頭 N 字に切れます。"
     line += budget_note
@@ -773,6 +787,26 @@ class StdinMcpServer:
                 }
             },
             {
+                "name": "read_works",
+                "description": (
+                    "Read OpenAlex works by id: the full abstract and the record's fields as a "
+                    f"candidate material, in ONE OpenAlex call for up to {_READ_WORKS_MAX_IDS} ids "
+                    "(F-75). For a candidate whose abstract materials_max_chars cut, a seed or "
+                    "home-excluded paper named in the diagnostics, or any id you want to read "
+                    "before scoring. Echo a returned material to delegate_finalize as you would a "
+                    "collected one; the quotes are then checked against the full text. No theme, "
+                    "no history, no LLM."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ids": {"type": "array", "items": {"type": "string"}, "maxItems": _READ_WORKS_MAX_IDS,
+                                "description": "OpenAlex work ids, as W123 or https://openalex.org/W123."}
+                    },
+                    "required": ["ids"]
+                }
+            },
+            {
                 "name": "delegate_finalize",
                 "description": (
                     "Delegation post-gate (stage c): the CALLING AGENT scores cross-domain "
@@ -882,6 +916,8 @@ class StdinMcpServer:
                 result = self._execute_bybridge(args)
             elif name == "delegate_finalize":
                 result = self._execute_delegate_finalize(args)
+            elif name == "read_works":
+                result = self._execute_read_works(args)
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
@@ -917,6 +953,46 @@ class StdinMcpServer:
                 ],
                 "isError": True
             }
+
+    def _execute_read_works(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """F-75: full abstracts by id, so nobody hand-writes an OpenAlex request.
+
+        The survey re-fetched the top 6-15 abstracts by hand on every run since 2026-10-14 (F-60
+        moved the cut to the tail; the deciding sentence of the 10-31 hit was still outside it),
+        and seihai did the same for the home-excluded papers F-71-I names (10-31).
+        """
+        raw_ids = args.get("ids") or []
+        if isinstance(raw_ids, str):
+            raw_ids = [raw_ids]
+        ids: List[str] = []
+        invalid: List[str] = []
+        for raw in raw_ids:
+            sid = _short_work_id(raw)
+            if not sid:
+                invalid.append(str(raw))
+            elif sid not in ids:
+                ids.append(sid)
+        if not ids or len(ids) > _READ_WORKS_MAX_IDS:
+            reason = ("読める id がありません" if not ids
+                      else f"1 回に {_READ_WORKS_MAX_IDS} 件までです（{len(ids)} 件）")
+            return {"content": [{"type": "text", "text": (
+                f"read_works: {reason}。id は W123 か {_OPENALEX_WORK_PREFIX}W123 の形です。"
+                + (f"形が違う: {', '.join(invalid)}" if invalid else ""))}], "isError": True}
+        payload = OpenAlexClient().get({"filter": "ids.openalex:" + "|".join(ids), "per_page": len(ids)})
+        by_id = {_short_work_id(w.id): w for w in normalize_results(payload)}
+        works = [by_id[i] for i in ids if i in by_id]
+        materials = [material_from_work(w, include_references=False, include_concept_names=False,
+                                        include_concept_tags=False) for w in works]
+        missing = [i for i in ids if i not in by_id]
+        lines = [f"read_works: {len(ids)} 件を 1 回で取得 -> {len(materials)} 件（抄録は切っていません・F-75）。"
+                 "材料はそのまま delegate_finalize へ echo できます。"]
+        if missing:
+            lines.append(f"- OpenAlex に無い id（統合・削除された可能性）: {', '.join(missing)}")
+        if invalid:
+            lines.append(f"- id の形が違うので読みませんでした: {', '.join(invalid)}")
+        if works:
+            lines.append(_field_ids_line(works))
+        return _external_data_result("\n".join(lines) + "\n\n" + _materials_json(materials))
 
     def _execute_byserendipity(self, args: Dict[str, Any]) -> Dict[str, Any]:
         theme = _build_theme_input(args)
