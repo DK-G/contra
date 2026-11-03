@@ -1097,9 +1097,25 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `caution` に呼び手が書いた「実験は学生ではなく一般の参加者 256 人」は、要旨に根拠が無い（要旨は「256 participants」だけ）。出力の「4) 注意点」にそのまま載った。誤りは呼び手の側で、台帳には正しい形で書かれた。
 - **試して外れた処方（原文に無い数字の検出）**: 保存された `delegate_finalize` の呼び出し 138 回（候補 3,873 件・`summary` 27 件・`caution` 39 件。`output/f77_scan_unchecked.py`）で、切っていない抄録に無い 2 桁以上の数字を含むものは 8 件。**8 件すべて正当**（著者年「Hennig ほか 2011」・自分の案件の日付「10-17」・別文献の W 番号・「900 字で切れており」など）。今回の誤りの「256」は原文にあるので当たらない。**実装していない。**
 
+### F-78. byrepo — **issue の取得は PR も返すので、直近 5 件がすべて PR の活発なリポジトリが「issuesなし (警告: ゼロIssueの罠)」と出て、Reliability の issue の点が 0 になる**（性能調査 2026-11-02 メタグモ「Issue の表示」に採番・2026-11-03 起票） → **同日対処済み＝「対処済み」節 F-78-R**
+
+- 観測: `compdemocracy/polis`・`ory/polis`・`Considerit/ConsiderIt` が「issuesなし (警告: ゼロIssueの罠)」と出たが、GitHub には issue 551・170・104 件ある。
+- 機序（11-03 に実 API で確認）: `/repos/{name}/issues?per_page=5` は PR も返す。3 件とも直近 5 件がすべて PR で、PR を除くと 0 件になり、星 50 以上なので罠と判定された。保存したプールのキャッシュ（10-02〜10-09・100 リポジトリ）では **35 件（35%）が直近 5 件すべて PR**だった。
+
 ---
 
 ## 対処済み
+
+### F-78-R. byrepo — **issue の取得を 1 回のまま 100 件に広げ、直近 5 件に issue が無いときだけ、さらに前の issue 5 件を採点する。100 件すべて PR なら「issues未確認」（3 点）と書く** — **対処済み 2026-11-03（Reliability の issue の点のみ）**
+
+- 発端（性能調査 11-02 メタグモ）: F-78。
+- 変えたもの（**byrepo の Reliability の issue の段**＝`git_collect._fetch_issue_signal`。検索・プール・関連度・描画は不変）: 取得は 1 回のまま `per_page` を 5→100 にした（GitHub の未認証枠 60 回/時を増やさないため。最初の実装は「全部 PR のときだけ 2 回目を取る」で、プール 30 の再生が 52 回の呼び出しで枠を使い切った）。直近 5 件に issue が 1 件でもあれば、採点は従来と同じ（その中の issue だけ）。空のリポジトリは従来どおり罠。非 owner の起票者（第三者の点）と、完成判定（`_is_completed_stable` の closed 件数）も同じ標本から数えるので、そちらも直る。
+- 実測:
+  - 11-02 の 3 件（実 API・`_fetch_issue_signal` を直接）: before `(0, 'issuesなし (警告: ゼロIssueの罠)')` ×3 → after `compdemocracy/polis (6, 'issues 1件 / open 1')`・`ory/polis (6, 'issues 5件 / open 5')`・`Considerit/ConsiderIt (9, 'issues 5件 / open 2 / closed 3')`。
+  - プール 30 件の再生（`scripts/byrepo_pool_probe.py` の既定の主題・10-09 の `--as-of`・11-03 に取り直したキャッシュ・before は同じキャッシュをオフラインで。`output/f78_issue_replay.py`）: **Reliability が変わったのは 12 件・すべて +6〜+10**（QuantInvestStrats 86→96・awesome-quant-ai 70→79・maverick-mcp 83→93 など）。上位 4 件は 1 位と 2 位が入れ替わっただけ、上位 6 件は AlphaSuite・nepse-quant-terminal が抜けて thetagang・awesome-quant-ai が入った。2 回取得版と 1 回取得版の並びは 30 件とも一致。
+- 検証: 新規 4 件（`tests/test_issue_signal_pr_only.py`）。706 pass。
+- **残る限界**: (1) **主題の一致は何も変わらない**。上がったのは PR の多い活発なリポジトリの信頼度で、F-14 の「主題を掲げる実装が返らない」は直さない。上位の入れ替わりは汎用の取引基盤どうし。(2) 応答が 5 件分から最大 100 件分になる（1 件あたり数 KB・プール 20 で数 MB）。(3) 100 件すべて PR のリポジトリ（10-09 のプールでは compdemocracy/polis が 100 件中 issue 1 件）は「未確認」で 3 点。issue の本数を数える API（search）は別の枠を使うので使っていない。
+- 計測の副作用: 最初の実装の再生で GitHub の未認証枠を使い切った（11-03 21:20 ごろ・1 時間で回復。OpenAlex の枠とは別で、seihai の 07:05 には影響しない）。
 
 ### F-77-R. delegate_finalize — **呼び手が書いた `summary`／`caution` の先頭に「（呼び手の記述・原文と未照合）」を付ける** — **対処済み 2026-11-01（描画のみ・棄却はしない）**
 

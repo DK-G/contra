@@ -699,6 +699,9 @@ def _third_party_score(repo: GitRepository) -> int:
     return min(score, 6)
 
 
+_ISSUE_WIDE_PAGE = 100
+
+
 def _fetch_issue_signal(
     client: GitHubClient,
     full_name: str,
@@ -711,11 +714,19 @@ def _fetch_issue_signal(
     Non-owner reporters reuse this same payload (no extra REST call) as a
     "third-party" people signal: distinct issue authors other than the owner.
     """
+    # F-78: the issues endpoint also lists PRs, so the newest `sample_size` items can
+    # be all PRs on an active repo. Fetch a wider page in the same single call; the
+    # newest `sample_size` items are scored as before, and only when they hold no
+    # issue does the sample reach further back for the newest real issues.
     payload = client.get(
         f"/repos/{full_name}/issues",
-        {"state": "all", "per_page": sample_size},
+        {"state": "all", "per_page": max(sample_size, _ISSUE_WIDE_PAGE)},
     )
-    issues = [item for item in payload if "pull_request" not in item]
+    issues = [item for item in payload[:sample_size] if "pull_request" not in item]
+    if not issues and payload:
+        issues = [item for item in payload if "pull_request" not in item][:sample_size]
+        if not issues:
+            return 3, f"issues未確認 (直近{len(payload)}件はすべてPR)", 0, 0, 0
     if not issues:
         # Zero Issues Trap check
         if repo_stars >= 50:

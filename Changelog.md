@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-03（CL-0164） byrepo の issue の標本が PR だけで「ゼロIssueの罠」になる誤りを直す（F-78）
+
+### 概要
+* `src/pipeline/git_collect.py`: `_fetch_issue_signal` の取得を 1 回のまま `per_page` 100 に。直近 5 件に issue が無いときだけ、さらに前の issue 5 件を採点する。100 件すべて PR なら「issues未確認」（3 点）。
+* `tests/test_issue_signal_pr_only.py`: 新規 4 件。706 pass。
+* 実測: 11-02 の 3 件は罠 0 点→6／6／9 点。プール 30 件の再生で Reliability が 12 件 +6〜+10、上位 6 件のうち 2 件が入れ替わり。
+* `docs/field_observations_seihai.md`: F-78・F-78-R。
+
 ## 2026-11-01（CL-0163） finalize の呼び手が書いた概要と注意点に未照合の印を付ける（F-77）
 
 ### 概要
