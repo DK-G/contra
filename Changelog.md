@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-03（CL-0168） bybridge の bridge 一覧に「出力に入らない・read_works で読める」の 1 行（F-83）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `render_diagnostics` の「交差候補が通った bridge」の後に 1 行（通行があるときだけ）。
+* `tests/test_bridge_diagnostics.py`: 新規 1 件。714 pass。
+* 実測: seihai 11-02・11-03 の呼び出しを実 API で再生。11-02 は Osler 2003（W2080887613）が通行 2 位に出て、`read_works` で読めた。
+* `docs/field_observations_seihai.md`: F-83・F-83-R、seihai 11-02／11-03・性能調査 11-02 への注記。
+
 ## 2026-11-03（CL-0167） byrepo の付録を TBD のままにしない（F-80）
 
 ### 概要

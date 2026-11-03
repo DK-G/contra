@@ -1156,7 +1156,14 @@ def render_diagnostics(
             f"{i}. {name} — 交差候補 {u.candidate_citers} 件 / "
             f"シード {u.seed_citers} 件が引用{cited} | {short_id(u.id)}"
         )
-    if not used:
+    if used:
+        # F-83: seihai 11-02 found the on-topic work among the bridges (Osler 2003, 2nd by traffic)
+        # with 0 candidates passing. Like seeds (F-76), bridges never reach the output.
+        lines.append(
+            "- bridge も交差候補にも最終出力にも入りません（F-83）。主題に当たる bridge は"
+            "行末の W 番号を read_works に渡すと全文が読めます。"
+        )
+    else:
         lines.append("（bridge 通行の記録なし＝候補の referenced_works が取得できていない可能性）")
 
     return "\n".join(lines)

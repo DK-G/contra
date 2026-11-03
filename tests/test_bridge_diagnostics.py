@@ -147,6 +147,13 @@ def test_every_seed_id_is_readable_even_with_a_doi_or_past_the_row_limit():
     assert "F-76" not in render_diagnostics([], [], {"B1"})
 
 
+def test_bridges_say_they_never_reach_the_output_only_when_there_are_bridges():
+    # F-83: seihai 11-02 found the on-topic work among the bridges, with 0 candidates passing.
+    out = render_diagnostics([_w("S1", ["B1"])], [_w("C1", ["B1"])], {"B1"})
+    assert "bridge も交差候補にも最終出力にも入りません（F-83）" in out
+    assert "F-83" not in render_diagnostics([_w("S1", ["B1"])], [], {"B1"})
+
+
 def test_render_diagnostics_survives_zero_candidates():
     seeds = [_w("S1", ["B1"], title="Seed one")]
     out = render_diagnostics(seeds, [], {"B1"})

@@ -1118,9 +1118,28 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: 通過 0 件で、0.15（output_floor 0.35・分位 0.2 のどちらも下回る）の W2157700119 が fallback で出て「履歴記録 1 件」。呼び手の採点ではテーマ自身の隣の分野（距離 0.30）の 1 本。`emit_fallback` の既定どおり。
 - 判断待ち（人間）: fallback は「ゲート未満だが何も返さないよりまし」として出しているので、履歴に入れると次回の読み直しから消える。入れない（または opt-in にする）と同じ fallback が毎回出る。どちらを既定にするか。seihai は通過 0 の回が多い（10-31・11-02・11-03 の bybridge）ので影響が大きい。
 
+### F-83. bybridge — **収穫が bridge の側にある回に、bridge が出力に入らないことが結果に書かれていない。診断ブロックの題を読まないと取りこぼす**（seihai 2026-11-02 r01 の bybridge 行に採番・2026-11-03 起票） → **同日対処＝「対処済み」節 F-83-R（診断の 1 行のみ）**
+
+- 観測（seihai 11-02）: 交差候補 60 件は通過 0・fallback 1。主題の直接の根拠は通行 2 位の bridge、Osler 2003 だった（`read_works` で原文確認）。F-76（シードの側）の bridge 版。
+
 ---
 
 ## 対処済み
+
+### F-83-R. bybridge — **「交差候補が通った bridge」の一覧の後に、bridge も最終出力に入らないことと、行末の W 番号を `read_works` に渡せることを 1 行で書く** — **対処済み 2026-11-03（診断の 1 行のみ）**
+
+- 発端（seihai 11-02）: F-83。
+- 変えたもの（**bybridge の診断の描画**＝`bridge_diagnostics.render_diagnostics`。シード・プール・走査・候補・materials は不変。今日の F-78・F-79・F-72-M・F-80 とは別のツール・段）: 通行のあった bridge があるときだけ。bridge の行には 10-xx から W 番号が出ているので、id の一覧は重ねない（F-57 の大きさを増やさない。約 80 字）。
+- 実測（実 MCP 経路・seihai の呼び出しを実 API で再生・`output/f83_bridge_line_live.py`）:
+  - 11-02 r01（`stop-loss orders`・`price cascades` ほか）: 通行 21 本（当時 24 本）・結果 57,049 字（当時 56,968 字）。2 位 `Currency Orders and Exchange Rate Dynamics: An Explanation for the Predictive Success of Technical Analysis … | W2080887613`（Osler 2003）の下に新しい行。`read_works` に W2080887613 を渡して要旨 647 字が読めた。
+  - 11-03 r02（`transaction costs`・`genetic programming` ほか）: 通行 24 本・56,320 字。同じ行が出た。
+  - before: 一覧の行だけで、出力に入らないことは書かれていない。
+- 検証: 新規 1 件（bridge があれば出る・交差候補 0 なら出ない）。714 pass。
+- **残る限界**: どの bridge が主題に当たるかは言わない。最頻の bridge は主題の基礎文献であることが多く（11-02 Jegadeesh–Titman・11-03 Brock ら）、seihai は既に読んでいる。呼び手が読むかは未確認。
+
+### seihai 2026-11-02／11-03・性能調査 2026-11-02 への注記（2026-11-03 失敗対処デー）
+
+(1) seihai 11-02・11-03 の byrepo はどちらも **F-14 の再現**（`failed breakout`・`stop hunt`・`intraday`／`transaction cost`・`turnover penalty`・`no-trade region` は名前/説明/topics に 0 件）。順位側の処方は F-43・F-29-W・F-48 で測って効かなかった。今日の F-78 は Reliability の誤りで、F-14 は直さない。(2) seihai 11-03 の bybridge の語彙レッグの主題一致 44%（`transaction cost` が貿易費用を引いた）は **F-13 の同形異義の再現**。seihai が呼び手の誤り (3) に数えたとおり。(3) seihai 11-02・11-03 と性能調査 11-02 の `no_material` は F-15-U2 の案内どおり（呼び手の誤り）。(4) bybridge の 56,968／56,037／61,105 字は **F-57 の再現**（判断待ちのまま。性能調査は 11-02 に「F-50b の bybridge 版」と書いたが、同じ様式）。(5) 性能調査 11-02 の bybridge の交差候補がワードクラウドを「道具として使っただけ」の論文で埋まった件は **F-25 に近い新しい観測**（シードが手法の論文のとき、引用する側は手段の利用者）。採番は保留し、2 回目が出たら起票する。(6) 同じ回のシード 20 件のうち主題外 2 件・抄録が上流で空 14 件は F-13・F-55 の再現。(7) byrepo の `ory/polis`（SSO）が `polis` の 1 語一致で 4 位は F-20 型の語の衝突で、冒頭の警告は正しく出た。(8) 性能調査 11-02 の byserendipity の上流レコードの壊れ（「End_of_Article」・空白の抜け・タイ語の母音記号）は F-53 と同種。(9) 明日から: byrepo の Reliability が PR の多いリポジトリで上がる（F-78）。付録が埋まる（F-80）。finalize が形の違う id を名指しする（F-79）。bybridge の bridge 一覧の後に 1 行増える（F-83）。
 
 ### F-80-R. byrepo(structured) — **付録に実行日・実際に送った GitHub の検索式・「取得 N 件 → 順位で上位 K 件」を書く** — **対処済み 2026-11-03（描画のみ）**
 
