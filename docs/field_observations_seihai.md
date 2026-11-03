@@ -1106,9 +1106,31 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測: bybridge の提出 61 件に `W4400018352x` が 1 件混ざり、0.01 で anomaly に落ちて「採点 61 件」と出た。結果は変わらなかったが、呼び手は自分の誤りを結果から読めない。
 
+### F-80. byrepo(structured) — **付録が「取得日: TBD／検索条件: TBD／フィルタ条件: TBD」のまま。`delegate_finalize` 側の F-54-A の対処が byrepo に入っていない**（性能調査 2026-11-02 メタグモ「出力の文」の後半に採番・2026-11-03 起票） → **同日対処済み＝「対処済み」節 F-80-R**
+
+### F-81. byrepo(structured) — **「1) 概要」の抜粋の文の区切りが URL や名前を割る（「Chart. js」「consider. it」「s3. amazonaws」「Kumo02. png」）**（性能調査 2026-11-02 メタグモ「出力の文」の前半に採番・2026-11-03 起票・**未対処**）
+
+- 同じ回の「2) 関連性」が 6 件とも同じ定型文・「3) 仮説」が 6 件とも「（記入なし）」なのは F-14 の散文の定型性（既知・残）。
+- 見送った理由: F-80 と同じ byrepo の描画の段（同じ段を 1 回で 2 件変えない）。次回の候補。抜粋を作る箇所はまだ特定していない（`assemble_keyless_track_a_document` の構造整形の先）。
+
+### F-82. delegate_finalize — **fallback で出した 1 件（ゲート未満）も履歴に「記録」され、次回以降の候補から除外される**（性能調査 2026-11-02 メタグモ「fallback の出力（bybridge 経由）」に採番・2026-11-03 起票・**未対処・判断待ち**）
+
+- 観測: 通過 0 件で、0.15（output_floor 0.35・分位 0.2 のどちらも下回る）の W2157700119 が fallback で出て「履歴記録 1 件」。呼び手の採点ではテーマ自身の隣の分野（距離 0.30）の 1 本。`emit_fallback` の既定どおり。
+- 判断待ち（人間）: fallback は「ゲート未満だが何も返さないよりまし」として出しているので、履歴に入れると次回の読み直しから消える。入れない（または opt-in にする）と同じ fallback が毎回出る。どちらを既定にするか。seihai は通過 0 の回が多い（10-31・11-02・11-03 の bybridge）ので影響が大きい。
+
 ---
 
 ## 対処済み
+
+### F-80-R. byrepo(structured) — **付録に実行日・実際に送った GitHub の検索式・「取得 N 件 → 順位で上位 K 件」を書く** — **対処済み 2026-11-03（描画のみ）**
+
+- 発端（性能調査 11-02 メタグモ）: F-80。
+- 変えたもの（**byrepo の描画の付録**＝`_execute_byrepo` の structured 経路で `doc.collected_at`／`query`／`filter_policy` を埋める。検索・順位・本文は不変。F-78 の Reliability の段とは別の段）: 検索式は `git_search_stats` の各レッグ（`keyword_fair_share` なら単独検索のレッグも）をそのまま。GitHub 以外の取得元だけなら「GitHub の検索式なし」。
+- 実測（実 MCP 経路・10-09 のプールをキャッシュで再生・API なし）:
+  - before: `- 取得日: TBD` / `- 検索条件: TBD` / `- フィルタ条件: TBD`
+  - after: `- 取得日: 2026-11-03（byrepo の実行日）` / `- 検索条件: GitHub 全語 OR: whipsaw OR hysteresis OR trend-following OR regime-filter OR backtesting in:name,description,readme pushed:>2025-04-07` / `- フィルタ条件: 取得 30 件 → Reliability × theme 関連度（anchor_rank_key・決定論・LLM なし）の順で上位 4 件（track_a_count 4）`
+- 検証: 新規 1 件（`tests/test_byrepo_pool_summary.py`）。文書の代わりに `object()` を返していたスタブ 2 件を `SimpleNamespace()` に変えた。713 pass。
+- **残る限界**: Hugging Face の取得の条件は書かない（GitHub だけ）。F-81（文の区切り）は同じ段なので次回。
 
 ### F-72-M. byserendipity(raw_only) — **Springer の補足資料のファイル名の形「MOESM5 of …」も F-72-R の規則で落とす** — **対処済み 2026-11-03（規則の 1 分岐の追加）**
 

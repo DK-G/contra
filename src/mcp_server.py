@@ -1271,6 +1271,7 @@ class StdinMcpServer:
 
         # Select & rank: reliability x relevance multiplier (F-03 — relevance must
         # actually move the ranking, not just appear as a label).
+        pooled = len(works)
         works = sorted(works, key=anchor_rank_key, reverse=True)[:target_count]
 
         # F-12 side-note (seihai, 2026-08-22): when even the BEST anchor's self-reported
@@ -1289,6 +1290,16 @@ class StdinMcpServer:
             # 4-part prose is structured-filled. See docs/research/mcp_subscription_delegation.md.
             _log("Byrepo: key-free structured assembly (no LLM)...")
             doc = assemble_keyless_track_a_document(theme, works, count=target_count)
+            # F-80: the appendix read "取得日: TBD / 検索条件: TBD / フィルタ条件: TBD" (survey
+            # 2026-11-02). byrepo ran the search itself, so it holds all three (cf. F-54-A).
+            doc.collected_at = f"{date.today().isoformat()}（byrepo の実行日）"
+            doc.query = " ／ ".join(
+                f"GitHub {s['label']}: {s['query']}" for s in git_search_stats
+            ) or f"取得元 {', '.join(sources)}（GitHub の検索式なし）"
+            doc.filter_policy = (
+                f"取得 {pooled} 件 → Reliability × theme 関連度（anchor_rank_key・決定論・LLM なし）の"
+                f"順で上位 {len(works)} 件（track_a_count {target_count}）"
+            )
             return _external_data_result(low_rel_warning + pool_note + render_markdown(doc))
 
         # Convert to entries / fill text

@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-03（CL-0167） byrepo の付録を TBD のままにしない（F-80）
+
+### 概要
+* `src/mcp_server.py`: `_execute_byrepo` の structured 経路で、付録の取得日・検索条件（各レッグの GitHub 検索式）・フィルタ条件（取得 N 件 → 上位 K 件）を埋める。
+* `tests/test_byrepo_pool_summary.py`: 新規 1 件。`tests/test_mcp_injection.py` とあわせてスタブの `object()` を `SimpleNamespace()` に。713 pass。
+* 実測: 10-09 のプールの再生で TBD 3 行が埋まった（API なし）。
+* `docs/field_observations_seihai.md`: F-80・F-80-R。F-81（文の区切り）・F-82（fallback の履歴記録）を起票（未対処）。
+
 ## 2026-11-03（CL-0166） 補足資料の題の規則に MOESM の形を足す（F-72-M）
 
 ### 概要

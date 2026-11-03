@@ -9,6 +9,8 @@ surface), regime-filter 5 (0), backtesting 26 (18). The calibration case below i
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import src.mcp_server as mcp
 from src.core.models import Keywords, Scope, ThemeInput
 from src.github.client import GitHubError
@@ -152,7 +154,7 @@ def test_byrepo_output_carries_the_pool_breakdown_before_the_cut(monkeypatch):
     pool = [_Work(90, backtesting="strong"), _Work(80, backtesting="strong"),
             _Work(10, whipsaw="strong")]
     monkeypatch.setattr(mcp, "collect_track_a_works", lambda *a, **k: list(pool))
-    monkeypatch.setattr(mcp, "assemble_keyless_track_a_document", lambda *a, **k: object())
+    monkeypatch.setattr(mcp, "assemble_keyless_track_a_document", lambda *a, **k: SimpleNamespace())
     monkeypatch.setattr(mcp, "render_markdown", lambda doc: "ANCHORS")
     result = mcp.StdinMcpServer()._execute_byrepo({
         "theme_overview": "テーマ概要。" * 40, "goal": "g", "why_problem": "w",
@@ -165,3 +167,27 @@ def test_byrepo_output_carries_the_pool_breakdown_before_the_cut(monkeypatch):
     assert "取得 3 件" in text and "whipsaw 1（1・0）" in text
     assert "hysteresis（README を含め 0 件）" in text
     assert text.index("プール内訳") < text.index("ANCHORS")
+
+
+def test_byrepo_appendix_names_date_query_and_cut(monkeypatch):
+    """F-80 (survey 2026-11-02): the structured byrepo appendix read TBD three times."""
+    pool = [_Work(90, backtesting="strong"), _Work(80, backtesting="strong"), _Work(10)]
+
+    def collect(*a, **k):
+        k["git_search_stats"].append({"label": "全語 OR", "query": "whipsaw OR backtesting in:name"})
+        return list(pool)
+
+    docs = []
+    monkeypatch.setattr(mcp, "collect_track_a_works", collect)
+    monkeypatch.setattr(mcp, "assemble_keyless_track_a_document", lambda *a, **k: SimpleNamespace())
+    monkeypatch.setattr(mcp, "render_markdown", lambda doc: docs.append(doc) or "ANCHORS")
+    mcp.StdinMcpServer()._execute_byrepo({
+        "theme_overview": "テーマ概要。" * 40, "goal": "g", "why_problem": "w",
+        "assumptions": ["仮説1", "仮説2"], "scope_field": "quantitative finance",
+        "keywords_include": ["whipsaw", "backtesting"],
+        "structured": True, "sources": ["github"], "track_a_count": 2,
+    })
+    doc = docs[0]
+    assert "byrepo の実行日" in doc.collected_at
+    assert doc.query == "GitHub 全語 OR: whipsaw OR backtesting in:name"
+    assert doc.filter_policy.startswith("取得 3 件") and "上位 2 件" in doc.filter_policy

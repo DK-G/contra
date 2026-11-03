@@ -7,6 +7,8 @@ close the envelope early to smuggle instructions to the calling agent.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import src.mcp_server as mcp
 from src.mcp_server import (
     _ENVELOPE_CLOSE,
@@ -67,7 +69,7 @@ def test_byrepo_structured_result_is_wrapped(monkeypatch) -> None:
 
     monkeypatch.setattr(mcp, "collect_track_a_works", lambda *a, **k: [_Work()])
     monkeypatch.setattr(
-        mcp, "assemble_keyless_track_a_document", lambda *a, **k: object()
+        mcp, "assemble_keyless_track_a_document", lambda *a, **k: SimpleNamespace()
     )
     monkeypatch.setattr(mcp, "render_markdown", lambda doc: injected)
 
