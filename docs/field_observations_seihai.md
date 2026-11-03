@@ -3260,3 +3260,25 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **大きさ**: `materials_lean` と `materials_abstract_chars: 250` でも結果は 56,970 字でファイル保存になった（bridge_signals が 15,453 字）。
 
 **呼び手の誤り 2 件**: (1) byserendipity で、点数だけ送った候補のうち 8 件がゲートを全部通って `no_material` で落ちた（F-15-U2・10/28 の 7 件と同じ。W3208241247 など読みたかったものが含まれた）。材料は通過しそうな候補全部に付ける。(2) bybridge で材料付きを 4 件にしたため、anomaly 除外後の母数が 8 件になり、分位ゲートが件数で決まった（診断に出ている・F-15。ただし 52 件は実際に purpose_sim < 0.20 なので結果は変わらない見込み）。
+
+## 2026-11-02（月・seihai r01）の観測
+
+テーマ: USDJPY M1 のダマシの抜け（足の極値だけが水準を越えて戻る）と、速いトレンド中の浅い押し。
+
+- **byrepo（structured・github・pool 20・`keyword_fair_share`）**: **F-14 の再現**。`failed breakout`・`stop hunt`・`intraday` は名前/説明/topics に 0 件（README のみ 3／2／9 件）。上位は futu_algo・ib_async など汎用。`keyword_fair_share` で単独検索しても主題を掲げるものはプールに入らなかった。
+- **byserendipity（raw_only・facet 3・44 件全件提出）**: 通過 7・出力 5・**接地検証失敗 0**。Far（送電網）と Very Far（神経の後電位）は機序を運んだ。Near facet は `home_converged` で棄却（呼び手の誤り・下記）。
+- **bybridge（materials・lean・abstract 250）**: **旧様式ではないが、収穫は交差候補に無く bridge の側にあった**。最頻 bridge＝Jegadeesh–Titman 1993（主題の基礎文献）・上位 10 件の 50%・全体の 15%・通行 bridge 24 本。交差候補 60 件は通過 0・fallback 1（When slower is faster・0.15）。**主題の直接の根拠は通行上位 2 位の bridge、Osler 2003 だった**（`read_works` で原文確認）。bridge は出力に出ないので、診断ブロックの題を読まないと取りこぼす。
+- **大きさ**: `materials_lean` と `materials_abstract_chars: 250` でも結果は 56,968 字でファイル保存（bridge_signals 15,059 字）。
+
+**呼び手の誤り 3 件**: (1) Near facet をホーム分野の言葉で書いて `home_converged`（10/26 に記録したのと同じ誤り）。(2) bybridge の提出に実在しない id `W4400018352x` を 1 件混ぜた（`採点 61 件`。0.01 で anomaly に落ちて影響なし。**存在しない id が黙って採点数に入る**のは contra 側でも検出できる）。(3) byserendipity で点数だけ送った W2109245277 がゲートを通って `no_material` で落ちた（F-15-U2）。
+
+## 2026-11-03（火・seihai r02/F2 GP）の観測
+
+テーマ: 固定費のある行動でいつ動かないか（不作為帯の幅と証拠の蓄積）。USDJPY M1 の GP 個体が 2 倍コストで死ぬ問題。
+
+- **byrepo（structured・github・pool 20・`keyword_fair_share`）**: **F-14 の再現**。`transaction cost`・`turnover penalty`・`no-trade region` は名前/説明/topics に 0 件（README のみ 4／2／4 件）。上位は 0dte-strategies・lumibot・hikyuu・operon（GP の記号回帰）。主題の実装は無し。
+- **byserendipity（raw_only・facet 3・60 件全件提出）**: 通過 9・出力 6・percentile 0.395。**接地検証失敗 1**（呼び手の誤り・下記）。工程管理の dead band と知覚の証拠蓄積は機序を運んだ。在庫の facet は (s,S) の最適性証明が大半で、1 本（Impulse Control of Brownian Motion）以外は機序が同じ。
+- **bybridge（materials・lean・abstract 250）**: 旧様式ではない。最頻 bridge＝Brock ら 1992（主題の基礎文献）・上位 10 件の 80%・全体の 30%・通行 bridge 24 本。交差候補 60 件は anomaly 48・hollow 10・通過 1・fallback 1（method of surrogate data・抄録なし）。**収穫はシード側**（IJFE 1997・JFE 1999・QF 2001 を `read_works` で確認）。語彙レッグの主題一致 44%＝`transaction cost` が貿易費用（Agricultural Trade Costs など）に同形異義で衝突（F-13 型）。
+- **大きさ**: `materials_lean` と `materials_abstract_chars: 250` でも結果は 56,037 字でファイル保存（11/02 と同じ）。
+
+**呼び手の誤り 3 件**: (1) byserendipity の W2951219477 で `source_quote` を逐語にしなかった（「it takes the form of…」、原文は「the optimal strategy takes the form of…」）→ 接地検証が正しく棄却。(2) byserendipity で点数だけ送った 3 件（W2043840772・W2103217847・W2590201952）がゲートを通って `no_material` で落ちた（F-15-U2 の再現）。(3) bybridge のキーワードに `transaction costs` を入れて貿易費用を引いた。
