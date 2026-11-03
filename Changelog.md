@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-03（CL-0166） 補足資料の題の規則に MOESM の形を足す（F-72-M）
+
+### 概要
+* `src/pipeline/collect.py`: `SUPPLEMENT_TITLE` に `MOESM5 of …` の形の分岐。
+* `tests/test_supplement_title_exclusion.py`: 当たる題 2 件・当たらない題 1 件を追加。712 pass。
+* 実測: 保存された候補 3,070 件で規則に当たるのは 8→9 件（増えたのは 11-02 の W2593470878 だけ）。11-02 の呼び出しを実 API で再生し、切り口 [2] で MOESM のレコード 3 件が名指しされて候補から外れた。
+* `docs/field_observations_seihai.md`: F-72-M。
+
 ## 2026-11-03（CL-0165） finalize が形の違う id を採点に数えず名指しする（F-79）
 
 ### 概要

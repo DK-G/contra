@@ -1110,6 +1110,17 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ## 対処済み
 
+### F-72-M. byserendipity(raw_only) — **Springer の補足資料のファイル名の形「MOESM5 of …」も F-72-R の規則で落とす** — **対処済み 2026-11-03（規則の 1 分岐の追加）**
+
+- 発端（性能調査 11-02 メタグモ「候補の中身」）: W2593470878「MOESM5 of Testing the Coulomb stress triggering hypothesis…」（Figshare・publication_type article）が候補に入った。F-72 の 4 回目で、F-72-R の規則（「Additional file N of」「Figure S1 from」など）に MOESM の形が無かった。
+- 変えたもの（**byserendipity の収集段の題の規則**＝`collect.SUPPLEMENT_TITLE` に `\S*moesm\d+(?:_esm)?` の分岐。F-78・F-79 とは別のツール・段）: 名指しと枠の扱いは F-72-R と同じ。
+- 誤って落とす範囲（API なし・`output/f72_scan_supplement_titles.py RULE`・保存された候補 3,070 件）: 規則に当たるのは 8→9 件。**増えたのは W2593470878 の 1 件だけ**で、9 件とも Figshare の補足資料。Figshare の掲載で当たらないのは 3 件（「Constructing TB Care Cascades.pdf」など「N of 論文」の形でないもの）で、触っていない。
+- 実測（実 MCP 経路・11-02 の呼び出しを実 API で再生・OpenAlex 3 回・履歴は書かない・`output/f72m_live.py`。before は MOESM の分岐を除いた規則）:
+  - before: 候補 60 件に W2593470878 が入る。
+  - after: 切り口 [2]（Seismology）の内訳に `補足資料のレコード 3 件を除外: W2593470878「MOESM5 of Testing the Coulomb stress…」 / W7136044530「MOESM5 of …」 / W7136081532「MOESM2 of …」`。抜けたのは W2593470878、入ったのは W3168708313「Stress–strain characterization of seismic source fields using moment measures of mechanism complexity」。
+- 検証: 既存のテストに当たる題 2 件・当たらない題 1 件を追加。712 pass。
+- **残る限界**: F-72-R と同じく、題の形で名乗らない補足資料（F-53 の併記の Regensburg 大の図の説明など）は落ちない。
+
 ### F-79-R. delegate_finalize — **OpenAlex の id に見えるが形の違う id は採点から外し、診断の行の直下に名指しする** — **対処済み 2026-11-03（入口の検査のみ）**
 
 - 発端（seihai 11-02）: F-79。

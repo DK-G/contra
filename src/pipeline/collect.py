@@ -1082,9 +1082,12 @@ HOME_EXCLUDED_HEAD = 3
 # publication_type article, so the type filter passes them. The title says what it is: a numbered
 # file, figure or table OF or FROM a paper. In 2,943 saved candidates this matches 8 records, all
 # supplements, and nothing else ("Tables of critical values …" and "Data from: …" stay).
+# F-72-M (survey 11-02): Springer's electronic supplement file name "MOESM5 of …" is the same kind
+# of record; in 3,070 saved candidates the MOESM form matches that 1 record and nothing else.
 SUPPLEMENT_TITLE = re.compile(
     r"^\s*(?:additional\s+files?|supplement(?:ary|al)\s+(?:materials?|files?|tables?|figures?|data|information)"
-    r"|supporting\s+information|(?:figure|fig\.?|table|movie|video|data|appendix)(?=\s+s?\d))"
+    r"|supporting\s+information|(?:figure|fig\.?|table|movie|video|data|appendix)(?=\s+s?\d)"
+    r"|\S*moesm\d+(?:_esm)?)"
     r"(?:\s+s?\d+[a-z]?)?\s*[:.]?\s+(?:of|from|for)\s", re.I)
 SUPPLEMENT_EXCLUDED_HEAD = 3
 

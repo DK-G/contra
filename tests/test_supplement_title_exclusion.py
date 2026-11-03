@@ -19,6 +19,8 @@ from src.pipeline.collect import CollectConfig, is_supplement_title
     "Supplementary Material for A study of signals",
     "Supplementary Table 2 of A study of signals",
     "Movie S2 of A study of signals",
+    "MOESM5 of Testing the Coulomb stress triggering hypothesis for three recent megathrust earthquakes",
+    "13059_2017_1234_MOESM1_ESM of A study of signals",
 ])
 def test_supplement_titles_match(title):
     assert is_supplement_title(title)
@@ -31,6 +33,7 @@ def test_supplement_titles_match(title):
     "Figure 8 knots from braids",
     "Figure-ground segregation of objects",
     "Video games from the 80s",
+    "MOESM of signals",
     "",
     None,
 ])
