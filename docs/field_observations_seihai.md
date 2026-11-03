@@ -1102,9 +1102,25 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `compdemocracy/polis`・`ory/polis`・`Considerit/ConsiderIt` が「issuesなし (警告: ゼロIssueの罠)」と出たが、GitHub には issue 551・170・104 件ある。
 - 機序（11-03 に実 API で確認）: `/repos/{name}/issues?per_page=5` は PR も返す。3 件とも直近 5 件がすべて PR で、PR を除くと 0 件になり、星 50 以上なので罠と判定された。保存したプールのキャッシュ（10-02〜10-09・100 リポジトリ）では **35 件（35%）が直近 5 件すべて PR**だった。
 
+### F-79. delegate_finalize — **W 番号の形でない id（写し間違い）が黙って採点され、「採点 N 件」に数えられる**（seihai 2026-11-02 の呼び手の誤り (2)「存在しない id が黙って採点数に入るのは contra 側でも検出できる」に採番・2026-11-03 起票） → **同日対処済み＝「対処済み」節 F-79-R**
+
+- 観測: bybridge の提出 61 件に `W4400018352x` が 1 件混ざり、0.01 で anomaly に落ちて「採点 61 件」と出た。結果は変わらなかったが、呼び手は自分の誤りを結果から読めない。
+
 ---
 
 ## 対処済み
+
+### F-79-R. delegate_finalize — **OpenAlex の id に見えるが形の違う id は採点から外し、診断の行の直下に名指しする** — **対処済み 2026-11-03（入口の検査のみ）**
+
+- 発端（seihai 11-02）: F-79。
+- 変えたもの（**finalize の入口**＝`mcp_server._split_malformed_ids`。ゲート・点数・描画は不変。F-78 とは別のツール・段）: `W` と数字で始まる、または openalex.org の URL の形をした id のうち、`W123` か `https://openalex.org/W123` の形でないものを外す（大文字小文字の違い・`api.openalex.org/works/` の形・数字の後ろの余分な文字）。それ以外の形の id は触らない。全件が外れたら「candidates が空です」に id を添える。
+- 誤って外す範囲（API なし・`output/f79_scan_ids.py`・保存された `delegate_finalize` の呼び出し 139 回・id 4,933 件）: 形の違う id は **11-02 の `W4400018352x` の 1 件だけ**（URL 2,899・W 番号 2,033）。
+- 実測（実 MCP 経路・11-02 の呼び出しを記録から再生・API なし・履歴は書かない・`output/f79_replay.py`）:
+  - before: `post-gate 診断: status=fallback / 採点 61 件 / anomaly 54 / … / 出力 1`
+  - after: `post-gate 診断: status=fallback / 採点 60 件 / anomaly 53 / … / 出力 1` の直下に `・受け付けない id 1 件（OpenAlex の W 番号の形でない・採点に数えず除外）: W4400018352x。候補の id 一覧から写し直してください（F-79）`
+  - 分位ゲートの母数（anomaly 除外後の 7 件）と出力は変わらない。
+- 検証: 新規 3 件（`tests/test_malformed_finalize_ids.py`）。709 pass。
+- **残る限界**: 形が正しく OpenAlex に無い id（実在しない W 番号）は検出しない。finalize は API を呼ばない設計で、どの道具が返した候補かの記録も持たない。確かめるなら `read_works` が「OpenAlex に無い id」を名指しする。
 
 ### F-78-R. byrepo — **issue の取得を 1 回のまま 100 件に広げ、直近 5 件に issue が無いときだけ、さらに前の issue 5 件を採点する。100 件すべて PR なら「issues未確認」（3 点）と書く** — **対処済み 2026-11-03（Reliability の issue の点のみ）**
 

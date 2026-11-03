@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-03（CL-0165） finalize が形の違う id を採点に数えず名指しする（F-79）
+
+### 概要
+* `src/mcp_server.py`: `_split_malformed_ids`。OpenAlex の id に見えるが `W123`／`https://openalex.org/W123` の形でない id を外し、診断の行の直下に名指し。
+* `tests/test_malformed_finalize_ids.py`: 新規 3 件。709 pass。
+* 実測: seihai 11-02 の呼び出しの再生で「採点 61 件」→「採点 60 件」＋`W4400018352x` の名指し。保存された 139 回・4,933 件で該当はこの 1 件だけ。
+* `docs/field_observations_seihai.md`: F-79・F-79-R。
+
 ## 2026-11-03（CL-0164） byrepo の issue の標本が PR だけで「ゼロIssueの罠」になる誤りを直す（F-78）
 
 ### 概要

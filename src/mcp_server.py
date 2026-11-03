@@ -8,7 +8,7 @@ import re
 from datetime import date
 import sys
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.core.input_schema import (
     APPROACH_TYPES,
@@ -260,6 +260,28 @@ def _expand_openalex_id(material: Any) -> Any:
         if isinstance(wid, str) and re.fullmatch(r"W\d+", wid.strip()):
             return {**material, "id": _OPENALEX_WORK_PREFIX + wid.strip()}
     return material
+
+
+_OPENALEX_LIKE_ID = re.compile(r"(?:https?://(?:api\.)?openalex\.org/(?:works/)?)?w\d", re.I)
+_OPENALEX_WORK_ID = re.compile(r"(?:https://openalex\.org/)?W\d+")
+
+
+def _split_malformed_ids(materials: List[Any]) -> Tuple[List[Any], List[str]]:
+    """F-79: an id written as an OpenAlex work but not in its shape is a copying slip.
+
+    seihai 2026-11-02 sent ``W4400018352x`` among 61 ids; it was scored, fell to anomaly at
+    0.01 and was counted in 「採点 61 件」 without a word. In 139 saved calls (4,933 ids) it is
+    the only id of this kind. Ids of any other shape are left alone.
+    """
+    kept, malformed = [], []
+    for m in materials:
+        wid = m.get("id") if isinstance(m, dict) else None
+        if (isinstance(wid, str) and _OPENALEX_LIKE_ID.match(wid.strip())
+                and not _OPENALEX_WORK_ID.fullmatch(wid.strip())):
+            malformed.append(wid)
+        else:
+            kept.append(m)
+    return kept, malformed
 
 
 def _short_ids_line(materials: List[Dict[str, Any]]) -> str:
@@ -1797,9 +1819,16 @@ class StdinMcpServer:
         # docs/research/mcp_subscription_delegation.md.
         theme = _build_theme_input(args)
         materials = [_expand_openalex_id(m) for m in (args.get("candidates") or [])]
+        materials, malformed_ids = _split_malformed_ids(materials)
+        malformed_line = (
+            f"受け付けない id {len(malformed_ids)} 件（OpenAlex の W 番号の形でない・採点に数えず除外）: "
+            + ", ".join(malformed_ids)
+            + "。候補の id 一覧から写し直してください（F-79）"
+        ) if malformed_ids else ""
         if not materials:
             return {
-                "content": [{"type": "text", "text": "candidates が空です。エージェント採点済みの候補リストを渡してください。"}],
+                "content": [{"type": "text", "text": "candidates が空です。エージェント採点済みの候補リストを渡してください。"
+                             + (f"\n{malformed_line}" if malformed_line else "")}],
                 "isError": False
             }
         count = int(args.get("count") or 1)
@@ -1832,6 +1861,8 @@ class StdinMcpServer:
             f"anomaly {diag.get('anomaly', 0)} / hollow {diag.get('hollow', 0)} / "
             f"通過 {diag.get('passed', 0)} / 出力 {len(entries)}"
         )
+        if malformed_line:
+            diag_line += f"\n  ・{malformed_line}"
         # F-15: the percentile bar is a quantile of THIS batch, so the same candidate can pass
         # in one submission and fail in another. Show the batch-relative bar next to the fixed
         # floor and what each would have passed, so the caller can tell "not good enough" from
