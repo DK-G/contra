@@ -1,14 +1,16 @@
 <!-- CURRENT-START / ここだけを常に最新に保つ。ここより下は履歴で、読むのは必要時のみ。 -->
-## 現在地（2026-09-27）
-- フェーズ: **実装は完了・Phase 1 の Done 判定待ち**。検索クエリ精度 Phase 2（bybridge）/ Phase 3（byserendipity）、キー無し委譲ループ（`delegate_finalize` ＋ 各 MCP の `structured` フラグ）、byrepo の A-RS1/A-RS2 配点移行、`fill_track_entries` の統合テストまで全て `[x]`。完了記録は `docs/archive/task-history.md` へ退避済み。
-- 進行中: **MCP サーバとして実稼働中**（`byserendipity` / `byrepo` / `bybridge` / `bynote_link_concepts` / `delegate_finalize` がツールとして利用可能なことを 2026-07-25 に確認）。Track A「Git 実用アンカー設計」は設計5項目とも完了（`docs/specs/track_a_git_anchor_design.md`）。
+## 現在地（2026-11-03）
+- フェーズ: **実装は稼働中・Phase 1 の Done 判定待ち**。MCP ツールとして稼働し、常設の利用者は seihai の日次ループ。完了記録は `docs/archive/task-history.md`。
+- 進行中（無人）: 直す日 `contra-failure-remediation`（火・金・日 21:00。main へ直接コミット・push なし）と性能調査 `contra-field-survey`（月・水・木・土 21:00。メタグモ・EX将棋・hAIbit・salon-sites。正本 `D:\dev\agents\routines\contra-field-survey.md`、台帳 `D:\dev\agents\reports\contra-survey\`）。
+- 直近: 11-01 に F-75（`read_works`）・F-76・F-77 を対処、702 pass。F-75 は 11-02 の調査で効果を確認。調査の案は EX将棋で実装まで届いた（10-20・10-23 に統合）。経緯は `DECISION_LOG.md`。
 - 次の一手:
-  1. **Track B 品質評価を実施して Phase 1 を閉じる** — ①複数テーマでサンプル生成し「遠いが構造一致」の1本が安定して出るか ②Anomaly（無意味接続）と近接（マイオピア）の混入がないか ③「役に立つ可能性の仮説」が論文固有の発見に基づくか ④飽和ノート時に弱い候補で水増しされないか、を確認し **`docs/quality_eval.md` §4 表・§5 総評に記入**（ルーブリックと再現コマンドは整備済み）。
-  2. Track A の discussion 観測は **GitHub Discussions が REST に一覧エンドポイントを持たず GraphQL 専用**のため保留中。着手するなら GraphQL 経路の導入から（dependents も同じ理由で対象外）。
-- ★ブロッカー/外部待ち: 上記1の残5件は**全て「実 LLM API キーが必要」または「人間の質的判断が必要」**。**実装が Done 判定を追い越しており、人間が評価しない限り Phase 1 を閉じられない**のが唯一かつ最大のボトルネック。
-- 直近の重い判断: **Web 化・課金は現時点では実装しない**（必要になったら Phase 2 として再評価）。PRF は bybridge の異分野目的と衝突するため不採用とし Track A 収集へ再配置。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。判断の経緯は `DECISION_LOG.md`。
-- ブランチ: 09-27 に整理し、local・origin とも `main` のみ。不採用の `feature/bybridge`（6 月の byrepo 拡張 3 commit）は origin から削除し、ローカルタグ `archive/feature-bybridge` に保存。
-- 09-27〜28: 後知恵テスト（Kaggle 4 題で勝因 0/4）→ F-34〜38、生成・観測過程 facet、F-15-U/U2（全件提出）、F-39（semantic 504 は type 絞り込みが主因）。facet 再テスト（ROGII・盲検）は主要項目で差なし＝次の題材で要再検証（DECISION_LOG）。
+  1. **週の 1 本の採点を 4 テーマ分そろえて Phase 1 を判定する**（問いは「今日あなたがやること」に出る）。答えは `docs/quality_eval.md` §4 に記入する。
+  2. §1・§4 の表は旧 5 テーマのままなので、記入の前に 4 テーマへ合わせる。
+  3. byrepo は主題の実装を拾えない回が続く（F-14）。bybridge も通過 0〜1 件の回が多い。生成過程 facet の効果は未確認（09-28 の ROGII 再テストは主要項目で差なし）で、次の題材で要再検証。
+  4. Track A の discussion 観測は GraphQL 専用のため保留中。
+- ★ブロッカー/外部待ち: 上記 1 の人間の採点。**実装が Done 判定を追い越している**状態は変わらない。
+- 直近の重い判断: **Web 化・課金は現時点では実装しない**。PRF は不採用。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。経緯は `DECISION_LOG.md`。
+- ブランチ: `main` は `origin` より先で、`origin` は 10-24（92095ca）のまま。push は都度確認。他は未評価の `prototype/reading-bridge`（未 merge）とタグ `archive/feature-bybridge`。
 <!-- CURRENT-END -->
 
 # 作業タスクリスト
