@@ -10,7 +10,7 @@
   4. Track A の discussion 観測は GraphQL 専用のため保留中。
 - ★ブロッカー/外部待ち: 上記 1 の人間の採点。**実装が Done 判定を追い越している**状態は変わらない。
 - 直近の重い判断: **Web 化・課金は現時点では実装しない**。PRF は不採用。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。経緯は `DECISION_LOG.md`。
-- ブランチ: `main` は `origin` より先で、`origin` は 10-24（92095ca）のまま。push は都度確認。他は未評価の `prototype/reading-bridge`（未 merge）とタグ `archive/feature-bybridge`。
+- ブランチ: `main`。直す日のコミットは push しないので `origin` より先行していく（push は都度確認）。他は未評価の `prototype/reading-bridge`（未 merge）とタグ `archive/feature-bybridge`。
 <!-- CURRENT-END -->
 
 # 作業タスクリスト
