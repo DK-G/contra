@@ -1,14 +1,14 @@
 <!-- CURRENT-START / ここだけを常に最新に保つ。ここより下は履歴で、読むのは必要時のみ。 -->
-## 現在地（2026-11-03）
-- フェーズ: **実装は稼働中・Phase 1 の Done 判定待ち**。MCP ツールとして稼働し、常設の利用者は seihai の日次ループ。完了記録は `docs/archive/task-history.md`。
+## 現在地（2026-11-04）
+- フェーズ: **実装は稼働中・Phase 1 は実地の成績で判定する**（11-04 に物差しを替えた）。MCP ツールとして稼働し、常設の利用者は seihai の日次ループ。完了記録は `docs/archive/task-history.md`。
 - 進行中（無人）: 直す日 `contra-failure-remediation`（火・金・日 21:00。main へ直接コミット・push なし）と性能調査 `contra-field-survey`（月・水・木・土 21:00。メタグモ・EX将棋・hAIbit・salon-sites。正本 `D:\dev\agents\routines\contra-field-survey.md`、台帳 `D:\dev\agents\reports\contra-survey\`）。
 - 直近: 11-01 に F-75（`read_works`）・F-76・F-77 を対処、702 pass。F-75 は 11-02 の調査で効果を確認。調査の案は EX将棋で実装まで届いた（10-20・10-23 に統合）。経緯は `DECISION_LOG.md`。
 - 次の一手:
-  1. **週の 1 本の採点を 4 テーマ分そろえて Phase 1 を判定する**（問いは「今日あなたがやること」に出る）。答えは `docs/quality_eval.md` §4 に記入する。
-  2. §1・§4 の表は旧 5 テーマのままなので、記入の前に 4 テーマへ合わせる。
+  1. **Phase 1 は「渡した案が受け取り手の物差しで効いたか」で判定する**（11-04 Kira。人の採点はやめた）。完了＝物差しのある 2 テーマ以上で「効いた」が 1 件以上。11-04 時点で EX将棋の 1 件（D-012）。段階・物差し・集計は `docs/quality_eval.md` §6 と調査ルーティン「役立ったかの追跡」。
+  2. 物差しのある 2 テーマ目が要る: メタグモは公開後、salon-sites は週末の撤退判断待ち、hAIbit は物差しが無い。
   3. byrepo は主題の実装を拾えない回が続く（F-14）。bybridge も通過 0〜1 件の回が多い。生成過程 facet の効果は未確認（09-28 の ROGII 再テストは主要項目で差なし）で、次の題材で要再検証。
   4. Track A の discussion 観測は GraphQL 専用のため保留中。
-- ★ブロッカー/外部待ち: 上記 1 の人間の採点。**実装が Done 判定を追い越している**状態は変わらない。
+- ★ブロッカー/外部待ち: 物差しのある 2 テーマ目（上記 2）。人の採点待ちではなくなった。
 - 直近の重い判断: **Web 化・課金は現時点では実装しない**。PRF は不採用。`spec.md` §7 の**スコア設計値（0.20 / 0.50 / 0.35）は不変**という禁則を守ること。経緯は `DECISION_LOG.md`。
 - ブランチ: `main`。直す日のコミットは push しないので `origin` より先行していく（push は都度確認）。他は未評価の `prototype/reading-bridge`（未 merge）とタグ `archive/feature-bybridge`。
 <!-- CURRENT-END -->
