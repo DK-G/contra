@@ -3366,3 +3366,21 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **大きさ**: `materials_lean` と `materials_abstract_chars: 250` でも結果は 56,037 字でファイル保存（11/02 と同じ）。
 
 **呼び手の誤り 3 件**: (1) byserendipity の W2951219477 で `source_quote` を逐語にしなかった（「it takes the form of…」、原文は「the optimal strategy takes the form of…」）→ 接地検証が正しく棄却。(2) byserendipity で点数だけ送った 3 件（W2043840772・W2103217847・W2590201952）がゲートを通って `no_material` で落ちた（F-15-U2 の再現）。(3) bybridge のキーワードに `transaction costs` を入れて貿易費用を引いた。
+
+## 2026-11-04（水・seihai r03/F4 解釈可能ML）の観測
+
+テーマ: 生成器の通過率が代理系列（block_shuffle・sign_flip）上の通過率と分けられないとき、家系を「情報なし」とする判断規則（S-167 の結果を受けて）。
+
+- **byrepo（structured・github・pool 10）**: **収穫ゼロ（様式 (iii)）**。`surrogate data`・`strategy null` は README を含め 0 件、`permutation test`・`monte carlo permutation` は README の言及のみ。関連度最大 0.2。上位は finlab_crypto・shapley（分類器のシャプレー値＝語彙衝突）・investing-algorithm-framework・pypbo・vibe-investing。戦略家系の代理系列検定の実装は 0 件。
+- **byserendipity（raw_only・facet 3・60 件全件提出）**: anomaly 6・通過 16・出力 3・percentile 0.303。機序を運んだ: 置換法の選び方への頑健性（Briefings Bioinf 2013）・Eklund ら 2016（実データ帰無で手法全体を検証）・Catmap 2004（遺伝子置換は標本ラベル置換の近似にならない）。代理データ facet はホーム除外 10 件（Economics に分類された代理データ文献）。
+- **bybridge（materials・lean・abstract 300）**: 旧様式ではない。最頻 bridge＝Benjamini & Hochberg 1995（主題の方法論の基礎文献）・上位 10 件の 30%・全体の 18%・通行 bridge 39 本。交差候補 60 件は Decision Sciences 30（Hansen SPA・Romano-Wolf・MCS＝主題が兄弟 Field に分類された近傍）＋RNA-seq ツール・幼児教育介入などの分野外。anomaly 39・通過 4・出力 1（P-curve 2013・機序を運んだ）。結果 59,810 字でファイル保存。
+- **呼び手の誤り 2 件**: (1) byserendipity で点数だけ送った 4 件（W2112220625・W2996080470・W2059782999・W2127072844）がゲートを通って `no_material`（F-15-U2 の再発・3 週連続）。(2) bybridge で抄録が上流で空の W3124195593 に `upstream_empty` を echo しなかった（F-19-V の警告が正しく出た）。
+
+## 2026-11-05（木・seihai r04/F5 microstructure）の観測
+
+テーマ: 待機キューの候補を、入場時の保存済み評価のまま着席させてよいか（当日窓の再測定が 7 週連続で net2x<0 の queue 先頭が、前任の手動 retire で着席する日）。英文で投入・assumptions 4（bybridge は 3）。
+
+- **byrepo**: 省略（S-62・r04 は 9/10〜10/01 の 4 週連続で `forex` 語彙衝突のため）。
+- **byserendipity（raw_only・facet 3・lean・max_chars 40,000・43 件全件提出）**: facet 別返却 29/27/32 → 提出 13/9/21。anomaly 14・hollow 0・percentile 0.338・通過 8・出力 5・**接地検証失敗 0**。機序を運んだ: 移植待機リストの定期再評価（Transplantation 2002・1998）・待機リストの維持と除名規則（2002）・RCT の winner's curse の縮小推定（Stat Med 2021）・持続的な基準充足を待機登録の条件にする方針（Transplantation Direct 2017）。結果 36.3k 字でインライン（予算どおり）。
+- **bybridge（materials・lean）**: **`materials_max_chars` を「受け付けない（F-57）」として無視し、結果 97.9k 字でファイル保存**。ツールの説明（引数一覧）には `materials_max_chars` が載っているので、**説明と実装が食い違っている**（byserendipity では効いた）。診断: シード 20 件（Field 一致 14/20・Finance 14・PBO/DSR/backtest overfitting の主題そのもの）。**最頻 bridge＝The Statistics of Sharpe Ratios（主題ドメインの文献）・上位 10 件の 30%・全体の 13%・通行 bridge 30 本**＝旧様式ではない。交差候補 60 件は Business 30（supply chain 8・public procurement 6・ESG 5）／CS 10／Math 10／Engineering 7。semantic レッグのシード「supplier qualification」2 本が交差候補 35 件を連れてきた（調達・輸送オークション・秘書問題）。**全 60 件採点・全件提出: anomaly 53・通過 0・出力 1（fallback: Model Confidence Set・0.198）**＝収穫ゼロ（様式 (i)）。近傍の Romano-Wolf・MCS は距離が近すぎて落ちる（主題が兄弟 Field に分類された近傍）。
+- **呼び手の誤り 1 件**: byserendipity で点数だけ送った W2292031384（Management of Kidney Transplantation Waiting List）がゲートを通って `no_material`（F-15-U2 の再発・4 週連続）。
