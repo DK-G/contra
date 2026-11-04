@@ -115,9 +115,7 @@ python -m src.cli.main \
 
 ## 6. 実地の成績（2026-11-04 から Phase 1 の判定の本体）
 
-正本は `D:\devgents
-outines\contra-field-survey.md`「役立ったかの追跡」（段階・テーマ別の物差し・効いたの線）。台帳は `D:\devgents
-eports\contra-survey\<テーマ>.md` の「その後」列。ここには週 1 回、集計だけを写す。
+正本は `D:\dev\agents\routines\contra-field-survey.md`「役立ったかの追跡」（段階・テーマ別の物差し・効いたの線）。台帳は `D:\dev\agents\reports\contra-survey\<テーマ>.md` の「その後」列。ここには週 1 回、集計だけを写す。
 
 **Done＝物差しのある 2 テーマ以上で、それぞれ「効いた」が 1 件以上。** Kira が決めるのは「試すか」だけで、効いたかは受け取り手の数字で決まる。
 
