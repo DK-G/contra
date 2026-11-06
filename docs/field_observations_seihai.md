@@ -1127,9 +1127,21 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `official-stockfish/Stockfish` が「issues 2件 / open 2 / closed 0」、OpenBench・Pikafish・Fairy-Stockfish・variant-nnue-tools が「issues 5件」。GitHub の実数は Stockfish 1,100・OpenBench 181・Fairy-Stockfish 533 件。
 - 機序: `_fetch_issue_signal` は直近 5 件（PR を除く。F-78-R 以降は、直近 5 件がすべて PR ならその前の issue 5 件）を採点し、その標本の件数をそのまま「issues N件」と書いていた。総数は取っていない（取るには別の呼び出しが要る）。
 
+### F-85. bybridge — **シードが主題に合っていても、bridge が「広く使われる手法・基礎の論文」だと、交差候補はその手法の利用者（構造を共有しない分野）で埋まる**（性能調査 2026-11-02 メタグモ「候補の中身」と 2026-11-04 EX将棋「巨大な基礎論文への吸収」の 2 回目で採番・2026-11-06 起票・**未対処・判断待ち**）
+
+- 観測 1（11-02 メタグモ）: シードが可視化の手法（ワードクラウド）で、交差候補 60 件は農家の聞き取り・小児科の教育・観光など「道具として使っただけ」の論文。anomaly 39・hollow 19・通過 0。11-03 の注記 (5) で「2 回目が出たら起票」とした。
+- 観測 2（11-04 EX将棋）: シード 20 件中 19 件が Topic「Artificial Intelligence in Games」で主題どおり。交差候補の通った bridge の上位は AlphaGo（被引用 15,843・候補 15 件）・AlphaGo Zero（9,227・14 件）・AlphaZero（3,607・12 件）・ResNet（237,350・11 件）。候補は AI の経営効果・医療画像・エアロゾル観測・タンパク質構造予測。採点 60 件 → anomaly 52・hollow 6・通過 0。診断の最頻 bridge 25% の行と bridge 一覧で原因は読めた。
+- 機序（コードと記録から）: phantom ではない（`bridge_liveness` は実在のレコードを外さない）。F-23/24-R の bridge ごとの配分（1 本 6 件）は効いているが、上位 4 本がどれも主題の基礎文献で、その引用側は分野を問わない。旧様式（F-01: 分野外の巨大ハブ・名簿の劣化）とは違い、名簿もプールも正しい。
+- **実装しなかった理由**: 処方の候補は (a) 被引用の上限で bridge を外す・後ろへ回す（opt-in）、(b) 引用側の主トピックがシードの主トピックと何段離れているかで候補を絞る。(a) は 2026-08-18 の計器の run で「本物の祖先を罰する」として退けた中心性ペナルティそのもので（`filter_live_bridges` の docstring）、seihai の当たりには主題の基礎文献を通ったもの（F-30 の novelty search の原典・F-83 の Osler 2003）がある。どちらも既定にするには人間の判断が要る。
+- 判断待ち（人間）: 「手法の利用者」を候補から外すことを bybridge の仕事にするか（交差候補の定義の変更）。するなら (a) の opt-in から測るのが安い（生存確認の一括の呼び出し `resolve_ids_batched` は今 `select=id` だけで、`cited_by_count` を足せば呼び出しを増やさずに取れる）。
+
 ---
 
 ## 対処済み
+
+### seihai 2026-11-04〜11-06・性能調査 2026-11-04／11-05 への注記（2026-11-06 失敗対処デー）
+
+(1) **seihai 11-05・11-06 の「bybridge のツール説明（引数一覧）には `materials_max_chars` が載っている」は反証**。2026-11-06 に実際の MCP の `tools/list` で `bybridge_collect` のスキーマを読んだ。載っていない（載っているのは `materials_lean`・`materials_abstract_chars`）。`materials_max_chars` は `byserendipity_discover` のスキーマにだけあり、`read_works` の説明文が言及している。結果の F-57 の名指しは正しい。bybridge の予算は **F-57 のまま判断待ち**（抄録を全部捨てても 47k 字＝予算を入れても毎回「収まりません」になる）。seihai 10-15・10-16・11-05・11-06、性能調査 11-02・11-04 で 6 回目。(2) seihai 11-04（r03）の bybridge の Decision Sciences 30 件（Hansen SPA・Romano-Wolf・MCS）と 11-06（r05）の Stock Market Forecasting Methods 12 件は **F-44 の再現**（主題が兄弟 Field の Topic に分類される）。(3) seihai 11-05（r04）の「semantic レッグのシード『supplier qualification』2 本が交差候補 35 件を連れてきた」は F-47 の向き（semantic レッグの側が外れる）。11-06 の「上位は多様化したが収穫は薄い」（Fama-French 経由の ESG・企業財務）は **F-85 と同じ形**（主題の基礎文献の引用側は分野を問わない）として F-85 に数える。(4) seihai 11-04・11-05 の byserendipity の `no_material`（点数だけの提出）は F-15-U2 の案内どおりの呼び手の誤りで、4 週連続。(5) seihai 11-04・11-06 の byrepo は **F-14 の再現**（`surrogate data`・`strategy null`／`model registry`・`champion challenger`・`model staleness`・`winner's curse` は名前/説明/topics に 0 件）。11-06 の `model staleness` が Stellar 決済に 0.61 で付いたのは README の部分一致で F-48 の形。(6) seihai 11-06 の byserendipity の 41,371 字（予算 40,000）は F-50b の設計どおり（抄録の最小 200 字でも収まらないとき、結果がそう申告する）。(7) seihai 11-06 の「待機リストの定期再評価（Transplantation 2002）が 11-05 r04 と同じ系統で、history_key が違うので重複除外が効かない」は F-74-R の挙動どおり（履歴は鍵ごと）。r04 と r05 で同じ鍵を使うかは seihai 側の判断。(8) 性能調査 11-04 EX将棋の byrepo の「issues 2件」は今日の **F-84**、「2) 関連性」の定型・「3) 仮説」の記入なしは F-14 の散文の定型性。(9) 性能調査 11-04 EX将棋の bybridge の巨大な基礎論文への吸収は今日起票の **F-85**。(10) 明日から: byrepo と Track B の「1) 概要」の抜粋で `Chart.js`・URL・小数が割れない（F-81-R）。byrepo の Issue Signal が「直近5件のうち issue N件」と標本を名乗る（F-84-R）。
 
 ### F-84-R. byrepo — **Issue Signal は採点した標本を名乗る（「直近5件のうち issue 2件」「直近5件はすべてPR・それより前の issue 5件」）** — **対処済み 2026-11-06（描画のみ）**
 
