@@ -38,8 +38,14 @@ def _summarize(abstract: str | None) -> str:
 
 
 
+# F-81 (survey 2026-11-02): splitting on every "." and re-joining with a space printed
+# 「Chart. js」「s3. amazonaws」「Kumo02. png」 in the unwritten summary. A sentence ends only
+# where a "." is followed by whitespace or the end of the text.
+_SENTENCE_END = re.compile(r"\.(?=\s|$)")
+
+
 def _sentence_chunks(text: str) -> List[str]:
-    parts = [p.strip() for p in text.replace("\n", " ").split(".") if p.strip()]
+    parts = [p.strip() for p in _SENTENCE_END.split(text.replace("\n", " ")) if p.strip()]
     return [p + "." for p in parts]
 
 

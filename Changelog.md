@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-06（CL-0169） 概要の抜粋が名前・URL・小数の . で文を割らない（F-81）
+
+### 概要
+* `src/pipeline/generate.py`: `_sentence_chunks` は「. の後に空白か文末」だけで割る。
+* `tests/test_summary_sentence_split.py`: 新規 3 件。717 pass。
+* 実測（API なし）: 保存した byrepo のプール 393 件で割れ 83 → 0、Track B の抄録 180 件で 4 → 0。10-09 のプールの実経路の再生で 6 件中 3 件の URL の割れが消えた。
+* `docs/field_observations_seihai.md`: F-81-R。
+
 ## 2026-11-03（CL-0168） bybridge の bridge 一覧に「出力に入らない・read_works で読める」の 1 行（F-83）
 
 ### 概要
