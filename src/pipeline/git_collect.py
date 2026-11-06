@@ -723,10 +723,14 @@ def _fetch_issue_signal(
         {"state": "all", "per_page": max(sample_size, _ISSUE_WIDE_PAGE)},
     )
     issues = [item for item in payload[:sample_size] if "pull_request" not in item]
+    # F-84 (survey 2026-11-04 EX将棋): "issues 2件" read as the repository's total (Stockfish
+    # has 1,100). The summary names the sample it scored instead.
+    sample = f"直近{min(len(payload), sample_size)}件のうち issue"
     if not issues and payload:
         issues = [item for item in payload if "pull_request" not in item][:sample_size]
         if not issues:
             return 3, f"issues未確認 (直近{len(payload)}件はすべてPR)", 0, 0, 0
+        sample = f"直近{sample_size}件はすべてPR・それより前の issue"
     if not issues:
         # Zero Issues Trap check
         if repo_stars >= 50:
@@ -758,7 +762,7 @@ def _fetch_issue_signal(
     if labels:
         score += 1
 
-    summary = f"issues {len(issues)}件 / open {open_count} / closed {closed_count}"
+    summary = f"{sample} {len(issues)}件 / open {open_count} / closed {closed_count}"
     if labels:
         summary += f" / labels: {', '.join(labels[:3])}"
     return min(score, 10), summary, open_count, closed_count, non_owner_reporters

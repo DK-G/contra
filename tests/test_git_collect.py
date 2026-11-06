@@ -166,7 +166,7 @@ def test_repository_to_work_maps_repo_fields():
     assert work.publication_type == "github_repository"
     assert "Run this toolkit" in (work.abstract or "")
     assert work.source_meta["reliability_score"] > 0
-    assert "issues 2件" in work.source_meta["issue_signal_summary"]
+    assert "のうち issue 2件" in work.source_meta["issue_signal_summary"]
     
     # Refined scoring pillars mapping verification
     assert work.source_meta["impl_doc_score"] > 0

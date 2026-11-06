@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-06（CL-0170） byrepo の Issue Signal は採点した標本を名乗る（F-84）
+
+### 概要
+* `src/pipeline/git_collect.py`: `_fetch_issue_signal` の summary を「直近5件のうち issue N件」「直近5件はすべてPR・それより前の issue N件」に。点数・取得回数は不変。
+* `tests/test_issue_signal_pr_only.py`・`tests/test_git_collect.py`: 文言を新しい形に、1 件に検査を追加。717 pass。
+* 実測: 11-04 EX将棋で名指しされた 6 件を実 GitHub API で。点は 6 件とも不変、5 件の文言が標本を名乗る形に。
+* `docs/field_observations_seihai.md`: F-84・F-84-R。
+
 ## 2026-11-06（CL-0169） 概要の抜粋が名前・URL・小数の . で文を割らない（F-81）
 
 ### 概要

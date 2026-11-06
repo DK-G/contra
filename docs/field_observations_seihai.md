@@ -1122,9 +1122,33 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 - 観測（seihai 11-02）: 交差候補 60 件は通過 0・fallback 1。主題の直接の根拠は通行 2 位の bridge、Osler 2003 だった（`read_works` で原文確認）。F-76（シードの側）の bridge 版。
 
+### F-84. byrepo — **Issue Signal の「issues 5件」が、リポジトリの issue の総数に読める**（性能調査 2026-11-04 EX将棋「Issue の表示」に採番・2026-11-06 起票） → **同日対処済み＝「対処済み」節 F-84-R**
+
+- 観測: `official-stockfish/Stockfish` が「issues 2件 / open 2 / closed 0」、OpenBench・Pikafish・Fairy-Stockfish・variant-nnue-tools が「issues 5件」。GitHub の実数は Stockfish 1,100・OpenBench 181・Fairy-Stockfish 533 件。
+- 機序: `_fetch_issue_signal` は直近 5 件（PR を除く。F-78-R 以降は、直近 5 件がすべて PR ならその前の issue 5 件）を採点し、その標本の件数をそのまま「issues N件」と書いていた。総数は取っていない（取るには別の呼び出しが要る）。
+
 ---
 
 ## 対処済み
+
+### F-84-R. byrepo — **Issue Signal は採点した標本を名乗る（「直近5件のうち issue 2件」「直近5件はすべてPR・それより前の issue 5件」）** — **対処済み 2026-11-06（描画のみ）**
+
+- 発端（性能調査 11-04 EX将棋）: F-84。
+- 変えたもの（**byrepo の Issue Signal の文言**＝`git_collect._fetch_issue_signal` の summary の 2 行。点数・取得（1 回のまま）・Reliability・順位は不変。今日の F-81-R は構造整形の概要の段で、別の段）。総数を足すことはしなかった（GitHub の呼び出しが 1 件あたり 1 回増え、未認証 60 回/時の枠を食う）。
+- 実測（実 GitHub API・`output/f84_issue_label_live.py`・11-04 に名指しされた 6 件）:
+
+  | リポジトリ | before | after | 点 |
+  |---|---|---|---|
+  | Stockfish | issues 5件 / open 4 / closed 1 | 直近5件はすべてPR・それより前の issue 5件 / open 4 / closed 1 | 9（不変） |
+  | OpenBench | issues 5件 / open 2 / closed 3 | 直近5件はすべてPR・それより前の issue 5件 / … | 9 |
+  | Pikafish | issues 5件 / open 2 / closed 3 | 同上の形 | 9 |
+  | Fairy-Stockfish | issues 5件 / open 5 / closed 0 | 同上の形 | 7 |
+  | variant-nnue-tools | issues 5件 / open 0 / closed 5 | 同上の形 | 10 |
+  | nnue-pytorch | issues未確認 (直近100件はすべてPR) | 不変 | 3 |
+
+  11-04 の「Stockfish issues 2件」は、その日の直近 5 件に issue が 2 件あった回（今日は 5 件すべて PR で、その前に遡った）。
+- 検証: 既存 2 件の文言を新しい形に、1 件に文言の検査を足した。717 pass。
+- **残る限界**: 総数は出ない。open/closed は 5 件の標本の内訳で、リポジトリの open 率ではない。
 
 ### F-81-R. 構造整形の「1) 概要」 — **文の区切りは「. の後に空白か文末」だけにする。名前・URL・小数の中の . では割らない** — **対処済み 2026-11-06（描画のみ）**
 
