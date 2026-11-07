@@ -4,7 +4,6 @@ tags, so MMR reduced to score order and all 3 output slots went to one facet. Th
 
 from __future__ import annotations
 
-from src.core.models import Concept
 from src.pipeline.classify import _SAME_FACET_SIM, _mmr_rerank, _redundancy
 from src.pipeline.delegate import work_from_material
 

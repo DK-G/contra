@@ -21,7 +21,7 @@ from src.core.input_schema import (
     TIME_RANGE_TYPES,
     validate_and_normalize,
 )
-from src.core.models import Keywords, Scope, ThemeHistory, ThemeInput
+from src.core.models import ThemeHistory, ThemeInput
 from src.pipeline.bridge_diagnostics import (
     render_seed_alignment,
     render_semantic_leg,

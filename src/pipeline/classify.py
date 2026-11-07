@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import statistics
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from src.core.models import OutputEntry, ThemeInput, Work
 from src.fulltext.base import effective_abstract

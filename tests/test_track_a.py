@@ -5,7 +5,6 @@ from __future__ import annotations
 from src.core.models import Keywords, Scope, ThemeInput
 from src.pipeline.git_collect import GitCollectConfig
 from src.pipeline.hf_collect import HFCollectConfig
-from src.pipeline.kaggle_collect import KaggleCollectConfig
 from src.pipeline.track_a import (
     DEFAULT_SOURCES,
     SOURCE_KAGGLE,

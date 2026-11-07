@@ -11,7 +11,7 @@ returns None when it cannot resolve a work, so the chain degrades to the abstrac
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Protocol, Tuple, runtime_checkable
+from typing import List, Optional, Protocol, runtime_checkable
 
 from src.core.models import Work
 

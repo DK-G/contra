@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-from src.core.models import ThemeInput, Scope, Keywords
 from src.pipeline.classify import apply_post_gates
 from src.pipeline.delegate import (
     echo_completeness_warnings,

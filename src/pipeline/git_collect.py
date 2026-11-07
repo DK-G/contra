@@ -9,8 +9,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from src.core.models import GitRepository, ThemeInput, Work
 from src.pipeline.theme_fit import (
-    README_DENSITY_UNIT as _README_DENSITY_UNIT_SHARED,
-    README_MIN_LEN as _README_MIN_LEN_SHARED,
     keyword_fit,
 )
 from src.github.client import GitHubClient

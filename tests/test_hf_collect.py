@@ -181,7 +181,6 @@ def test_collect_empty_query_returns_empty():
 
 # --- F-03 (2026-08-22): card fit is density-normalised, not prefix-truncated ---
 
-from src.core.models import Keywords, Scope
 from src.pipeline.hf_collect import _theme_fit_score as _hf_fit
 
 

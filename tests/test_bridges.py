@@ -74,9 +74,7 @@ def test_rank_bridge_candidates_annotates_and_sorts():
 
 from src.core.models import Keywords, Scope, ThemeInput
 from src.pipeline.bridges import (
-    annotate_bridge_signals,
     annotate_hybrid_rank,
-    candidate_theme_fit,
     diversify_head_by_bridge,
     hybrid_bridge_rank_key,
 )

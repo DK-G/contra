@@ -29,7 +29,6 @@ clean "needs API key" status per pair instead of crashing; --show-prompts works 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import List, Optional

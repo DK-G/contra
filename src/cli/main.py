@@ -16,7 +16,6 @@ from src.openalex.parser import OpenAlexParseError, normalize_results
 from src.pipeline.classify import (
     _STRUCT_DEPTH_GATE,
     classify_track_a,
-    classify_track_b,
     select_track_b,
 )
 from src.pipeline.collect import (

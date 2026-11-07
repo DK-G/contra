@@ -34,9 +34,6 @@ from src.pipeline.collect import (
     merge_seed_pools,
 )
 from src.pipeline.query import (
-    ROUTE_FILTER,
-    ROUTE_SEARCH,
-    StructuredQuery,
     resolve_subfield_ids,
     subfield_labels,
     subfield_vocabulary,
