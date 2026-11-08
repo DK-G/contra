@@ -86,6 +86,7 @@ from src.pipeline.delegate import (
     material_from_work,
     score_only_ids,
     score_only_summary,
+    unwritten_relationship_line,
 )
 from src.pipeline.serendipity_query import spec_from_payload
 from src.pipeline.generate import GenerationConfig, fill_track_entries
@@ -1866,6 +1867,12 @@ class StdinMcpServer:
         score_only_line = score_only_summary(materials, rendered_ids)
         if score_only_line:
             echo_warnings.append(score_only_line)
+        unwritten_line = unwritten_relationship_line(
+            materials, rendered_ids,
+            {str(g.get("id")) for g in diag.get("grounding_failures", [])},
+        )
+        if unwritten_line:
+            echo_warnings.append(unwritten_line)
         score_only = score_only_ids(materials)
         diag_line = (
             f"post-gate 診断: status={diag.get('status')} / 採点 {diag.get('scored', 0)} 件 / "

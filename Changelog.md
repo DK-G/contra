@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-08（CL-0171） relationship の無い出力を finalize の診断が名指す（F-86）
+
+### 概要
+* `src/pipeline/delegate.py`: `unwritten_relationship_line`（出力に入った候補のうち relationship が空のものを 1 行で。接地失敗は除く）。
+* `src/mcp_server.py`: `_execute_delegate_finalize` の echo 警告の列に足す。描画・採点は不変。
+* `tests/test_unwritten_relationship_note.py`: 新規 3 件。720 pass。
+* 実測（API なし）: 合成 13 件・出力 3 本で、before は行なし、after は relationship の無い 2 本を名指し。
+* `docs/field_observations_seihai.md`: F-86・F-86-R・seihai 11-07／性能調査 11-05・11-07 への注記。
+
 ## 2026-11-06（CL-0170） byrepo の Issue Signal は採点した標本を名乗る（F-84）
 
 ### 概要

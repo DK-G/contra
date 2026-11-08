@@ -474,6 +474,34 @@ def score_only_summary(
     )
 
 
+# F-86 (survey 2026-10-24/10-29/11-05/11-07): an output entry whose caller sent no relationship
+# renders 「2) テーマとの関連性: （記入なし）」, and nothing in the result said so -- the caller
+# found it only by reading each entry. Name the rendered entries without one. A missing summary
+# is not named: F-62-R chose the labelled excerpt as its accepted stand-in.
+def unwritten_relationship_line(
+    materials: Sequence[Dict[str, Any]], rendered_ids: Set[str],
+    grounding_failed_ids: Optional[Set[str]] = None,
+) -> Optional[str]:
+    """One line naming the rendered entries sent without a relationship (F-86).
+
+    Grounding failures are left out: their prose was dropped on purpose and is named
+    in the grounding block. Rendering is unchanged.
+    """
+    failed = set(grounding_failed_ids or ())
+    ids = [
+        str(m.get("id")) for m in materials
+        if str(m.get("id") or "") in rendered_ids and str(m.get("id")) not in failed
+        and not str(m.get("relationship") or "").strip()
+    ]
+    if not ids:
+        return None
+    return (
+        f"⚠ 出力 {len(rendered_ids)} 本のうち {len(ids)} 本は relationship が送られず、"
+        f"「2) テーマとの関連性」が（記入なし）で描画されています: {', '.join(ids)}。"
+        "出力に入れる候補には relationship を theme_quote・source_quote 付きで書いて再投してください（F-86）。"
+    )
+
+
 def echo_completeness_warnings(
     materials: Sequence[Dict[str, Any]], rendered_ids: Optional[Set[str]] = None,
 ) -> List[str]:
