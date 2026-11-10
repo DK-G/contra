@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-10（CL-0172） 抄録が題の再掲だけのレコードに印を付けて名指す（F-87）
+
+### 概要
+* `src/pipeline/delegate.py`: `title_only_abstract`（title_echo／title_fragment／caps_heading）・`material_from_work` が切る前の全文で判定して `abstract_title_only` を足す・`title_only_line`。抄録の文は変えない。
+* `src/mcp_server.py`: `_materials_size_note`（bybridge・byserendipity）と `read_works` の見出しに 1 行。
+* `tests/test_title_only_abstract.py`: 新規 3 件。723 pass。
+* 実測: 実 OpenAlex 14 件で性能調査の 5 件をすべて名指し・言い換えた抄録 4 件と百科事典の項目は名指さない。保存済み材料 596 件で語の集合の規則は外れ 4 件、語の並びの規則で 0 件。
+* `docs/field_observations_seihai.md`: F-87・F-87-R・seihai 11-09／11-10・性能調査 11-09 への注記。
+
 ## 2026-11-08（CL-0171） relationship の無い出力を finalize の診断が名指す（F-86）
 
 ### 概要

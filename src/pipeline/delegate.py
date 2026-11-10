@@ -256,7 +256,60 @@ def material_from_work(
     empty = _recommended_empty(material)
     if empty:
         material[UPSTREAM_EMPTY_KEY] = empty
+    title_only = title_only_abstract(work.title, abstract)
+    if title_only:
+        material[TITLE_ONLY_ABSTRACT_KEY] = title_only
     return material
+
+
+# F-87 (survey 2026-11-02 / 11-09): some OpenAlex records carry no abstract but a re-statement
+# of the title in the abstract field -- "AUTHORS; Title, Journal, Volume…" (Public Opinion
+# Quarterly), the tail of the title ("test empírico"), or the title in capitals in another
+# language. The text is non-empty, so nothing marked it, and the caller found it only by reading
+# (and re-reading through read_works: the upstream record has this shape). Mark it at the source;
+# the text itself is kept, so grounding and echo are unchanged.
+TITLE_ONLY_ABSTRACT_KEY = "abstract_title_only"
+_WORD = re.compile(r"\w+", re.UNICODE)
+
+
+def title_only_abstract(title: Optional[str], abstract: Optional[str]) -> Optional[str]:
+    """Which title-only shape a non-empty abstract has, or None (F-87).
+
+    - ``title_echo``: the title's words appear in the abstract as one contiguous run and the
+      abstract has at most 25 words more than the title (room for authors / journal / volume).
+    - ``title_fragment``: every word of the abstract is a word of the title.
+    - ``caps_heading``: at most 40 words, 20+ letters, 90%+ of them capitals (a heading, e.g. the
+      title translated into English in capitals).
+    """
+    a_words = [w.lower() for w in _WORD.findall(abstract or "")]
+    if not a_words:
+        return None
+    t_words = [w.lower() for w in _WORD.findall(title or "")]
+    t_set, a_set = set(t_words), set(a_words)
+    # contiguous: an abstract that paraphrases its title shares the words, not the sequence
+    # (2026-11-10 scan of 596 saved materials: the word-share rule alone named 4 real abstracts)
+    if len(t_words) >= 3 and len(a_words) <= len(t_words) + 25 \
+            and f" {' '.join(t_words)} " in f" {' '.join(a_words)} ":
+        return "title_echo"
+    if t_set and a_set <= t_set and len(a_words) <= len(t_words):
+        return "title_fragment"
+    letters = [c for c in (abstract or "") if c.isalpha()]
+    if len(a_words) <= 40 and len(letters) >= 20 \
+            and sum(c.isupper() for c in letters) >= 0.9 * len(letters):
+        return "caps_heading"
+    return None
+
+
+def title_only_line(materials: Sequence[Dict[str, Any]]) -> Optional[str]:
+    """One line naming the candidates whose abstract only re-states the title (F-87)."""
+    ids = [str(m.get("id")).rsplit("/", 1)[-1] for m in materials if m.get(TITLE_ONLY_ABSTRACT_KEY)]
+    if not ids:
+        return None
+    return (
+        f"- 抄録が題の再掲だけの候補 {len(ids)} 件（{TITLE_ONLY_ABSTRACT_KEY} 欄・上流のレコードが"
+        f"この形で、read_works でも同じ）: {', '.join(ids)}。中身は題だけなので、"
+        "採点は題で行うのと同じです（F-87）。"
+    )
 
 
 # A sentence boundary: end punctuation, whitespace, then something that can open a sentence.

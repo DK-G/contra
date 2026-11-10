@@ -86,6 +86,7 @@ from src.pipeline.delegate import (
     material_from_work,
     score_only_ids,
     score_only_summary,
+    title_only_line,
     unwritten_relationship_line,
 )
 from src.pipeline.serendipity_query import spec_from_payload
@@ -489,6 +490,9 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
         line += (f"\n- 抄録が上流で空の候補 {no_abstract} 件（upstream_empty に abstract）: "
                  "source_quote は title から取れます（10字以上の逐語抜粋）。title を echo すれば"
                  "出力候補になります。")
+    title_only = title_only_line(materials)
+    if title_only:
+        line += "\n" + title_only
     return line
 
 
@@ -1015,6 +1019,9 @@ class StdinMcpServer:
             lines.append(f"- id の形が違うので読みませんでした: {', '.join(invalid)}")
         if works:
             lines.append(_field_ids_line(works))
+        title_only = title_only_line(materials)
+        if title_only:
+            lines.append(title_only)
         return _external_data_result("\n".join(lines) + "\n\n" + _materials_json(materials))
 
     def _execute_byserendipity(self, args: Dict[str, Any]) -> Dict[str, Any]:
