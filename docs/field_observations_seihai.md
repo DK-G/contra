@@ -3511,3 +3511,30 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **byserendipity（raw_only・facet 3・lean・max_chars 45,000・60 件全件提出）**: facet 別返却 37/35/39 → 提出 20/20/20（臨床疫学の before-after・生態学の BACI・育種の対照系統）。percentile 0.468・anomaly 3・hollow 41・通過 4・出力 4・**接地検証失敗 0**。主題に効く収穫あり（対照系統で環境トレンドを差し引く Biometrics 1986／上下両方向の選抜 GSE 2003 など）。
 - **bybridge（materials・lean）**: **`materials_max_chars` は 4 週続けて F-57 で無視**（78k 字でファイル保存）。観測（S-26）: 最頻 bridge＝White "A Reality Check for Data Snooping"（被引用 1,841・主題の基礎文献）・**交差候補の 30%・上位 10 件の 30%**・通行 bridge 36 本・平均 3.02 本。交差候補 60 件は Decision Sciences 48（Stock Market Forecasting Methods 34＝主題そのものが兄弟 Field で通過）。採点 → anomaly 33・hollow 17・通過 3・出力 2（P-curve・Using Models to Persuade）。**主題の文献（White・Hansen SPA）は距離 0.2 で分位ゲート落ち＝分野外の収穫は 2 本だけ。**
 - **呼び手の誤り 3 件（先週と同じものを 2 件繰り返した）**: (i) byserendipity の finalize で出力候補に `relationship` を付けず `serendipity_rationale` だけ送った（F-86）。(ii) bybridge に `materials_max_chars` を渡した（F-57）。(iii) 点数だけの候補に誤った id `W2122068366x` を 1 件混ぜた（F-79 で拒否・正しい id は別に送っていた）。bybridge の finalize では出力候補の venue/cited_by_count を echo しなかった（F-19-V 警告）。
+
+## 2026-11-11（水・seihai r03 / F4 解釈可能ML）の観測
+
+テーマ: 選別時の点数（DSR・net2x・CPCV 正率）が後の sim 成績を逆順に並べる（S-174 実装の結果・中央値 ρ≈−0.2）家系で、「情報なし」と「局面への適合」をどう分けるか。英語で記述。
+
+- **byrepo（structured・github・pool 10）**: `strategy selection bias` は README を含め 0 件。上位 5 件は purged CV／DSR／PBO の汎用実装と教材（eslazarev/purged-cross-validation 0.67 ほか関連度 0.4〜0.6）。選別点と後の成績の順位相関を診断するリポジトリは 0 件＝**収穫ゼロ（様式 iii）**。先週と同じ様式。
+- **byserendipity（raw_only・facet 3・lean・max_chars 40,000・60 件全件提出）**: facet 別返却 34/41/30 → 提出 14/26/20（育種の G×E・SDM の時間転移・HTS のヒット確認）。予算 40,000 に対し約 40,717 字（最小 200 字まで切っても超過と申告どおり・インライン受領）。percentile 0.304・anomaly 10・通過 15・出力 4。主題に効く収穫あり（交差型 G×E 検定 Baker 1988・SDM の「説明力は将来予測力を意味しない」2012）。
+- **bybridge（materials・lean）**: **`materials_max_chars` は 5 週続けて F-57 で無視**（85,811 字でファイル保存）。観測: 最頻 bridge＝White "A Reality Check for Data Snooping"（主題の基礎文献）・**交差候補の 20%・上位 10 件の 40%**・通行 bridge 35 本・平均 2.57 本。交差候補 60 件は Decision Sciences 34（Stock Market Forecasting Methods 22）＝主題そのものが兄弟 Field で通過。採点後は anomaly 36・通過 7・**出力 1（fallback・MCS 0.29 < floor 0.35）**＝上位（Giacomini–White・Hansen SPA・MCS）は主題に効くが近すぎて距離で律速。「上位は主題文献・収穫は floor 未満」の新様式（旧様式＝分野外ハブ占有ではない）。
+- **呼び手の誤り 3 件（先週・先々週と同じ 3 件を 3 回目の再発）**: (i) byserendipity finalize で出力候補に `relationship` を付けなかった（F-86・出力 4 本とも関連性が空欄）。(ii) bybridge に `materials_max_chars` を渡した（F-57）。(iii) 点数だけの候補に誤 id `W2130653110x` を混ぜた（F-79）。**呼び手側の手順書（seihai ルーティン）に事前チェックが無いことが原因**。contra 側の対処対象ではない。
+
+## 2026-11-12（木・seihai r04 / F5 microstructure）の観測
+
+テーマ: 列挙壺を引き尽くした STA/LTA バースト fade 生成器に、時刻プロファイル正規化（`vol_tod`）と相対スプレッド（`spread_sma`）を配線すべきか。
+
+- **byrepo（structured・github のみ・include 5）**: 取得 10 件・**theme 関連度は全アンカーで最大 0.3**（語彙衝突警告）。`intraday seasonality`・`tick volume` は README を含めプール 0 件。上位は汎用ライブラリ（Point72/csp 0.2・quant-ohlcv-feature 0.3・bidask 0.2・ctrader volume profile 0.2）＝**時刻正規化したバースト検出の実装アンカーは 0 件**（明らかに主題外の上位＝失敗様式 iii）。
+- **byserendipity（raw_only・facet 3〔地震 STA/LTA／ネットワーク流量／症候群サーベイランス〕・lean・max_chars 30,000・60 件全件提出）**: 返却 38/42/42 → 提出 20/20/20。予算 30,000 に対し約 39,903 字（最小 200 字でも超過と申告どおり・インライン受領）。percentile 0.365・anomaly 7・通過 15・出力 3（全て症候群サーベイランス: 季節トレンド無視のベースラインは偽陽性を増やす 2003／曜日分割ベースラインで C1–C3 の FAR 低下 2011／季節依存閾値 2017）。**主題に効く収穫あり**。
+- **bybridge（materials・lean）**: **`materials_max_chars` は 6 週続けて F-57 で無視**（83,930 字でファイル保存）。シード 20 件は主題に合っている（Finance 19・FX 流動性／日中パターン／FX volume）。観測: 最頻 bridge＝Glosten–Milgrom 型 "Bid, ask and transaction prices in a specialist market…"（主題ドメインの基礎文献）・**交差候補の 22%・上位 10 件の 40%**・通行 bridge 23 本・平均 1.78 本。交差候補 60 件は **Auditing, Earnings Management, Governance 18 件**・Stock Market Forecasting Methods 15 件。採点後は **anomaly 49**・通過 2・**出力 1（fallback・waveform dictionaries 1997, 0.28 < floor 0.35）**＝「上位は多様化（占有 40%）したが収穫はゼロ」の新様式が継続。シードが主題に合っていても、共有 bridge（マーケットメイク理論）経由で会計開示文献に流れる。
+- **呼び手の誤り（4 回目の再発）**: (i) byserendipity finalize で出力 3 本に `relationship` を付けず `serendipity_rationale` だけ送った（F-86）。(ii) bybridge に `materials_max_chars` を渡した（F-57）。(iii) bybridge finalize で出力候補の `venue`/`cited_by_count` を echo し忘れ（F-19-V）。contra 側の対処対象ではない（seihai ルーティン側の事前チェック欠如）。
+
+## 2026-11-13（金・seihai r05 / F9 LLM）の観測
+
+テーマ: 選別時の点数が後の成績を逆順に並べる（S-174・F9 の DSR 順位相関の日別中央値 −0.28）。順位の逆転を作る構造と、そのときの選別規則。
+
+- **byrepo（structured・github・pool 20・keyword_fair_share）**: `rank IC`・`out-of-sample` は名前/説明/topics の一致 0（README のみ）＝F-14 の再現。上位 5 件は汎用バックテスタ・LSTM 予測・TradingView MCP・先物モメンタム修論・株式モデル集＝**順位の減衰や選別段の獲得を測る実装は 0 件**（収穫ゼロ・失敗様式 iii）。
+- **byserendipity（raw_only・facet 3・lean・max_chars 40,000・55 件全件提出）**: **Near facet（投信の成績持続とマネージャー選別）が `home_converged` で棄却**＝この距離段は材料ゼロ（11/07 の「Near facet で主題の論文がホーム除外で全部落ちる」形の再発。facet を経済学の外の近接領域で書くべきだった＝呼び手側の設計の問題でもある）。育種 G×E 30・進化生物学 25。抄録末尾 210 字で収まった（36,287 字・インライン受領）。percentile 0.248・anomaly 7・通過 14・出力 4（crossover point の rank reversal 2003／変動環境で最適な選択を採ると損 2011／予測できない環境向け選抜 1992／環境の生物測定 1957）。**主題に効く収穫あり**（接地失敗 0）。
+- **bybridge（materials・lean）**: **語彙シードの取得が OpenAlex 503（匿名全文検索の一時停止・F-40）で 0 件**、名簿は semantic 12 件のみ。`materials_max_chars` は今週も F-57 で無視（83,546 字でファイル保存）。観測プロトコル: (i) 最頻 bridge の上位 10 件占有 **10%**（全体 38%・通行 bridge 16 本）、(ii) 最頻 bridge＝Sharpe 1964 "Capital Asset Prices"（主題ドメインの基礎文献）。交差候補 60 件は CSR 報告 18・監査/ガバナンス 6 で、採点後 **anomaly 50**・通過 3・出力 1（少数標本の遺伝子リスト再現性 PNAS 2006）＝「上位は多様化したが収穫は薄い」の新様式が継続。CAPM 経由で CSR／資本コスト文献に流れる形は 11/12 の「マーケットメイク理論経由で会計開示へ」と同型。
+- **呼び手の誤り（5 回目）**: (i) byserendipity finalize で出力 4 本に `relationship` を付けなかった（F-86・再発）。(ii) bybridge に `materials_max_chars` を渡した（F-57・再発）。contra 側の対処対象ではない。
