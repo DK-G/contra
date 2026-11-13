@@ -39,6 +39,8 @@ from src.pipeline.bridge_diagnostics import (
     seed_routes,
     lexical_bridges_last,
     filter_live_bridges,
+    candidate_bridge_sizes,
+    render_bridge_size_tiers,
     render_diagnostics,
     resolve_work_labels,
 )
@@ -1564,8 +1566,10 @@ class StdinMcpServer:
         # later: verify before seating. Fails open; `bridge_liveness: false` restores the old
         # behaviour. Costs one batched OpenAlex call per run.
         dead_bridges: List[str] = []
+        # F-85: the liveness call also returns each bridge's cited_by_count (same request).
+        bridge_cited: Dict[str, int] = {}
         if bool(args.get("bridge_liveness", True)):
-            live_bridges, dead_bridges = filter_live_bridges(bridges)
+            live_bridges, dead_bridges = filter_live_bridges(bridges, cited_out=bridge_cited)
             if live_bridges:
                 bridges = live_bridges
                 bridge_pool = [b for b in bridge_pool if b in bridges]
@@ -1594,6 +1598,10 @@ class StdinMcpServer:
         # F-25-L: what that re-ordering achieved, measured on the order the caller will see.
         head_note = head_window_note(bridge_concentration(cands, bridges, ranked=ranked_all))
         diag_line = self._bybridge_diagnostics(seeds, cands, bridges, ranked_all, enabled=diagnostics)
+        if diagnostics:
+            size_line = render_bridge_size_tiers(cands, bridges, bridge_cited)
+            if size_line:
+                diag_line += "\n" + size_line
         # F-46: which seed leg each pooled bridge (and so each candidate) came through. Needs
         # the semantic leg to have run; without it there is one leg and nothing to split.
         routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})
@@ -1747,6 +1755,9 @@ class StdinMcpServer:
                 }
                 if routes is not None:
                     m["bridge_signals"]["seed_route"] = candidate_route(w, routes.bridge_route)
+                sizes = candidate_bridge_sizes(w, bridges, bridge_cited)
+                if sizes is not None:
+                    m["bridge_signals"]["bridge_cited_min"], m["bridge_signals"]["bridge_cited_max"] = sizes
                 m["bridge_signals"].update(candidate_filing_tag(w, filing))
                 mats.append(m)
             instruction = (
@@ -1760,6 +1771,8 @@ class StdinMcpServer:
                 + "bridge_signals.openalex_field／openalex_topic は OpenAlex がその候補を分類した Field と Topic、"
                 "topic_seen はその Topic をシード側が既に引いていたか（roster＝名簿のシードと同じ Topic／"
                 "seed_pool＝名簿には無いが取得したシード候補と同じ Topic／none・F-44）です。"
+                + ("bridge_signals.bridge_cited_min／bridge_cited_max はその候補が通る bridge の被引用の"
+                   "最小と最大です（F-85）。" if bridge_cited else "")
                 +
                 "★接地契約: relationship / serendipity_rationale を書く場合は、テーマ側の逐語抜粋を theme_quote に、"
                 "候補側（title/abstract）の逐語抜粋を source_quote に必ず添えてください（各10字以上）。"

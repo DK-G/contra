@@ -248,11 +248,15 @@ def resolve_ids_batched(
     client: Any = None,
     *,
     chunk: int = 50,
+    cited_out: Optional[Dict[str, int]] = None,
 ) -> Set[str]:
     """The subset of ``work_ids`` that OpenAlex still resolves to a real work.
 
     One ``ids.openalex:`` call per ``chunk`` ids. Raises on transport failure so callers can
     decide — a *silent* empty answer here would look identical to "every bridge is dead".
+
+    F-85 (2026-11-13): with ``cited_out``, the same call also selects ``cited_by_count`` and
+    fills ``cited_out[short_id]`` — the bridge's size at no extra request.
     """
     ids: List[str] = []
     seen: Set[str] = set()
@@ -272,18 +276,22 @@ def resolve_ids_batched(
         payload = client.get({
             "filter": "ids.openalex:" + "|".join(batch),
             "per_page": len(batch),
-            "select": "id",
+            "select": "id,cited_by_count" if cited_out is not None else "id",
         })
         for item in (payload or {}).get("results", []) or []:
             sid = short_id(item.get("id", ""))
             if sid:
                 live.add(sid)
+                if cited_out is not None and isinstance(item.get("cited_by_count"), int):
+                    cited_out[sid] = item["cited_by_count"]
     return live
 
 
 def filter_live_bridges(
     bridges: Iterable[str],
     client: Any = None,
+    *,
+    cited_out: Optional[Dict[str, int]] = None,
 ) -> "tuple[Set[str], List[str]]":
     """Split a bridge pool into (live, dead). Fails OPEN — on error everything counts as live.
 
@@ -320,7 +328,7 @@ def filter_live_bridges(
         return set(), []
     ids = list(originals)
     try:
-        live_ids = resolve_ids_batched(ids, client)
+        live_ids = resolve_ids_batched(ids, client, cited_out=cited_out)
     except Exception:      # transport failure -> keep the old behaviour, drop nothing
         return {originals[i] for i in ids}, []
     if not live_ids:       # an all-dead answer is far likelier to be a bad response than truth
@@ -1193,3 +1201,57 @@ __all__ = [
     "candidate_filing_tag",
     "render_candidate_filing",
 ]
+
+
+# ---------------------------------------------------------------------------
+# F-85 instrument (2026-11-13): how big are the bridges each candidate routes through?
+# F-85's open prescription (a) — cap bridges by citation count, opt-in — was never measured
+# because nothing joined a candidate to the size of its bridges: materials drop
+# referenced_works (F-50) and the bridge table names only the top 5. The cap would remove a
+# candidate only when EVERY bridge it routes through is above the cap, so the smallest one
+# (``bridge_cited_min``) is the number that decides it. Sizes come from the liveness call
+# (select=id,cited_by_count), so this adds no request. Nothing is filtered here.
+# ---------------------------------------------------------------------------
+
+BRIDGE_SIZE_TIERS = ((20_000, "2万以上"), (5_000, "5千〜2万"), (1_000, "千〜5千"), (0, "千未満"))
+
+
+def candidate_bridge_sizes(
+    work: Work, bridges: Iterable[str], cited: Dict[str, int],
+) -> Optional["tuple[int, int]"]:
+    """(smallest, largest) cited_by_count among the pool bridges ``work`` cites, or None."""
+    pool = {short_id(b) for b in bridges or []}
+    sizes = [cited[s] for s in {short_id(r) for r in (work.referenced_works or [])}
+             if s in pool and s in cited]
+    return (min(sizes), max(sizes)) if sizes else None
+
+
+def bridge_size_tier(n: int) -> str:
+    for floor, label in BRIDGE_SIZE_TIERS:
+        if n >= floor:
+            return label
+    return BRIDGE_SIZE_TIERS[-1][1]
+
+
+def render_bridge_size_tiers(
+    cands: Sequence[Work], bridges: Iterable[str], cited: Dict[str, int],
+) -> str:
+    """One diagnostics line: candidates split by the size of the SMALLEST bridge they use."""
+    if not cited or not cands:
+        return ""
+    bridges = list(bridges or [])
+    counts = {label: 0 for _, label in BRIDGE_SIZE_TIERS}
+    unknown = 0
+    for w in cands:
+        sz = candidate_bridge_sizes(w, bridges, cited)
+        if sz is None:
+            unknown += 1
+        else:
+            counts[bridge_size_tier(sz[0])] += 1
+    parts = " / ".join(f"{label} {counts[label]} 件" for _, label in BRIDGE_SIZE_TIERS)
+    return (
+        f"- bridge の大きさ (F-85): 交差候補 {len(cands)} 件を、通る bridge のうち最小の被引用で分けると "
+        f"{parts}" + (f" / 不明 {unknown} 件" if unknown else "")
+        + "。候補ごとの値は materials の bridge_signals.bridge_cited_min／bridge_cited_max"
+          "（被引用の上限で bridge を外す処方は未実装。外れるのは最小の bridge まで上限を超える候補だけ）"
+    )

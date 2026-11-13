@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-11-13（CL-0173） bybridge の候補に通る bridge の大きさを付ける（F-85 の計器）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `resolve_ids_batched`／`filter_live_bridges` に `cited_out`（生存確認の同じ呼び出しで cited_by_count を取る・リクエスト数は不変）。`candidate_bridge_sizes`・`bridge_size_tier`・`render_bridge_size_tiers`。
+* `src/mcp_server.py`: bybridge の材料の `bridge_signals` に `bridge_cited_min`／`bridge_cited_max`、診断に「bridge の大きさ (F-85)」の 1 行、指示文に欄の説明。採点・除外・順位は不変。
+* `scripts/bridge_size_vs_score.py`: 保存した bybridge の結果と呼び手の finalize の採点を id で結び、最小の bridge の大きさ別に anomaly を数える。
+* `tests/test_bridge_size_instrument.py`: 新規 3 件。726 pass。
+* 実測: seihai 11-11（59/60 件を結合）で最小 bridge 千〜5千 anomaly 65%・千未満 55%、11-12（54/60）で 82〜87% と段で差が無く、2 万以上の bridge を通る候補は 0 件。処方 (a)（被引用の上限）は seihai の F-85 には効かない見込み。
+* `docs/field_observations_seihai.md`: F-85-I・F-85 の見出し・seihai 11-11〜11-13／性能調査 11-11・11-12 への注記。
+
 ## 2026-11-10（CL-0172） 抄録が題の再掲だけのレコードに印を付けて名指す（F-87）
 
 ### 概要
