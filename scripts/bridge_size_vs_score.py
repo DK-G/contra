@@ -51,6 +51,17 @@ def bridge_sizes(path: Path) -> dict:
         hi = re.search(r'"bridge_cited_max": (\d+)', chunk)
         if lo:
             out[short_id(m.group(1))] = (int(lo.group(1)), int(hi.group(1)) if hi else None)
+            continue
+        # F-88: under materials_max_chars the signals are a positional row
+        # [shared, betweenness, strength, hybrid, route, cited_min, cited_max, field, topic, seen].
+        row = re.search(r'"bridge_signals_row": (\[.*?\])\s*(?:,|\}|$)', chunk, re.S)
+        if row:
+            try:
+                vals = json.loads(row.group(1))
+            except json.JSONDecodeError:
+                continue
+            if len(vals) >= 7 and isinstance(vals[5], int):
+                out[short_id(m.group(1))] = (vals[5], vals[6] if isinstance(vals[6], int) else None)
     return out
 
 

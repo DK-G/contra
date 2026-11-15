@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-15（CL-0174） bybridge に大きさの予算を入れる（F-88）
+
+### 概要
+* `src/mcp_server.py`: bybridge_collect が `materials_max_chars`・`materials_abstract_part` を受け付ける。予算のときは各候補の `bridge_signals` を `bridge_signals_row`（`BRIDGE_SIGNAL_ROW_ORDER` の順の値だけ）にし、見出しに凡例を 1 行。抄録の切り詰めは byserendipity と同じ `_fit_abstract_cut`。収まらなければ約 X 字と `diagnostics:false` を案内。予算なしの出力は不変。
+* `scripts/bridge_size_vs_score.py`: 並びの形からも bridge_cited_min／max を読む。
+* `tests/test_bybridge_size_budget.py`: 新規 4 件。`tests/test_ignored_args_note.py`・`tests/test_raw_output_legibility.py` の「bybridge は予算を宣言しない」前提を更新。730 pass。
+* 実測（実 OpenAlex・seihai 11-14 と同じ引数）: 60,418 → 47,541 字（bridge_signals 17,839 → 6,353 字）。45,000 字には診断ブロック（約 9k 字）が残って届かない。
+* `docs/field_observations_seihai.md`: F-88・F-88-R・F-57 の見出し・seihai 11-14 への注記。
+
 ## 2026-11-13（CL-0173） bybridge の候補に通る bridge の大きさを付ける（F-85 の計器）
 
 ### 概要

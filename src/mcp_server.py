@@ -348,6 +348,16 @@ def _materials_json(materials: List[Dict[str, Any]]) -> str:
     return "[\n" + ",\n".join(rows) + "\n]"
 
 
+# F-88: under a size budget bybridge sends each candidate's bridge_signals as one positional
+# row (the ten key names were ~60% of the 15-19k chars the signals took on every result).
+BRIDGE_SIGNAL_ROW_KEY = "bridge_signals_row"
+BRIDGE_SIGNAL_ROW_ORDER = (
+    "shared_bridge_count", "bridge_betweenness", "bridge_strength", "bridge_hybrid_score",
+    "seed_route", "bridge_cited_min", "bridge_cited_max",
+    "openalex_field", "openalex_topic", "topic_seen",
+)
+
+
 # F-50: a caller-chosen abstract cut below this would leave too little to score or quote from.
 _MATERIALS_ABSTRACT_MIN_CHARS = 200
 
@@ -391,6 +401,21 @@ def _materials_max_chars_prop() -> Dict[str, Any]:
         "to a file, so 45000 is a tested value there. Use it with materials_lean:true (without "
         "it the concept_tags alone exceed that). An explicit materials_abstract_chars is an "
         "upper bound on the head.")}
+
+
+def _bybridge_materials_max_chars_prop() -> Dict[str, Any]:
+    prop = _materials_max_chars_prop()
+    prop["description"] = (
+        "Size budget for the WHOLE returned text, in characters (F-88; byserendipity's F-50b "
+        "budget, ported). Under a budget each candidate's bridge_signals is sent as "
+        "`bridge_signals_row`, the same values in a fixed order named once in the header (the key "
+        "names were ~60% of the signals' size), then contra picks the longest abstract cut (never "
+        f"below {_MATERIALS_ABSTRACT_MIN_CHARS}; the end is kept unless materials_abstract_part is "
+        "'head') that keeps the result within the budget. Every candidate is still returned; if "
+        "the budget cannot be met the result says so and by how much. 45000 arrived inline on "
+        "Claude Code (2026-10-13). Use with materials_lean:true. Without a budget the output is "
+        "unchanged.")
+    return prop
 
 
 def _materials_abstract_part_prop() -> Dict[str, Any]:
@@ -458,7 +483,8 @@ def _materials_size_note(materials: List[Dict[str, Any]], *, lean: bool,
         for k, v in m.items():
             per_field[k] = per_field.get(k, 0) + len(json.dumps(v, ensure_ascii=False))
     total = len(_materials_json(materials))
-    named = [k for k in ("abstract", "concept_tags", "bridge_signals") if per_field.get(k)]
+    named = [k for k in ("abstract", "concept_tags", "bridge_signals", BRIDGE_SIGNAL_ROW_KEY)
+             if per_field.get(k)]
     parts = "／".join(f"{k} {per_field[k]:,}" for k in named)
     line = f"- materials の大きさ (F-50): 候補 {len(materials)} 件・{total:,} 字（うち {parts}）。"
     if lean:
@@ -794,6 +820,8 @@ class StdinMcpServer:
                         "materials": {"type": "boolean", "description": "DELEGATION MODE (production path since 2026-08-22): return the ranked cross-domain candidates as scoreable materials JSON (with bridge_signals) for the CALLING AGENT to score and pass to delegate_finalize — the byserendipity raw_only path's symmetric twin. The agent does the purpose/mechanism judgement and grounded prose with its OWN inference; contra verifies deterministically.", "default": False},
                         "materials_lean": _materials_lean_prop(),
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
+                        "materials_max_chars": _bybridge_materials_max_chars_prop(),
+                        "materials_abstract_part": _materials_abstract_part_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "lexical_bridges_last": {"type": "boolean", "description": "When the semantic seed leg ran, scan the bridges cited ONLY by lexical-leg seeds after the others, so the 60 cross-candidate slots go first to bridges a semantic-leg seed also reaches; the lexical-only bridges fill what is left (F-66: on 15 seihai runs the caller rated purpose_sim >= 0.5 on 2 of 166 lexical-only candidates). Set false for the old pool order.", "default": True},
                         "bridge_liveness": {"type": "boolean", "description": "Drop bridge-pool ids that OpenAlex no longer resolves (one batched call, fails open). referenced_works keeps the ids of merged/deleted records, and such a phantom is a bibliographic scar rather than a shared ancestor: the measured worst case, W4285719527, resolves to nothing yet sits in 4.9M reference lists and captured 59/60 candidates, collapsing the output into the globally most-cited works. Set false to restore the old behaviour.", "default": True},
@@ -1740,12 +1768,20 @@ class StdinMcpServer:
             # three saved runs) and nothing after this point reads it: delegate_finalize has no
             # bridge set, and the bridge signals the caller scores from are computed right here.
             lean, abstract_cut = _materials_options(args)
-            mats = []
-            for w in ranked_all:
-                m = material_from_work(w, include_references=False, include_concept_names=False,
-                                       include_concept_tags=not lean, abstract_max_chars=abstract_cut)
+            # F-88 (2026-11-15): bybridge had no size budget. seihai passed byserendipity's
+            # materials_max_chars here six weeks running (F-57 named it each time) and the result
+            # still went to a file (56.9k-61.9k chars with lean + a 250-300 char abstract cut),
+            # because bridge_signals (15-19k) outweighed the abstracts; about 60% of it is the
+            # ten key names repeated on every candidate. Under a budget the signals go out as a
+            # positional row with one legend line, then the abstract cut is fitted like
+            # byserendipity's (F-50b). Without a budget nothing changes.
+            budget = _materials_budget(args)
+            part = _materials_abstract_part(args, budget)
+            signal_rows = bool(budget)
+
+            def _signals(w) -> Dict[str, Any]:
                 meta = w.source_meta or {}
-                m["bridge_signals"] = {
+                sig: Dict[str, Any] = {
                     # computed directly (not from annotation side-effects) so the material
                     # is correct regardless of which collection path produced the Work
                     "shared_bridge_count": shared_bridge_count(w, bridges),
@@ -1754,14 +1790,37 @@ class StdinMcpServer:
                     "bridge_hybrid_score": meta.get("bridge_hybrid_score", 0.0),
                 }
                 if routes is not None:
-                    m["bridge_signals"]["seed_route"] = candidate_route(w, routes.bridge_route)
+                    sig["seed_route"] = candidate_route(w, routes.bridge_route)
                 sizes = candidate_bridge_sizes(w, bridges, bridge_cited)
                 if sizes is not None:
-                    m["bridge_signals"]["bridge_cited_min"], m["bridge_signals"]["bridge_cited_max"] = sizes
-                m["bridge_signals"].update(candidate_filing_tag(w, filing))
-                mats.append(m)
+                    sig["bridge_cited_min"], sig["bridge_cited_max"] = sizes
+                sig.update(candidate_filing_tag(w, filing))
+                return sig
+
+            sigs = [_signals(w) for w in ranked_all]
+
+            def _build(cut: Optional[int]) -> List[Dict[str, Any]]:
+                out = []
+                for w, sig in zip(ranked_all, sigs):
+                    m = material_from_work(w, include_references=False, include_concept_names=False,
+                                           include_concept_tags=not lean, abstract_max_chars=cut,
+                                           abstract_part=part)
+                    if signal_rows:
+                        m[BRIDGE_SIGNAL_ROW_KEY] = [sig.get(k) for k in BRIDGE_SIGNAL_ROW_ORDER]
+                    else:
+                        m["bridge_signals"] = sig
+                    out.append(m)
+                return out
+
+            row_legend = (
+                f"- {BRIDGE_SIGNAL_ROW_KEY} (F-88): 大きさの予算があるので bridge_signals を欄名なしの"
+                f"並びで返しています。順は [{', '.join(BRIDGE_SIGNAL_ROW_ORDER)}]"
+                "（その回に無い値は null）。意味は下の bridge_signals.* の説明と同じです。"
+                "delegate_finalize は読まないので echo は不要です。\n"
+                if signal_rows else ""
+            )
             instruction = (
-                f"bybridge raw 収集: 交差候補 {len(mats)} 件（構造的関連度順。{head_note}）。"
+                f"bybridge raw 収集: 交差候補 {len(ranked_all)} 件（構造的関連度順。{head_note}）。"
                 "各候補を purpose_sim/mechanism_dist（2桁小数・格子値回避）等で採点し、同じ材料を echo して "
                 "delegate_finalize へ渡してください。bridge_signals.bridge_strength はその候補が通る bridge を"
                 "引用するシード数＝構造的テーマ結合の強さです。"
@@ -1781,10 +1840,43 @@ class StdinMcpServer:
             # Lines that must reach the caller even with diagnostics off (the raw paths print
             # diag_line unconditionally): the F-40 lexical-leg failure and an unresolved F-37 scope.
             forced = "".join(f"- {n}\n" for n in (lex_note, scope_note if not home_ids else "") if n)
-            size_note = _materials_size_note(mats, lean=lean, abstract_cut=abstract_cut)
-            body = (instruction + "\n" + size_note + "\n\n"
-                    + (diag_line + "\n\n" if diagnostics else (forced + "\n" if forced else ""))
-                    + _materials_json(mats))
+
+            def _render(cut: Optional[int], budget_note: str = "") -> str:
+                mats = _build(cut)
+                size_note = _materials_size_note(mats, lean=lean, abstract_cut=cut,
+                                                 budget_note=budget_note, abstract_part=part)
+                return (instruction + "\n" + row_legend + size_note + "\n\n"
+                        + (diag_line + "\n\n" if diagnostics else (forced + "\n" if forced else ""))
+                        + _materials_json(mats))
+
+            budget_note = ""
+            if budget:
+                longest = max((len(w.abstract) for w in ranked_all if isinstance(w.abstract, str)),
+                              default=0)
+                upper = min(abstract_cut, longest) if abstract_cut else longest
+                upper = max(upper, _MATERIALS_ABSTRACT_MIN_CHARS)
+                reserve = 260
+                abstract_cut, fits = _fit_abstract_cut(_render, budget - reserve, upper=upper)
+                if abstract_cut >= longest:
+                    abstract_cut = None if not _materials_options(args)[1] else abstract_cut
+                size = len(_render(abstract_cut))
+                if fits:
+                    budget_note = (
+                        f"\n- 大きさの予算 (materials_max_chars {budget:,} 字): 収まりました＝"
+                        + (f"抄録の{'末尾' if part == 'tail' else '先頭'}を {abstract_cut:,} 字にしました"
+                           if abstract_cut else "抄録は切っていません")
+                        + f"・bridge_signals は {BRIDGE_SIGNAL_ROW_KEY} の並びにしました（候補は全件返しています）。"
+                    )
+                else:
+                    budget_note = (
+                        f"\n- ⚠ 大きさの予算 (materials_max_chars {budget:,} 字) に収まりません: "
+                        f"bridge_signals を並びにし、抄録を最小の {_MATERIALS_ABSTRACT_MIN_CHARS} 字まで"
+                        f"切っても結果は約 {size + 150:,} 字です（候補は全件返しています。件数は減らして"
+                        "いません）。"
+                        + ("" if lean else "materials_lean:true で concept_tags を省くと縮みます。")
+                        + ("" if not diagnostics else "診断ブロックは diagnostics:false で省けます。")
+                    )
+            body = _render(abstract_cut, budget_note)
             return {"content": [{"type": "text", "text": body}], "isError": False}
 
         if raw_only:

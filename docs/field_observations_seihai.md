@@ -964,7 +964,7 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `not_selected(count=3)` と `not_selected(no_material)` の行が「実測 0.468 / 閾値 3」。点数の閾値（分位ゲート 0.432・0.416）と並んで読まれ、取り違える。
 - 機序（コード）: `classify._record_rejections` の `threshold` 欄に、この 2 種の落選だけ出力の件数 `count` が入っている。描画（`mcp_server` の落選内訳）は全行を同じ「/ 閾値 {threshold}」で書いていた。
 
-### F-57. 全 by\* 共通 — **道具が宣言していない引数を、何も言わずに無視する**（seihai 2026-10-15・10-16 の bybridge 行「`materials_max_chars` は bybridge の引数に無く、黙って無視された」に採番・2026-10-16 起票） → **無視したことの申告は同日対処済み＝「対処済み」節 F-57-R。bybridge の大きさの予算そのものは未実装（下の実測で、抄録を切るだけでは届かないと分かった）**
+### F-57. 全 by\* 共通 — **道具が宣言していない引数を、何も言わずに無視する**（seihai 2026-10-15・10-16 の bybridge 行「`materials_max_chars` は bybridge の引数に無く、黙って無視された」に採番・2026-10-16 起票） → **無視したことの申告は同日対処済み＝「対処済み」節 F-57-R。bybridge の大きさの予算そのものは未実装（下の実測で、抄録を切るだけでは届かないと分かった）** → **2026-11-15: bybridge の大きさの予算は F-88 として実装（bridge_signals を並びにしてから抄録を合わせる）。下記 F-88・「対処済み」節 F-88-R**
 
 - 観測: seihai は byserendipity と同じ `materials_max_chars: 45000` を bybridge に渡した。bybridge の結果は 62,156 字（10/15）・89,759 字（10/16）でファイルに退避され、引数が効かなかったことは大きさからしか分からなかった。
 - 機序（コード）: `handle_tool_call` は引数をスキーマと照合しない。各ツールは自分が読む鍵だけを `args.get` で読むので、ほかの鍵は消える（F-51 の `scope_time_range` は「宣言されているが使われない」、こちらは「宣言されていないので使われない」）。
@@ -1147,7 +1147,33 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ---
 
+### F-88. bybridge — **`materials_lean` と抄録の切り詰めを付けても結果が受領上限を超える。重いのは抄録でなく `bridge_signals`（15〜19k 字）で、その約 6 割は 10 個の欄名を 60 回繰り返した分。大きさの予算（`materials_max_chars`）は byserendipity にしか無く、seihai は 6 週続けて bybridge にも渡していた**（seihai 2026-11-14 週次指針の bybridge 行・性能調査 2026-11-07 YouTube「道具の失敗かは直す日の判断に任せる」に採番・2026-11-15 起票） → **同日対処済み＝「対処済み」節 F-88-R（予算があるときだけ。予算なしの出力は不変）**
+
+- 観測: seihai 11-14 は lean・`materials_abstract_chars 300` で 61,948 字（材料 51,489 字のうち bridge_signals 17,822 字＝35%・抄録 10,968 字）。10-31・11-02・11-03 も 56.9k〜58.7k 字（bridge_signals 15.1k〜15.5k）。性能調査は 11-04 EX将棋 58,806 字・11-07 YouTube 56,744 字（bridge_signals 14,718 字）。`materials_max_chars` は 10-15 から 11-13 まで seihai が bybridge に渡し続け、F-57 が毎回「無視しました」と名指した。
+- F-57 の 10-16 の実測で「抄録を全部捨てても 45,000 字を超える」と分かっていたが、処方 (a)（呼び手が使わない数値を落とす）は「どれを使っているかは seihai 側の手順にしか書かれていない」で止まっていた。欄の値でなく**欄名**が重いことは測っていなかった。
+
 ## 対処済み
+
+### seihai 2026-11-14・性能調査 2026-11-07 への注記（2026-11-15 失敗対処デー）
+
+(1) seihai 11-14 の bybridge「`bridge_signals` が抄録より大きい＝lean と抄録の切り詰めでは受領上限に収まらない」と、性能調査 11-07 YouTube の「bybridge の結果の大きさの予算が bridge_signals を削れるか」は今日の **F-88**（予算を実装・下の F-88-R）。(2) seihai 11-14 の byrepo は **F-14 の再現**として記録のみ（`empirical bayes shrinkage`・`random effects`・`selection bias` は名前/説明/topics の一致 0）。関連度 0.07 の DRL 売買ボットが関連度 0.4 の pypbo より上に来た件は F-29 の床（0.35）の形で、床を単独で動かしても上位は変わらないことは F-29-W で測ってある。(3) seihai 11-14 の byserendipity の facet 2 が教育測定・順位統計へ流れた形は **F-64**（`structure`／擬似抄録の字面に引かれる）の再現とみる。(4) bybridge の交差候補が「選抜手続きを道具として引用する応用」で埋まった形は **F-85** の再現（基礎の手法の bridge の利用者）。主題に当たったのが bridge とシードだった点は F-76・F-83 の対処（一覧と read_works）で拾えた＝計器は効いた。(5) 両 finalize の relationship 漏れ（6 回目）は F-86 の警告どおりで、呼び手側の手順の問題（contra 側の対処対象ではない）。
+
+### F-88-R. bybridge — **大きさの予算（`materials_max_chars`）を受け付ける。予算があるときは `bridge_signals` を欄名なしの並び `bridge_signals_row` にし（順は見出しに 1 回だけ書く）、そのうえで byserendipity と同じく抄録の切り詰めを二分探索で選ぶ** — **対処済み 2026-11-15（予算があるときだけ。予算なしの出力・採点・順位・finalize は不変）**
+
+- 変えたもの（**bybridge の材料の生成**だけ。シード段・プール段・2-hop 走査・順位・診断・finalize は触っていない）: `src/mcp_server.py` の bybridge 材料経路を `_build(cut)`／`_render(cut)` に分け、`_fit_abstract_cut`（F-50b）を共用。`materials_max_chars` と `materials_abstract_part` をスキーマに宣言（F-57 の名指しは出なくなる）。予算のときは `BRIDGE_SIGNAL_ROW_ORDER`＝[shared_bridge_count, bridge_betweenness, bridge_strength, bridge_hybrid_score, seed_route, bridge_cited_min, bridge_cited_max, openalex_field, openalex_topic, topic_seen] の順に値だけを並べ、無い値は null。delegate_finalize は bridge_signals を読まないので echo は不要（見出しにそう書いた）。収まらないときは「約 X 字」と、診断ブロックを `diagnostics:false` で省けることを言う。`scripts/bridge_size_vs_score.py` は並びの形からも bridge_cited_min／max を読む。
+- 実測（実 OpenAlex・seihai 11-14 の bybridge 呼び出しを同じ引数で今夜 2 回。after だけ `materials_max_chars: 45000` を足した。候補 60 件のうち 58 件が共通＝before の回は OpenAlex の一時失敗 1 件で取得が少しずれた）:
+
+  | | before（lean・抄録 300） | after（＋予算 45,000） |
+  |---|---|---|
+  | 結果全体 | **60,418 字** | **47,541 字**（−21%） |
+  | bridge_signals | 17,839 字（欄名つき） | **6,353 字**（並び） |
+  | 抄録 | 10,882 字（先頭 300） | 6,912 字（末尾 200＝最小） |
+  | 見出し＋診断 | 8,863 字 | 11,094 字（並びの凡例 331 字と予算の行を含む） |
+  | 予算の行 | （F-57 の「無視しました」） | 「⚠ 収まりません・約 47,327 字」＋`diagnostics:false` の案内 |
+
+- **効かなかった部分（記録）**: 45,000 字には届かなかった。抄録を最小まで切った後に残るのは診断ブロック（約 9k 字＝シード 20 件の一覧 3.8k・F-13／F-44／F-46／F-73 の行など）と、題 5.9k・DOI 3.1k・掲載先 2.6k・id 2.5k・publication_type 1.9k（すべて "article"）。診断は seihai の S-26 観測プロトコルが読むので既定では削らない。`diagnostics:false` なら約 38〜39k 字の見込み（見出しの内訳からの推定で、**実測していない**＝OpenAlex の日次予算が残り約 57 回で、07:05 の seihai と共有するため 3 回目は回さなかった）。publication_type の省略は未実施（F-72 の型の議論があるので材料の欄は減らさない）。
+- 検証: 新規 `tests/test_bybridge_size_budget.py` 4 件（予算なしは不変／並びは同じ値・F-57 に名指されない／予算内は末尾を残して切る／届かないときはそう言う）。既存 2 件は「bybridge は materials_max_chars を宣言していない」前提だったので書き換え（F-57 の例は宣言の無い `max_chars` に）。726 → 730 pass。
+- 申し送り（seihai 側・人間の判断）: (i) bybridge に `materials_max_chars` を渡すのは誤りでなくなった（F-57 の警告は消える）。seihai の手順に「bybridge には渡さない」と書いてあれば外してよい。(ii) 予算を渡すと材料の欄が `bridge_signals` から `bridge_signals_row`（位置の並び）に変わる。bridge_signals を名前で読むスクリプトがあれば並びの順（見出しに書いてある）で読む。(iii) 45,000 字に収めたいなら diagnostics を落とすしかないが、S-26 の観測には診断が要る＝ファイル退避のまま読むか、インラインを取るかは seihai 側の判断（F-57 の処方 (c) の問いは残る）。
 
 ### seihai 2026-11-11〜11-13・性能調査 2026-11-11／11-12 への注記（2026-11-13 失敗対処デー）
 
@@ -3567,3 +3593,5 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **byserendipity（raw_only・facet 3〔メタ分析／ML ベンチマーク／人事選抜〕・lean・max_chars 45,000・60 件全件提出）**: 返却 35/25/40 → 提出 24/13/23。**予算 45,000 に収まった**（41,199 字・抄録の末尾 274 字・インライン受領）。Near facet（メタ分析）は 29/29 が Decision Sciences でホーム除外に掛からず、材料が残った（11/07・11/13 の Near 全滅の形は出なかった＝経済学の外の近接領域で facet を書いた）。**facet 2（Machine learning benchmarking）は 13 件中 CS が 1 件**で、残りは教育測定・順位統計（SAT の得点変化・試験の採点・大学ランキング）＝擬似抄録の「ranking」「test set」「scores」に引かれて流れた形。ただし主題に当たる 2 本（Reusing Search Data in Ranking and Selection／Modeling the variability of rankings）はこの facet から来た。percentile 0.25・anomaly 3・通過 17・出力 5（count 6）・**接地検証失敗 0**。
 - **bybridge（materials・lean・`materials_abstract_chars 300`・`materials_max_chars` は渡していない）**: 結果は 61,948 字でファイル保存。材料 51,489 字のうち **`bridge_signals` が 17,822 字（35%）で、抄録 10,968 字より大きい**＝lean と抄録の切り詰めでは受領上限に収まらない。観測プロトコル: (i) 最頻 bridge の上位 10 件占有 **40%**（全体 18%・通行 bridge 14 本・平均 1.42 本）、(ii) 最頻 bridge＝「On two-stage selection procedures and related probability-inequalities」（被引用 455・選抜統計の基礎文献・11/07 と同じ・名簿由来の分野外ハブではない）。シード名簿は Finance 10・Management Science and OR 9（順位づけと選抜のシミュレーション文献）で主題に合う。雑音シード 1 件（「From the authors」European Respiratory Journal・bridge 寄与 0）。交差候補 60 件はすべて semantic 側経由（語彙側 0 件・4 週連続）。**新しい形**: 交差候補の大半は、選抜手続きを道具として引用するシミュレーション最適化の応用（港湾 5・配車・半導体・避難）で、呼び手の採点は anomaly 32／60。主題に当たったのは交差候補でなく **bridge とシードそのもの**（Kim–Nelson の逐次選抜＝共通乱数を前提・Overlapping variance estimators）で、`read_works`（F-75・F-83）で抄録を読んで使った。通過 8・出力 1。
 - **呼び手の誤り（6 回目）**: byserendipity・bybridge の両 finalize で、出力候補に `relationship` を付けず `serendipity_rationale` だけ送った（F-86・出力 6 本とも関連性が空欄）。`materials_max_chars` を bybridge に渡す誤り（F-57）は今回は避けた。contra 側の対処対象ではない。
+
+> **contra 側注記（2026-11-15 失敗対処デー）**: bybridge の「bridge_signals が抄録より大きい」は **F-88** として対処（予算 `materials_max_chars` を実装・予算のときは bridge_signals を並びに）。この回と同じ引数で 60,418 → 47,541 字。45,000 字には診断ブロック（約 9k 字）を残すと届かない。詳細は「対処済み」節 F-88-R。byrepo は F-14 の再現、byserendipity の facet 2 の流れは F-64 の再現として記録のみ。

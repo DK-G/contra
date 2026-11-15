@@ -10,9 +10,12 @@ from src.mcp_server import StdinMcpServer
 
 
 def test_unknown_argument_is_named():
+    # bybridge declares materials_max_chars since F-88 (2026-11-15); use an undeclared one.
     note = StdinMcpServer()._ignored_args_note(
-        "bybridge_collect", {"theme_overview": "x", "materials_max_chars": 45000})
-    assert "materials_max_chars" in note and "bybridge_collect" in note and "F-57" in note
+        "bybridge_collect", {"theme_overview": "x", "max_chars": 45000})
+    assert "max_chars" in note and "bybridge_collect" in note and "F-57" in note
+    assert StdinMcpServer()._ignored_args_note(
+        "bybridge_collect", {"theme_overview": "x", "materials_max_chars": 45000}) == ""
 
 
 def test_declared_arguments_say_nothing():

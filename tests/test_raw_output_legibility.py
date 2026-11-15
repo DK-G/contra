@@ -337,10 +337,11 @@ def test_byserendipity_size_budget_that_cannot_be_met_says_so_and_keeps_every_ro
     assert max(lens) <= 300 and min(lens) > 270            # tail, snapped to a word start
 
 
-def test_size_budget_is_offered_on_byserendipity_only_for_now():
+def test_size_budget_is_offered_on_byserendipity_and_bybridge():
+    # bybridge joined on 2026-11-15 (F-88); see tests/test_bybridge_size_budget.py.
     tools = {t["name"]: t for t in mcp_mod.StdinMcpServer().list_tools()}
     assert "materials_max_chars" in tools["byserendipity_discover"]["inputSchema"]["properties"]
-    assert "materials_max_chars" not in tools["bybridge_collect"]["inputSchema"]["properties"]
+    assert "materials_max_chars" in tools["bybridge_collect"]["inputSchema"]["properties"]
 
 
 def test_byserendipity_lists_every_id_on_one_line_inside_the_budget(facet_pages):
