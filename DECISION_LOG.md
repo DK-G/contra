@@ -4,6 +4,18 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-11-16 — bybridge は bridge ごとの枠をホーム領域の外の引用側から先に埋める。既定 ON（F-85-D）
+
+**決定**: 2-hop 走査で bridge ごとの 6 枠を取るとき、シードのホーム Field が属する OpenAlex Domain の外の引用側を先に、領域内を次に、Domain の分からないレコードを最後に取る。領域内は除外しない。`home_domain_preference:false` で従来の順。
+
+**根拠**: 呼び手の採点 1,680 件（28 回）で、anomaly はホーム領域内の兄弟 Field に偏る（81% 対 65%・Finance ホームの Business/Accounting は 96% で有用 0 件）。F-85 の処方 (b)（遠いトピックを絞る）は逆向きで、(a)（bridge の大きさ）は 11-13 に効かないと測った。同じページの A/B で、入れ替わった候補の盲検採点は anomaly 13/15 → 9/15。
+
+**しなかったこと**: 領域内の除外（領域内にも有用な候補があり、A/B の最高点の 1 件は領域内だった）。Field 単位の罰（Business を名指す規則はテーマ族に依存する）。順位の段の変更（枠を埋める段で効かせないと、60 件の構成は変わらない）。
+
+**撤回条件**: seihai の実運用の採点で、ON の回の anomaly 率が OFF の回（11-16 以前）より下がらなければ既定を戻す。
+
+---
+
 ## 2026-11-15 — bybridge に大きさの予算を入れる。予算のときだけ bridge_signals を欄名なしの並びにする（F-88）
 
 **決定**: bybridge_collect が `materials_max_chars`（と `materials_abstract_part`）を受け付ける。予算があるときは各候補の bridge_signals を `bridge_signals_row`（順は見出しに 1 回）にしてから、byserendipity と同じ方法で抄録の切り詰めを選ぶ。予算が無い呼び出しの出力は変えない。

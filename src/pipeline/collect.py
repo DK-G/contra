@@ -55,6 +55,13 @@ class CollectConfig:
     # let the theme's own subject through when OpenAlex files it under a sibling Field
     # ("Stock Market Forecasting Methods" -> Decision Sciences). False restores Field-only.
     home_topic_exclusion: bool = True
+    # F-85-D (2026-11-16): when a bridge's page has more citers than its share, fill the share
+    # with citers OUTSIDE the seeds' home Domain first (OpenAlex Domain>Field). The Field and
+    # Topic exclusions leave the home's sibling Fields in, and those are the theory's users:
+    # 1,680 candidates the callers scored over 28 runs, same-Domain sibling 81% anomaly
+    # (Business/Accounting under a Finance home 96%, 0 useful) vs other-Domain 65%. Same-Domain
+    # citers are deferred, not dropped (they fill any share the others cannot). False = page order.
+    home_domain_preference: bool = True
     # F-52 (2026-10-11): in the semantic Track B collection, a record whose abstract opens with
     # the same text as one already kept is the same paper under another OpenAlex id (a
     # repository copy titled "SUMMARY" or "….pdf", no DOI or a deposit DOI), which the
@@ -874,6 +881,22 @@ def _seed_l0_concept_ids(seeds: List[Work]) -> List[str]:
 
 _BRIDGE_QUOTA_DIVISOR = 10      # a single bridge may supply at most max_count // 10 candidates
 
+# OpenAlex's four Domains over its 26 Fields (ids are stable: openalex.org/fields/<id>).
+FIELD_DOMAIN: Dict[str, str] = {
+    **{f: "1" for f in ("11", "13", "24", "28", "30")},                                # Life Sciences
+    **{f: "2" for f in ("12", "14", "18", "20", "32", "33")},                          # Social Sciences
+    **{f: "3" for f in ("15", "16", "17", "19", "21", "22", "23", "25", "26", "31")},  # Physical Sciences
+    **{f: "4" for f in ("27", "29", "34", "35", "36")},                                # Health Sciences
+}
+DOMAIN_NAMES: Dict[str, str] = {"1": "Life Sciences", "2": "Social Sciences",
+                                "3": "Physical Sciences", "4": "Health Sciences"}
+
+
+def work_domain_id(work: Work) -> Optional[str]:
+    """OpenAlex Domain id of a work's primary Topic Field, or None when it is not filed."""
+    fid = (getattr(work, "source_meta", None) or {}).get("primary_topic_field_id")
+    return FIELD_DOMAIN.get(str(fid)) if fid else None
+
 
 def _citation_query(
     bridges: Sequence[str],
@@ -909,6 +932,7 @@ def collect_citation_candidates(
     max_refs: int = 100,
     bridges: Optional[Iterable[str]] = None,
     per_bridge_cap: Optional[int] = None,
+    stats: Optional[Dict[str, Any]] = None,
 ) -> List[Work]:
     """Citation 2-hop scan: papers citing the seeds' references but OUTSIDE the seeds' domain.
 
@@ -962,11 +986,41 @@ def collect_citation_candidates(
     if quota is None:
         quota = max(1, max_count // _BRIDGE_QUOTA_DIVISOR) if cfg.bridge_fair_share else 0
 
+    # F-85-D: the seeds' home Domain(s), from the same Field ids the exclusion uses.
+    home_domains = ({FIELD_DOMAIN[f] for f in home_field_ids if f in FIELD_DOMAIN}
+                    if cfg.home_domain_preference else set())
+    if stats is not None:
+        stats.update(home_domains=sorted(home_domains), deferred=0)
+
+    def absorb_preferring(payload: Dict[str, Any], limit: int) -> int:
+        """F-85-D: like absorb, but citers outside the home Domain take the share first."""
+        fresh = [w for w in filter_retracted(normalize_results(payload))
+                 if w.id not in exclude and w.id not in seen]
+        # A record OpenAlex has not filed (no primary Topic) goes last: on the first live run
+        # (2026-11-16) those were "Volume 23 Index" / conference programs, not papers.
+        other = [w for w in fresh if work_domain_id(w) not in home_domains and work_domain_id(w)]
+        same = [w for w in fresh if work_domain_id(w) in home_domains]
+        unfiled = [w for w in fresh if not work_domain_id(w)]
+        taken = 0
+        for w in other + same + unfiled:
+            if taken >= limit or len(out) >= max_count:
+                break
+            seen.add(w.id)
+            out.append(w)
+            taken += 1
+        if stats is not None:
+            # same-Domain citers this page had room for in page order but lost to others
+            in_page_order = fresh[:limit]
+            stats["deferred"] += sum(1 for w in in_page_order
+                                     if work_domain_id(w) in home_domains and w.id not in seen)
+        return taken
+
     if quota > 0 and len(bridges) > 1:
         # One page per bridge is enough: the quota is far below OpenAlex's 50-per-page cap, and a
         # bridge whose first page cannot fill its quota (after exclusions) is not the bridge the
         # pool is collapsing onto. Ask for headroom so exclusions do not silently under-fill.
-        per_page = max(quota, min(cfg.per_page, quota * 2))
+        # F-85-D asks for more (still one request) so the preference has citers to choose from.
+        per_page = max(quota, min(cfg.per_page, quota * (4 if home_domains else 2)))
         for bridge in bridges:
             if len(out) >= max_count:
                 break
@@ -975,7 +1029,10 @@ def collect_citation_candidates(
                 payload = collector.client.get(sq.to_params(per_page=per_page, page=1))
             except OpenAlexError:
                 continue        # one bridge failing must not cost the caller the other 49
-            absorb(payload, quota)
+            if home_domains:
+                absorb_preferring(payload, quota)
+            else:
+                absorb(payload, quota)
 
     # Legacy OR scan — the backfill. It is also the whole scan when the fair share is disabled.
     if len(out) < max_count:

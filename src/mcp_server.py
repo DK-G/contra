@@ -403,6 +403,22 @@ def _materials_max_chars_prop() -> Dict[str, Any]:
         "upper bound on the head.")}
 
 
+def _home_domain_line(cands, stats: Dict[str, Any]) -> str:
+    """F-85-D: how the per-bridge shares were filled with respect to the seeds' home Domain."""
+    from src.pipeline.collect import DOMAIN_NAMES, work_domain_id
+    homes = stats.get("home_domains") or []
+    if not homes:
+        return ("- ホーム領域の後回し (F-85-D): 無効（home_domain_preference:false、"
+                "またはシードのホーム Field が分からない）＝bridge ごとの枠は OpenAlex の返した順で埋めた。")
+    names = "・".join(DOMAIN_NAMES.get(d, d) for d in homes)
+    inside = sum(1 for w in cands if work_domain_id(w) in homes)
+    return (f"- ホーム領域の後回し (F-85-D): bridge ごとの枠を、シードのホーム領域（{names}）の外の"
+            f"引用側から先に埋めた。返した順なら入っていたホーム領域内の引用側 {stats.get('deferred', 0)} 件を"
+            f"後回しにした／交差候補 {len(cands)} 件のうちホーム領域内 {inside} 件"
+            "（ホーム Field と Topic は従来どおり除外済み。領域内は除外せず、枠が余れば入る）。"
+            "従来の順は home_domain_preference:false。")
+
+
 def _bybridge_materials_max_chars_prop() -> Dict[str, Any]:
     prop = _materials_max_chars_prop()
     prop["description"] = (
@@ -821,6 +837,12 @@ class StdinMcpServer:
                         "materials_lean": _materials_lean_prop(),
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "materials_max_chars": _bybridge_materials_max_chars_prop(),
+                        "home_domain_preference": {"type": "boolean", "default": True, "description": (
+                            "F-85-D: fill each bridge's share of the 60 cross-candidates with citers OUTSIDE "
+                            "the seeds' home OpenAlex Domain first (e.g. outside Social Sciences for a Finance "
+                            "roster); same-Domain citers are deferred, not dropped. Measured on 1,680 "
+                            "caller-scored candidates (28 runs): same-Domain sibling Fields 81% anomaly "
+                            "(Business/Accounting under Finance 96%) vs other Domains 65%. false = page order.")},
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "lexical_bridges_last": {"type": "boolean", "description": "When the semantic seed leg ran, scan the bridges cited ONLY by lexical-leg seeds after the others, so the 60 cross-candidate slots go first to bridges a semantic-leg seed also reaches; the lexical-only bridges fill what is left (F-66: on 15 seihai runs the caller rated purpose_sim >= 0.5 on 2 of 166 lexical-only candidates). Set false for the old pool order.", "default": True},
@@ -1612,9 +1634,11 @@ class StdinMcpServer:
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
         home_topic_exclusion = bool(args.get("home_topic_exclusion", True))
+        domain_stats: Dict[str, Any] = {}
         cands = collect_citation_candidates(
-            seeds, CollectConfig(home_topic_exclusion=home_topic_exclusion), max_count=60,
-            used_ids=used_ids, bridges=bridge_pool,
+            seeds, CollectConfig(home_topic_exclusion=home_topic_exclusion,
+                                 home_domain_preference=bool(args.get("home_domain_preference", True))),
+            max_count=60, used_ids=used_ids, bridges=bridge_pool, stats=domain_stats,
         )
         # C(ii): theme relevance leads the ranking, citations demoted to a tie-breaker;
         # C(i): no single bridge may fill the display window (2026-08-22 ruling).
@@ -1630,6 +1654,8 @@ class StdinMcpServer:
             size_line = render_bridge_size_tiers(cands, bridges, bridge_cited)
             if size_line:
                 diag_line += "\n" + size_line
+        if diagnostics and cands:
+            diag_line += "\n" + _home_domain_line(cands, domain_stats)
         # F-46: which seed leg each pooled bridge (and so each candidate) came through. Needs
         # the semantic leg to have run; without it there is one leg and nothing to split.
         routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})

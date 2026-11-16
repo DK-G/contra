@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-16（CL-0175） bybridge の bridge ごとの枠をホーム領域の外から先に埋める（F-85-D）
+
+### 概要
+* `src/pipeline/collect.py`: `CollectConfig.home_domain_preference`（既定 True）・`FIELD_DOMAIN`／`DOMAIN_NAMES`／`work_domain_id`。`collect_citation_candidates` の bridge ごとの取り込みを「領域外 → 領域内 → 未分類」の順に（ページ 12 → 24 件・リクエスト数は不変）。`stats` で後回しの件数を返す。
+* `src/mcp_server.py`: bybridge の引数 `home_domain_preference`・診断の 1 行「ホーム領域の後回し (F-85-D)」。
+* `tests/test_home_domain_preference.py`: 新規 4 件。734 pass。
+* 計測: 呼び手の採点 1,680 件（28 回）でホーム領域内 anomaly 81%・領域外 65%（Business/Accounting 96%）。同じページの A/B（seihai 11-16 の引数）で領域内 51 → 36、入れ替わった候補の盲検採点は anomaly 13/15 → 9/15・平均 0.088 → 0.143（最高点の 1 件は落ちた）。
+* `docs/field_observations_seihai.md`: F-85-D・F-85 の見出し。
+
 ## 2026-11-15（CL-0174） bybridge に大きさの予算を入れる（F-88）
 
 ### 概要
