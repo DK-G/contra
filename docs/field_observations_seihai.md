@@ -3671,3 +3671,11 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **bynote 代替の A3 接地（byserendipity raw・facet 1 枚 ×3）**: 3 本とも初回で実文献が当たった（市場タイミング検定／対照系列付き ITS／気象の skill score）。気象 facet は 36 件中 26 件が主題そのもので、接地の用途では最も効率がよかった。
 
 > **contra 側注記（2026-11-17 失敗対処デー）**: BACI 切り口の英語以外の 5 件は **F-89** として採番。計器（内訳に言語の件数）を入れ、後回しの処方は試して外れた（短い切り口では効かない）。分位の母数 6 → 通過 1 は F-15 の機序の再現（ゲートは変えない）。relationship の漏れは F-86 の 3 週目（警告どおり・呼び手側の対処）。byrepo は F-14 の再現。bybridge の予算 40,000 に約 46,112 字は F-88-R の既知の残り。F-85-D（11-16 既定化）の実運用での効果判定は、この回を含めて採点が数回溜まってから。
+
+## 2026-11-18（水・seihai r03 / F4）の観測
+
+テーマ「生成器の通過率が陰性対照と区別できないとき補充をいつ止めるか（futility）」
+
+- **byrepo（structured・GitHub・pool 10）＝収穫ゼロ・明らかに無関係な上位**: 関連度最大 0.2（警告発出）。include 5 語のうち `futility`・`model confidence set`・`decision tree trading` はプール 0 件。`surrogate` が surrogate modeling（SMTorg/smt）・分子動力学（kpleo/pyraimd）・スパイキングNN（snntorch）に語彙衝突し上位 4 件中 3 件を占めた。
+- **bybridge（materials・lean・abstract 220 字）**: 上位 10 件の最頻 bridge 占有率 **30%**、最頻 bridge は **A Reality Check for Data Snooping**（被引用 2,202・主題ドメインの基礎文献で名簿由来の分野外ハブではない）。使われた bridge 37 本・候補あたり 2.87 本。ただし交差候補 60 件のうち呼び手採点で anomaly 39 件（ESG・会計・教育・気象など主題外）、近傍の多重検定文献（Romano–Wolf・SPA・MCS）は既知。post-gate は **fallback 出力 1 件**（研究登録の Political Analysis 2013・seren 0.32 < floor 0.35）。＝「上位は多様化したが収穫は薄い」の新様式側の観測。materials は abstract 220 字指定でも 59,810 字で tool 上限を超えファイル退避（bridge_signals が 17,724 字）。
+- **byserendipity（raw_only・facet 3）**: 正常。60 件全件提出・通過 16・出力 3・接地失敗なし。
