@@ -321,6 +321,31 @@ def _field_ids_line(works: List[Any]) -> str:
             "ホーム分野の学会・雑誌の論文でも別の Field なら残ります）: " + " ／ ".join(parts))
 
 
+def _subfield_ids_line(works: List[Any]) -> str:
+    """F-90: the candidate ids grouped by OpenAlex Subfield (opt-in `subfield_line`).
+
+    llm-evolve 2026-11-17 aims every facet at a branch of mathematics and wants to keep or drop
+    candidates by branch (Algebra and Number Theory, Geometry and Topology, ...). The exclusion
+    stays per Field: a Subfield-level exclusion was turned down on 2026-09-27 (F-37) because it
+    changes which candidates survive. This only names the Subfield the parser already reads.
+    Same form as _field_ids_line (one line, not a per-candidate key) for the F-65 reason, and
+    opt-in so the default output and its budget are unchanged.
+    """
+    groups: Dict[str, List[str]] = {}
+    for w in works:
+        meta = w.source_meta or {}
+        name = meta.get("primary_topic_subfield_name") or "不明"
+        field = meta.get("primary_topic_field_name") or ""
+        label = f"{name}（{field}）" if field else name
+        wid = str(w.id or "")
+        groups.setdefault(label, []).append(
+            wid[len(_OPENALEX_WORK_PREFIX):] if wid.startswith(_OPENALEX_WORK_PREFIX) else wid)
+    parts = [f"{label} {len(ids)}: {', '.join(ids)}"
+             for label, ids in sorted(groups.items(), key=lambda kv: -len(kv[1]))]
+    return ("- 候補の OpenAlex Subfield（括弧内は Field。除外には使っていません。どの小分野を残すかは"
+            "呼び手が決めます）: " + " ／ ".join(parts))
+
+
 # F-75: one ids.openalex filter call takes this many ids.
 _READ_WORKS_MAX_IDS = 50
 
@@ -787,6 +812,7 @@ class StdinMcpServer:
                         "materials_max_chars": _materials_max_chars_prop(),
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "facet_language": {"type": ["string", "null"], "description": "When raw_only, opt-in (F-89): within each facet, records in another language than this one (OpenAlex `language`, ISO code, e.g. 'en') go to the END of the facet's list, so they take a slot only when the facet runs out of records in this language. Deferred, not dropped; records without a language code count as this language. Default null = the endpoint's order. Measured 2026-11-17 on 9 real calls: it swapped 5 of ~514 candidates, none of them anomaly by the caller's score, so it is not the default. The facet breakdown names each facet's non-English records either way.", "default": None},
+                        "subfield_line": {"type": "boolean", "description": "When raw_only, opt-in (F-90): add one diagnostics line grouping the candidate ids by OpenAlex Subfield (e.g. 'Geometry and Topology (Mathematics)'), for callers that aim facets at branches of one Field and keep or drop candidates by branch. Display only: the home exclusion stays per Field (a Subfield-level exclusion was declined on 2026-09-27, F-37). One grouped line, not a per-candidate key, so abstracts keep their length under materials_max_chars (the line is counted in the budget). Default false = output unchanged.", "default": False},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "history_key": _history_key_prop(),
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
@@ -1183,6 +1209,7 @@ class StdinMcpServer:
         facet_stats: List[Dict[str, Any]] = []
         home_ids = resolve_field_ids(theme.scope.field)
         facet_language = args.get("facet_language")
+        subfield_line = bool(args.get("subfield_line"))
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(facet_language_preference=(
                 str(facet_language).strip() or None) if facet_language else None),
@@ -1257,6 +1284,7 @@ class StdinMcpServer:
                                               budget_note=budget_note, abstract_part=part)
                 + ("\n" + _short_ids_line(materials) if materials else "")
                 + ("\n" + _field_ids_line(works) if works and home_ids else "")
+                + ("\n" + _subfield_ids_line(works) if works and subfield_line else "")
             )
             return diag + "\n\n" + _materials_json(materials)
 

@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-17（CL-0177） byserendipity raw に候補の OpenAlex Subfield をまとめた 1 行を出す（F-90・opt-in）
+
+### 概要
+* `src/mcp_server.py`: `_subfield_ids_line`（候補の id を Subfield〔括弧に Field〕ごとにまとめた 1 行）。byserendipity の引数 `subfield_line`（既定 false）。表示だけで、ホーム除外（Field 単位）・取得・材料は不変。1 行は予算（materials_max_chars）の計算に入る。
+* `tests/test_subfield_ids_line.py`: 新規 3 件。743 pass。
+* 依頼元: llm-evolve（11-17）。facet を数学の小分野に向け、どの小分野の候補を残すかを呼び手が決めたい。Subfield での除外は F-37（09-27）で見送り済みなので、名指すだけにした。
+* 実測（実 OpenAlex・数学向け facet 3 つ〔最適輸送・情報幾何・代数的位相〕・lean＋45,000）: 候補 33 件・Mathematics 28 件の内訳が Applied Mathematics 17／Geometry and Topology 5／Mathematical Physics 5 ほかと出た。1 行は 842 字（38,409 → 39,251 字）、この回は予算に余裕があり抄録の長さは同じ。
+
 ## 2026-11-17（CL-0176） byserendipity の切り口ごとの内訳に英語以外の件数を出す（F-89 の計器・後回しは opt-in）
 
 ### 概要

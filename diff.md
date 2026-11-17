@@ -7,38 +7,28 @@
 
 ## 1. 変更目的 (必須)
 
-*   委譲設計（`docs/research/mcp_subscription_delegation.md`）の**段階(d)**として、byrepo/Track A を**キー無しで一周**できるようにし、委譲シリーズ(a)〜(d)を完了する。
+*   llm-evolve（ローカル LLM を改造して測る周回、2026-11-17 開始）が、byserendipity の facet を数学の小分野に向けて「数学の中で領域をまたぐ類推」を探す。どの候補がどの小分野から来たかを呼び手が見て、残す小分野を選べるようにする（F-90）。
+*   ホーム除外は Field 単位のまま。Subfield での除外は F-37（2026-09-27）で「残る候補が変わる」として見送っているので、名指すだけにする。
 
 ---
 
 ## 2. 変更概要 (必須)
 
-*   変更ファイル: `src/pipeline/delegate.py`, `src/mcp_server.py`, `tests/test_delegate.py`, `DECISION_LOG.md`, `task.md`, `diff.md`, `Changelog.md`
-*   `build_track_a_entries`（4-Pillar 信頼性スコア降順の決定論ランク・relationship_level を信頼性帯から付与）＋ `assemble_keyless_track_a_document`（→ `fill_track_entries(mode="structured")` → OutputDocument）。LLM 不使用。
-*   MCP `byrepo_search` に `structured` フラグ追加（信頼性順＋構造整形済み Track A Markdown をキー無しで返す）。
+*   変更ファイル: `src/mcp_server.py`, `tests/test_subfield_ids_line.py`（新規）, `DECISION_LOG.md`, `Changelog.md`, `diff.md`
+*   `_subfield_ids_line(works)`: 候補の id を `primary_topic_subfield_name`（括弧に Field）ごとにまとめた 1 行。`_field_ids_line`（F-65）と同じ形。
+*   byserendipity の引数 `subfield_line`（boolean・既定 false）。raw 経路で true のとき診断に上の 1 行を足す。予算（`materials_max_chars`）の計算に入る。既定の出力は不変。
 
 ---
 
 ## 3. 確認方法 (必須)
 
-*   `python3 -m pytest tests/ -q` → 191 passed
-*   `python3 -c "import src.mcp_server"` → OK
-*   `tests/test_delegate.py`（信頼性順ランク / キー無しでの4部充足）
+*   `python -m pytest tests/ -q` → 743 passed（新規 3 件: まとめ方・opt-in のときだけ出て他は同じ・スキーマの既定値）
+*   実 OpenAlex: 数学向け facet 3 つ（最適輸送・情報幾何・代数的位相）、`materials_lean`＋45,000。off 38,409 字／on 39,251 字（1 行 842 字）。候補 33 件、Mathematics 28 件が Applied Mathematics 17／Geometry and Topology 5／Mathematical Physics 5 に分かれて見えた。
 
 ---
 
 ## 4. 既知の課題・リスク (必須)
 
-*   設計要点: Track A は選別が決定論（信頼性スコア）のため**再ゲート不要**＝Track B（`delegate_finalize`）より単純。エージェントは後でプローズを磨くだけ。
-*   実エージェントによる採点ループの実運用手順化（roadmap #10 の評価とセット）、agentmemory 周回メモリ統合は未着手。
-*   スコア設計値は不変。
-
----
-
-## 5. 変更内容の詳細 (任意)
-
-*   byrepo は元々 collect/score が決定論（GitHub/OpenAlex 取得のみ、LLM なし）。`classify_track_a(use_llm=False)` と `mode="structured"` も決定論であることを確認済み。
-*   `structured=true` の MCP `byrepo` は、信頼性スコアで sort・trim 後 `assemble_keyless_track_a_document` で組み立て、`render_markdown` で出力（Track A の Reliability/Verified Maturity/Third-Party 内訳表示はそのまま機能）。
-*   委譲シリーズ総括: (a) bybridge キー無し structured → (b) post-gate 純関数化 → (c) `delegate_finalize` ＋ JSON スキーマ → (d) Track A キー無し組み立て。
-
----
+*   予算が厳しい呼び出しで true にすると、1 行の分だけ抄録の先頭が短くなる（F-65 の 1 行と同じ扱い）。既定 false なので既存の呼び手には影響しない。
+*   bybridge・read_works には付けていない（依頼元が使うのは byserendipity raw だけ）。
+*   動いている MCP サーバーは `repos/contra` の main を読むので、main へ merge するまで呼び手からは使えない。
