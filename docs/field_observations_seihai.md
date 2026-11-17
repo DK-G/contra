@@ -3625,3 +3625,21 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **呼び手の誤り（6 回目）**: byserendipity・bybridge の両 finalize で、出力候補に `relationship` を付けず `serendipity_rationale` だけ送った（F-86・出力 6 本とも関連性が空欄）。`materials_max_chars` を bybridge に渡す誤り（F-57）は今回は避けた。contra 側の対処対象ではない。
 
 > **contra 側注記（2026-11-15 失敗対処デー）**: bybridge の「bridge_signals が抄録より大きい」は **F-88** として対処（予算 `materials_max_chars` を実装・予算のときは bridge_signals を並びに）。この回と同じ引数で 60,418 → 47,541 字。45,000 字には診断ブロック（約 9k 字）を残すと届かない。詳細は「対処済み」節 F-88-R。byrepo は F-14 の再現、byserendipity の facet 2 の流れは F-64 の再現として記録のみ。
+
+## 2026-11-16（月・seihai r01／FJ）の観測
+
+テーマ: 時刻補正した静穏（同じ時刻の直近数日の平常より静か）の後に来るのは拡張か、レンジの継続か。英語で記述。
+
+- **byrepo（structured・github・pool 20・`keyword_fair_share`）**: 収穫ゼロ（F-14 の再現）。6 件とも AI 売買エージェント・スクリーナー類で theme 関連度は最大 0.37。`deseasonalized volume` は README を含め GitHub 全体で 0 件、`volatility breakout` は README の言及のみ 7 件、`intraday periodicity` は GitHub 全体で 31 件と診断行が申告したとおり。
+- **byserendipity（raw_only・facet 3〔地震の相対的静穏化／概日医学／電力負荷の異常検知〕・lean・max_chars 45,000・60 件全件提出）**: 返却 48/44/44 → 提出 20/20/20。予算に収まった（41,329 字・抄録の末尾 204 字）。採点 → anomaly 12・**hollow 39**・通過 2・出力 2（percentile 0.413＝母数 9）。接地検証失敗 0。**概日医学の facet は 20 件とも「リズムの乱れ＝疾患の指標」で、問い（静穏の後に何が来るか）に触れなかった**（facet の pseudo_abstract に書いた「low activity precedes deterioration」より「circadian」が効いた様子）。
+- **bybridge（materials・lean・max_chars 45,000）**: **F-88 の予算を初めて使った**。結果は約 47,232 字（予算超過を本文で申告）だが**インラインで届いた**。観測プロトコル: (i) 最頻 bridge の上位 10 件占有 **60%**（全体 17%）、(ii) 最頻 bridge は Admati–Pfleiderer 1988「A Theory of Intraday Patterns」＝**主題の基礎文献**。通行 bridge 28 本。交差候補 60 件は会計（開示と情報の非対称）21・Decision Sciences 23 で、採点 anomaly 49・通過 1（fallback・call center の日中到着予測）。**上位は主題 bridge 経由だが収穫は 1 件**（S-26 の「主題適合性は未改善」の観測。旧様式の再現ではない）。シード（FX seasonality の時差正規化 2013 など）のほうが主題に当たった。
+- **呼び手の誤り・癖**: byserendipity で structural_depth を 0.5 未満に付けた候補が 39 件あり、hollow で落ちて分位の母数が 9 に縮んだ＝通過 2 は件数で決まった（F-15 の機序を呼び手の採点が起こした）。`relationship` は今回は全出力候補に付けた（F-86 は再発せず）。
+
+## 2026-11-17（火・seihai r02 / F2 GP）の観測
+
+テーマ: 買い専用の GP 個体の最初のライブ 2 本（上昇週の買い・両方 TP）を、同じ保有区間のドリフト分を引いて読むには。
+
+- **byrepo（structured・github・pool 20・keyword_fair_share）**: **収穫ゼロ（F-14 の再現）**。関連度最大 0.2・語彙衝突警告。include 5 語のうち 4 語（market timing / buy and hold benchmark / trade attribution / beta adjusted）は名前/説明/topics の一致が 0 件で README 言及のみ。上位は暗号資産の forward-testing ハーネスや汎用 AI 売買基盤。
+- **byserendipity（raw_only・facet 3〔スポーツの新任評価／BACI／信号検出の反応バイアス〕・lean・max_chars 40,000・38 件全件提出）**: 返却 28/42/39 → 提出 7/11/20（**スポーツ facet はホーム除外で 16 件落ち、提出 7 件**＝経済学に分類されるスポーツ分析が多い）。BACI facet の 11 件のうち 7 件は環境影響評価の制度論（スペイン語・韓国語・中国語含む）で機序を運ばない。採点 → anomaly 18・hollow 14・**分位の母数 6 → 通過 1**（F-15 の機序がそのまま出た。呼び手は全件提出したが、hollow/anomaly で母数が縮んだ）。接地検証失敗 0。**呼び手の誤り: 出力候補に relationship を付けず serendipity_rationale だけ（F-86 再発・3 週目）**。
+- **bybridge（materials・lean・max_chars 40,000）**: 観測プロトコル: (i) 最頻 bridge の上位 10 件占有 **70%**（全体 27%）、(ii) 最頻 bridge は Brock–Lakonishok–LeBaron 1992「Simple Technical Trading Rules…」＝**主題の基礎文献**。通行 bridge 39 本。予算 40,000 に対し約 46,112 字（申告どおり・インラインで届いた）。交差候補 60 件のうち 28 件が Stock Market Forecasting Methods（主題そのものが兄弟 Field で通過・F-32 の残り）。採点 anomaly 28・hollow 16・通過 3・出力 1（fallback・事前登録の論文）。**最も有用だった「GP-evolved Technical Trading Rules Can Outperform Buy and Hold」（買いと売りの規則を別々に共進化）は距離 0.18 で分位落ち＝F-22 の「近いが有用」**。
+- **bynote 代替の A3 接地（byserendipity raw・facet 1 枚 ×3）**: 3 本とも初回で実文献が当たった（市場タイミング検定／対照系列付き ITS／気象の skill score）。気象 facet は 36 件中 26 件が主題そのもので、接地の用途では最も効率がよかった。
