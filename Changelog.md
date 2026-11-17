@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-17（CL-0176） byserendipity の切り口ごとの内訳に英語以外の件数を出す（F-89 の計器・後回しは opt-in）
+
+### 概要
+* `src/pipeline/collect.py`: `CollectConfig.facet_language_count`（既定 "en"・内訳用に数えるだけ）と `facet_language_preference`（既定 None・opt-in の後回し）。`language_matches`。後回しのときは重複よけの位置の索引を付け替える。
+* `src/mcp_server.py`: byserendipity の引数 `facet_language`（既定 null）・内訳の「（英語以外 N 件〔…〕・うち提出 M 件）」。
+* `tests/test_facet_language_preference.py`: 新規 6 件。740 pass。
+* 計測: 呼び手の採点 2,862 件（51 回）で英語以外 66 件は anomaly 41%（英語 11%）・0.35 以上 12%（英語 49%）。同じページの A/B（9 回）で後回しが入れ替えたのは約 514 件中 5 件、押し出された側は anomaly 0・0.71 を 1 件失う＝既定にしない。
+* `docs/field_observations_seihai.md`: F-89・F-89-I・seihai 11-16／11-17 への注記。
+
 ## 2026-11-16（CL-0175） bybridge の bridge ごとの枠をホーム領域の外から先に埋める（F-85-D）
 
 ### 概要

@@ -570,6 +570,23 @@ def _supplement_excluded_note(r: Dict[str, Any]) -> str:
     return f"（補足資料のレコード {n} 件を除外: " + " / ".join(head) + "）"
 
 
+def _off_language_note(r: Dict[str, Any]) -> str:
+    """F-89: "（英語以外 N 件〔es 3・ko 2〕・うち提出 M 件）" for one facet, or "".
+
+    With the opt-in reorder (facet_language) it says the records were moved back ("は後回し").
+    """
+    n = r.get("off_language") or 0
+    if not n:
+        return ""
+    codes = r.get("off_language_codes") or {}
+    mix = "・".join(f"{k} {v}" for k, v in sorted(codes.items(), key=lambda kv: (-kv[1], str(kv[0]))))
+    lang = str(r.get("off_language_lang") or "en")
+    name = "英語" if lang == "en" else f"{lang} "
+    return (f"（{name}以外 {n} 件" + (f"〔{mix}〕" if mix else "")
+            + ("は後回し" if r.get("off_language_deferred") else "")
+            + f"・うち提出 {r.get('off_language_selected', 0)} 件）")
+
+
 def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
     """Per-facet retrieval breakdown for the raw_only diagnostic block (F-18).
 
@@ -604,6 +621,8 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             + _home_excluded_note(r)
             # F-72: a supplement names its paper; the paper itself may not be among the candidates.
             + _supplement_excluded_note(r)
+            # F-89: other-language records were moved behind this facet's own-language ones.
+            + _off_language_note(r)
             # F-64: the field the facet actually came back from, to read against its name.
             + (f"（主な分野 {r['top_field']['name']} {r['top_field']['count']}/{r.get('kept', 0)}）"
                if r.get("top_field") else "")
@@ -767,6 +786,7 @@ class StdinMcpServer:
                         "materials_abstract_chars": _materials_abstract_chars_prop(),
                         "materials_max_chars": _materials_max_chars_prop(),
                         "materials_abstract_part": _materials_abstract_part_prop(),
+                        "facet_language": {"type": ["string", "null"], "description": "When raw_only, opt-in (F-89): within each facet, records in another language than this one (OpenAlex `language`, ISO code, e.g. 'en') go to the END of the facet's list, so they take a slot only when the facet runs out of records in this language. Deferred, not dropped; records without a language code count as this language. Default null = the endpoint's order. Measured 2026-11-17 on 9 real calls: it swapped 5 of ~514 candidates, none of them anomaly by the caller's score, so it is not the default. The facet breakdown names each facet's non-English records either way.", "default": None},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "history_key": _history_key_prop(),
                         "used_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional agent-managed exclusions (OpenAlex work ids), merged on top of the file history."},
@@ -1162,8 +1182,10 @@ class StdinMcpServer:
         _log("Byserendipity(raw): semantic collection from agent facets (key-free)...")
         facet_stats: List[Dict[str, Any]] = []
         home_ids = resolve_field_ids(theme.scope.field)
+        facet_language = args.get("facet_language")
         works = collect_track_b_from_spec(
-            theme, spec, CollectConfig(),
+            theme, spec, CollectConfig(facet_language_preference=(
+                str(facet_language).strip() or None) if facet_language else None),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
             home_field_ids=home_ids, stats_out=facet_stats,
         )

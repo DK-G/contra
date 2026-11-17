@@ -70,6 +70,19 @@ class CollectConfig:
     # F-72: in the semantic Track B collection, a record titled as a supplement of a paper
     # ("Additional file 3: of …", "Figure S1 from …") is not a candidate. False keeps them.
     supplement_title_exclusion: bool = True
+    # F-89 (2026-11-17): in the semantic Track B collection, a facet's records in another
+    # language than this one (OpenAlex `language`) go to the END of that facet's list, so they
+    # take a slot only when the facet has no more records in this language. Callers scored 2,862
+    # byserendipity candidates over 51 runs: non-English 66, anomaly 41% vs English 11%,
+    # purpose_sim >= 0.35 12% vs 49%. Deferred, not dropped (8 of the 66 did reach 0.35).
+    # Records without a language code count as this language.
+    # OPT-IN (None = endpoint order): replaying 9 real calls on the same pages, the reorder swapped
+    # 5 of ~514 candidates, none of them anomaly by the caller's own score (0.21-0.71, one the
+    # 0.71 hit) -- the anomalous non-English records sit in short facets the reorder cannot touch.
+    facet_language_preference: Optional[str] = None
+    # F-89: the language counted as "own" for the facet breakdown's other-language count, which
+    # is reported whether or not the reorder is on. None = not counted.
+    facet_language_count: Optional[str] = "en"
     # F-33 (2026-09-25): the bybridge semantic seed leg re-sends a 504 until this many seconds
     # have passed (OpenAlexConfig.gateway_patience_sec). The endpoint's 504s come in streaks
     # that clear within minutes and are not charged to the daily budget; the leg supplied 0
@@ -526,6 +539,12 @@ def _abstract_key(abstract: Optional[str]) -> str:
 def _record_standing(work: Work) -> tuple:
     """Which of two records of one paper to keep: the one with a DOI, then the more cited."""
     return (bool(work.doi), int(work.cited_by_count or 0))
+
+
+def language_matches(work: Work, preferred: str) -> bool:
+    """True when the record is in ``preferred`` or carries no language code (F-89)."""
+    lang = (work.language or "").strip().lower()
+    return not lang or lang == preferred.strip().lower()
 
 
 def _norm_doi(doi: Optional[str]) -> str:
@@ -1323,6 +1342,26 @@ def _collect_track_b_semantic(
                     seen_title_at[norm_title] = (bucket, len(bucket))
                 bucket.append(w)
         rec["kept"] = len(bucket)
+        # F-89: count the facet's other-language records; with the opt-in reorder, move them to
+        # the end of the facet's list (stable, not dropped).
+        pref = cfg.facet_language_preference or cfg.facet_language_count
+        off = [w for w in bucket if not language_matches(w, pref)] if pref else []
+        if off:
+            rec["off_language"] = len(off)
+            rec["off_language_ids"] = [w.id for w in off]
+            rec["off_language_codes"] = dict(Counter(w.language for w in off))
+            rec["off_language_lang"] = pref
+            if cfg.facet_language_preference:
+                rec["off_language_deferred"] = True
+                old = list(bucket)
+                bucket[:] = [w for w in old if language_matches(w, pref)] + off
+                # Positions moved: re-point the dedup indexes (later facets may swap a held
+                # record in place, F-52/F-67) to the reordered list.
+                new_pos = {id(w): i for i, w in enumerate(bucket)}
+                for index in (seen_abstracts, seen_title_at):
+                    for key, (held_bucket, p) in list(index.items()):
+                        if held_bucket is bucket:
+                            index[key] = (bucket, new_pos[id(old[p])])
         # F-64 (survey 2026-10-17): a facet can come back from a different field than the one it
         # names (particle physics -> radio receivers, pulled by the caller's `structure` words).
         # Name the facet's most common OpenAlex Field so the caller can see it without a lookup.
@@ -1341,6 +1380,9 @@ def _collect_track_b_semantic(
         # "ok（504 …）" F-33) — an exact "ok" match left those facets' selected count at 0.
         if rec["status"].startswith("ok"):
             rec["selected"] = sum(1 for w in buckets[bi] if w.id in chosen)
+            if rec.get("off_language"):
+                rec["off_language_selected"] = sum(
+                    1 for wid in rec["off_language_ids"] if wid in chosen)
             bi += 1
     if stats_out is not None:
         stats_out.extend(stats)
