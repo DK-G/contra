@@ -3679,3 +3679,19 @@ seihai 側の日次・週次ルーティンは、当日の失敗を上記の該�
 - **byrepo（structured・GitHub・pool 10）＝収穫ゼロ・明らかに無関係な上位**: 関連度最大 0.2（警告発出）。include 5 語のうち `futility`・`model confidence set`・`decision tree trading` はプール 0 件。`surrogate` が surrogate modeling（SMTorg/smt）・分子動力学（kpleo/pyraimd）・スパイキングNN（snntorch）に語彙衝突し上位 4 件中 3 件を占めた。
 - **bybridge（materials・lean・abstract 220 字）**: 上位 10 件の最頻 bridge 占有率 **30%**、最頻 bridge は **A Reality Check for Data Snooping**（被引用 2,202・主題ドメインの基礎文献で名簿由来の分野外ハブではない）。使われた bridge 37 本・候補あたり 2.87 本。ただし交差候補 60 件のうち呼び手採点で anomaly 39 件（ESG・会計・教育・気象など主題外）、近傍の多重検定文献（Romano–Wolf・SPA・MCS）は既知。post-gate は **fallback 出力 1 件**（研究登録の Political Analysis 2013・seren 0.32 < floor 0.35）。＝「上位は多様化したが収穫は薄い」の新様式側の観測。materials は abstract 220 字指定でも 59,810 字で tool 上限を超えファイル退避（bridge_signals が 17,724 字）。
 - **byserendipity（raw_only・facet 3）**: 正常。60 件全件提出・通過 16・出力 3・接地失敗なし。
+
+## 2026-11-19（木・seihai r04 / F5 microstructure）の観測
+
+テーマ「出来高クライマックス逆張りが、時計で予定された出来高の山（日替わり・セッション開始）と持続トレンドで負ける＝予定された山と固有のショックをどう分け、山が反転か継続かをどう読むか」
+
+- **byrepo（structured・GitHub・pool 20）＝明らかに無関係な上位**: include 5 語のうち `intraday seasonality`・`tick volume` はプール 0 件、`volume spike` は README 言及のみ 3 件。`exhaustion` が resource exhaustion（RestClient.Net・pdfparser・cloudflare/security-audit-skill・bb8 接続プール）に語彙衝突して上位 5 件中 4 件を占めた。主題寄りは 3 位の price-action-lib（インド株・関連度 0.4）のみ。
+- **byserendipity（raw_only・facet 3）**: Near facet（先物の寄り付き出来高と exhaustion）が **home_converged で棄却**（Near 段が材料から消えた）。Far・Very Far の 30 件を全件提出・anomaly 8・通過 6・出力 3・接地失敗なし。ただし出力 3 本とも relationship を送らず（F-86 の呼び手ミス再発）。
+- **bybridge（materials・lean・budget 40,000）＝収穫ゼロ（saturated）**: 観測プロトコル項目 (i) 上位 10 件の最頻 bridge 占有率 **50%**（全体 25%）、通行 bridge 20 本・候補あたり 1.80 本・共有 bridge 1 本のみの候補 31/60。(ii) 最頻 bridge は **Continuous Auctions and Insider Trading（Kyle 1985・被引用 11,059）＝主題ドメインの基礎文献**。シード 20 件は主題に合う（Foreign Exchange Volume・FX Fixings around the Clock 等）。交差候補 60 件の主 Topic は Auditing/Earnings Management 24 件、呼び手採点で anomaly 57・hollow 1・通過 0。予算 40,000 字に収まらず約 46,417 字（抄録を 200 字まで切っても超過）。⇒ 「上位は主題の基礎文献経由だが、引用側は会計開示へ流れる」新様式の継続（11/12 は占有 40%・fallback 1 件、今日は占有 50%・0 件）。
+
+## 2026-11-20（金・seihai r05 / F9 LLM）の観測
+
+テーマ: 出口の非対称（損失は固定損切りの満額、利益は時間切れで頭打ち）＝損切り×TP×時間切れの相互作用。
+
+- **byrepo（structured・GitHub・pool 20・keyword_fair_share）＝実質収穫ゼロ**: include 5 語のうち `MAE MFE`・`time stop` は名前/説明/topics の一致 0（README の言及のみ 4 件ずつ）＝F-14 の再現。`time stop` が SensorsINI/v2e（動画→イベントカメラ変換）に語彙衝突して 5 位。上位はトレード日誌 2 件（MAE/MFE は README のみ）と暗号資産 bot。設計単位で出口の内訳を測る実装は 0 件。
+- **byserendipity（raw_only・facet 3・60 件全件提出）**: home_converged なし。anomaly 21・hollow 30・通過 2・出力 2・接地失敗 0。分位ゲートの母数 9 件（F-15 の警告どおり上位 2 件だけ通過）。**出力 2 本とも relationship を送らなかった（F-86・呼び手ミス。r05 では 2 週連続）**。主題に最も近い候補（最大値からの後退幅で止める最適停止・J Appl Prob 2004）は mechanism_dist 0.41 で距離律速の落選＝呼び手の採点どおりの挙動。
+- **bybridge（materials・lean・budget 45,000）**: 観測プロトコル (i) 最頻 bridge の上位 10 件占有率 **50%**（全体 18%）・通行 bridge 30 本。(ii) 最頻 bridge＝Brock, Lakonishok & LeBaron 1992（Simple Technical Trading Rules・被引用 2,789）＝**主題ドメインの基礎文献**で旧様式ではない。シード 20 件は主題そのもの（stop-loss 文献群）で、収穫はシード・bridge 側（「When do stop-loss rules stop losses?」がシード 7 件から引用）。交差候補は abstract の上流欠落 25/60・anomaly 43・出力 1（fallback 0.26）。**`materials_max_chars` 45,000 に収まらず約 46,296 字**（抄録最小 200 字でも超過・診断ブロック込み）＝予算に診断ブロックが入る場合の見積もりの観測。「上位は主題寄りだが交差候補が薄い」は新しい観測として記録。
