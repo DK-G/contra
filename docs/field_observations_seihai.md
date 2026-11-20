@@ -1169,7 +1169,18 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ### F-91. bybridge — **`materials_max_chars` を渡しても 4 回続けて予算に収まらない（11-16 47,246／45k・11-17 46,126／40k・11-19 46,630／40k・11-20 46,310／45k）。抄録を最小の 200 字まで切った後に残るのは診断ブロック約 9k 字と、全 60 件で同じ値の `publication_type: "article"`（1.9k 字）**（seihai 2026-11-16〜11-20 の bybridge 行「予算に収まらず約 46k」4 回に採番・2026-11-20 起票。F-88-R の「効かなかった部分」の実地での再現） → **同日対処＝「対処済み」節 F-91-R（予算があるときだけ。45k の回は収まる・40k の回は診断ブロックの大きさを名指す）**
 
+### F-92. byserendipity(raw_only) — **ホームの近くをわざと狙った facet が home_converged で丸ごと棄却され、ホーム Field の外の主題どおりのレコードも一緒に捨てられる。結果はその件数を言わない**（llm-evolve 2026-11-20 の型 1・`D:\dev\agents\reports\contra-survey\failures.md` 11-20 の行に採番・2026-11-21 起票） → **同日対処＝「対処済み」節 F-92-K（opt-in。既定は棄却のまま、捨てた件数は既定で名指す）**
+
 ## 対処済み
+
+### F-92-K. byserendipity(raw_only) — **opt-in `keep_converged_facets`: home_converged の facet でも、ホーム Field の外のレコードは残す（ホーム除外はそのまま）。既定でも、棄却した facet にホームの外が何件あったかを警告の行で名指す** — **対処済み 2026-11-21（opt-in・既定の候補は不変）**
+
+- 観測（llm-evolve 2026-11-20 の型 1・ホーム Computer Science・`subfield_line`）: facet [2]「Random matrix theory and spectral estimation」（特異値の縮小で低ランクの信号を雑音から分ける）が `棄却 (home_converged)` で収穫 0。llm-evolve の型 1 は「LLM に近い数学」の段を毎回混ぜる決まりなので、この段は毎回落ちる恐れ。
+- 機序（同じ引数で 2026-11-21 に再実行）: 返却 38 件のうち Computer Science 26 件（OpenAlex が特異値の縮小の研究を **Signal Processing＝CS の Subfield** に分類する）＝68% が `_MAX_HOME_FRACTION` 0.6 を超え、facet ごと棄却。残る **Mathematics 12 件（Statistics and Probability・Applied Mathematics）は主題そのもの**: 「Singular vectors of sums of rectangular random matrices and optimal estimation of high-rank signals」（＝複数の差分の和を縮小する問い）・「Matrix denoising … optimal singular value shrinkage of spiked F-matrices」・「Generalized SURE for optimal shrinkage of singular values」など。ゲートは「facet がホームへ収束した＝遠くない」の判定（2026-06-23 の較正）で、**近い段を狙うこと自体が目的の呼び手**には、ホームの外の残りまで捨てる理由が無い。
+- 変えたもの（**byserendipity の facet の検証の段だけ**。ゲートの閾値・ホーム除外・重複・枠・順位・finalize は不変）: `validate_semantic_results` が home_converged のとき、ホーム除外を通る件数を `converged_distant` に記録。`keep_converged_facets:true` かつ 1 件以上なら facet を採用し、内訳の status に「home_converged＝返却 N 件のうちホーム Field M 件。ホームの外の K 件だけを残した」。既定（false）は棄却のままで、「収穫0の facet（棄却）」の警告の下に「ホーム Field の外のレコードがありました（[2] 12 件）。keep_converged_facets:true で残せます」の 1 行を足す。
+- 実測（同じ引数・実 OpenAlex）: 既定 候補 36 件（facet [2] は 0）→ opt-in **47 件（facet [2] が 11 件・すべて Mathematics。12 件のうち 1 件は抄録なしで落ちた）**。ホーム除外された 26 件は F-71-I どおり先頭 3 件が名指される（OptShrink・Optimal Shrinkage of Singular Values など＝CS に分類された主題の原典。id で read_works できる）。
+- 既定にしない理由: seihai・性能調査の home_converged は「facet の選び方の側・設計どおり」と記録してきた（11-12 hAIbit の時間生物学・seihai 11-13 の Near facet ほか）。そこで残る少数のホーム外は主題の兄弟 Field である見込みが高く（F-44・F-85-D と同じ形）、既定で採ると anomaly を増やす恐れがある。llm-evolve の型 1 の手順の側で渡す。
+- 検証: 新規 `tests/test_keep_converged_facets.py` 4 件（既定は棄却して件数を名指す／opt-in はホームの外だけ／ホームの外が 0 件なら opt-in でも棄却／スキーマの既定）。751 → 755 pass。
 
 ### F-91-R. bybridge — **予算があるときは、全候補で同じ値の `publication_type` を各候補から省いて見出しに 1 回だけ書く。予算に収まらないときは、診断ブロックの字数を名指す** — **対処済み 2026-11-20（予算があるときだけ。予算なしの出力・採点・順位・診断・finalize は不変）**
 

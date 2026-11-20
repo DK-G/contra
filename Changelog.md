@@ -7,6 +7,15 @@
 
 ---
 
+## 2026-11-21（CL-0181） byserendipity に opt-in の keep_converged_facets（F-92）
+
+### 概要
+* `src/pipeline/collect.py`: `CollectConfig.keep_converged_facets`（既定 False）。home_converged の facet でホーム除外を通る件数を記録し、opt-in ならその分だけを採用する。
+* `src/mcp_server.py`: byserendipity の引数 `keep_converged_facets`。既定でも、棄却した facet にホームの外が何件あったかを警告の行で名指す。
+* `tests/test_keep_converged_facets.py`（新規 4 件）。755 pass。
+* 発端は llm-evolve 2026-11-20 の型 1: ランダム行列の facet が 38 件中 CS（Signal Processing）26 件で棄却され、主題どおりの Mathematics 12 件も捨てられた。同じ引数の再実行で opt-in は候補 36 → 47 件（facet [2] が Mathematics 11 件）。
+* llm-evolve の手順（型 1・2）に `keep_converged_facets: true` を足した。
+
 ## 2026-11-21（CL-0180） bybridge に opt-in の走査順 bridge_order:"small_first"（F-85-S）
 
 ### 概要

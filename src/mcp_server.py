@@ -678,6 +678,15 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             "具体ドメインへ見直してください（home_converged ＝ 結果がホーム分野に収束。何を"
             "ホームとしたかは scope_field の行を参照）。"
         )
+        # F-92: a converged facet that still had records outside the home Field.
+        spare = [f"[{i}] {r.get('converged_distant')} 件" for i, r in enumerate(stats, 1)
+                 if str(r.get("status") or "").startswith("棄却") and r.get("converged_distant")]
+        if spare:
+            line += (
+                f"\n  ・home_converged で棄却した facet にも、ホーム Field の外のレコードがありました（"
+                f"{'・'.join(spare)}）。近い段をわざと狙った facet なら、keep_converged_facets:true で"
+                "その分だけを残せます（ホーム除外はそのまま・F-92）。"
+            )
     if emptied:
         line += (
             f"\n⚠ 収穫0の facet: {', '.join(emptied)}（取得は成功・ホーム除外／重複／履歴除外で"
@@ -814,6 +823,7 @@ class StdinMcpServer:
                         "materials_max_chars": _materials_max_chars_prop(),
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "facet_language": {"type": ["string", "null"], "description": "When raw_only, opt-in (F-89): within each facet, records in another language than this one (OpenAlex `language`, ISO code, e.g. 'en') go to the END of the facet's list, so they take a slot only when the facet runs out of records in this language. Deferred, not dropped; records without a language code count as this language. Default null = the endpoint's order. Measured 2026-11-17 on 9 real calls: it swapped 5 of ~514 candidates, none of them anomaly by the caller's score, so it is not the default. The facet breakdown names each facet's non-English records either way.", "default": None},
+                        "keep_converged_facets": {"type": "boolean", "description": "When raw_only, opt-in (F-92): a facet whose raw results sit mostly (>60%) in the home Field is normally rejected whole as home_converged. With true it keeps that facet's records OUTSIDE the home Field instead (the home exclusion still applies) and the breakdown says it converged. For callers that deliberately aim one facet close to home (e.g. math next to Computer Science): llm-evolve 2026-11-20's random-matrix facet returned 38, 26 filed as CS Signal Processing, and the 12 Mathematics records on optimal singular-value shrinkage were dropped with them. Default false = reject as before (the rejection line still counts the non-home records).", "default": False},
                         "subfield_line": {"type": "boolean", "description": "When raw_only, opt-in (F-90): add one diagnostics line grouping the candidate ids by OpenAlex Subfield (e.g. 'Geometry and Topology (Mathematics)'), for callers that aim facets at branches of one Field and keep or drop candidates by branch. Display only: the home exclusion stays per Field (a Subfield-level exclusion was declined on 2026-09-27, F-37). One grouped line, not a per-candidate key, so abstracts keep their length under materials_max_chars (the line is counted in the budget). Default false = output unchanged.", "default": False},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "history_key": _history_key_prop(),
@@ -1223,7 +1233,8 @@ class StdinMcpServer:
         subfield_line = bool(args.get("subfield_line"))
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(facet_language_preference=(
-                str(facet_language).strip() or None) if facet_language else None),
+                str(facet_language).strip() or None) if facet_language else None,
+                keep_converged_facets=bool(args.get("keep_converged_facets"))),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
             home_field_ids=home_ids, stats_out=facet_stats,
         )

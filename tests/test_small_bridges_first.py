@@ -47,12 +47,7 @@ def test_diagnostic_line_names_the_switch_back():
 
 def test_bybridge_schema_offers_the_opt_in_with_pool_default():
     from src.mcp_server import StdinMcpServer
-    tools = StdinMcpServer().list_tools() if hasattr(StdinMcpServer, "list_tools") else None
-    if tools is None:
-        import src.mcp_server as ms
-        src = Path(ms.__file__).read_text(encoding="utf-8")
-        assert '"bridge_order": {"type": "string", "enum": ["pool", "small_first"], "default": "pool"' in src
-        return
+    tools = StdinMcpServer().list_tools()
     schema = next(t for t in tools if t["name"] == "bybridge_collect")["inputSchema"]["properties"]
     assert schema["bridge_order"]["default"] == "pool"
     assert schema["bridge_order"]["enum"] == ["pool", "small_first"]

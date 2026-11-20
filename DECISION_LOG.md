@@ -4,6 +4,16 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-11-21 — byserendipity の home_converged の facet からホームの外を残すのは opt-in。既定は棄却のまま、捨てた件数だけ名指す（F-92）
+
+**決定**: `keep_converged_facets:true` のとき、home_converged の facet でもホーム Field の外のレコードは残す。閾値（0.6）とホーム除外は変えない。既定は棄却のままで、警告の行に捨てたホーム外の件数を出す。llm-evolve の型 1・2 は true を渡す。
+
+**根拠**: llm-evolve 11-20 のランダム行列の facet は 38 件中 CS 26 件（特異値の縮小は OpenAlex で Signal Processing＝CS）で棄却され、主題そのもの（和の特異値の最適な縮小）の Mathematics 12 件が捨てられた。再実行で opt-in は 11 件を返した。近い段を狙うのが目的の呼び手に、遠さの判定で丸ごと捨てる理由は無い。
+
+**既定にしない理由**: seihai・性能調査の home_converged は facet の選び方の側として記録してきた。そこで残るホーム外は主題の兄弟 Field が多い見込み（F-44・F-85-D）で、既定で採ると anomaly を増やす恐れがある。
+
+---
+
 ## 2026-11-21 — bybridge の「被引用の小さい bridge から走査」は opt-in で入れる。既定は変えない（F-85-S）
 
 **決定**: `bridge_order:"small_first"` を opt-in で足す。プールの走査順を被引用の小さい順にするだけで、bridge も候補も外さない。既定（"pool"＝複数シードが共有する順）は変えない。llm-evolve の型 3 は `small_first` と `home_domain_preference:false` を渡す。

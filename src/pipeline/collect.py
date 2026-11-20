@@ -83,6 +83,14 @@ class CollectConfig:
     # F-89: the language counted as "own" for the facet breakdown's other-language count, which
     # is reported whether or not the reorder is on. None = not counted.
     facet_language_count: Optional[str] = "en"
+    # F-92 (2026-11-21): a facet whose raw neighbours sit mostly in the home Field is rejected as
+    # home_converged, records outside the home and all. llm-evolve 2026-11-20 aimed a facet at
+    # random matrix theory (home Computer Science): 38 returned, 26 filed as CS Signal
+    # Processing, so the 12 Mathematics records (optimal singular-value shrinkage, sums of
+    # rectangular random matrices -- the theme's own question) were thrown away with them.
+    # OPT-IN: True keeps such a facet's non-home records (the home exclusion still applies);
+    # the breakdown says the facet converged. False = reject as before.
+    keep_converged_facets: bool = False
     # F-33 (2026-09-25): the bybridge semantic seed leg re-sends a 504 until this many seconds
     # have passed (OpenAlexConfig.gateway_patience_sec). The endpoint's 504s come in streaks
     # that clear within minutes and are not charged to the daily budget; the leg supplied 0
@@ -1266,6 +1274,14 @@ def _collect_track_b_semantic(
         raw = keep_semantic_types(filter_retracted(normalize_results(payload)), sq.work_type)
         rec["returned"] = len(raw)
         ok, reason = validate_semantic_results(raw, home_field_ids)
+        if not ok and reason == "home_converged":
+            # F-92: how many records the rejection throws away that the home exclusion keeps.
+            distant = len(exclude_home_field(raw, home_field_ids))
+            rec["converged_distant"] = distant
+            if cfg.keep_converged_facets and distant >= 1:
+                ok = True
+                rec["status"] = (f"ok（home_converged＝返却 {len(raw)} 件のうちホーム Field "
+                                 f"{len(raw) - distant} 件。ホームの外の {distant} 件だけを残した・F-92）")
         if not ok:
             print(f"[info] Track B semantic facet '{facet.domain}' 棄却 ({reason})")
             rec["status"] = f"棄却 ({reason})"
