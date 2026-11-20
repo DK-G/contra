@@ -4,6 +4,26 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-11-21 — byserendipity の home_converged の facet からホームの外を残すのは opt-in。既定は棄却のまま、捨てた件数だけ名指す（F-92）
+
+**決定**: `keep_converged_facets:true` のとき、home_converged の facet でもホーム Field の外のレコードは残す。閾値（0.6）とホーム除外は変えない。既定は棄却のままで、警告の行に捨てたホーム外の件数を出す。llm-evolve の型 1・2 は true を渡す。
+
+**根拠**: llm-evolve 11-20 のランダム行列の facet は 38 件中 CS 26 件（特異値の縮小は OpenAlex で Signal Processing＝CS）で棄却され、主題そのもの（和の特異値の最適な縮小）の Mathematics 12 件が捨てられた。再実行で opt-in は 11 件を返した。近い段を狙うのが目的の呼び手に、遠さの判定で丸ごと捨てる理由は無い。
+
+**既定にしない理由**: seihai・性能調査の home_converged は facet の選び方の側として記録してきた。そこで残るホーム外は主題の兄弟 Field が多い見込み（F-44・F-85-D）で、既定で採ると anomaly を増やす恐れがある。
+
+---
+
+## 2026-11-21 — bybridge の「被引用の小さい bridge から走査」は opt-in で入れる。既定は変えない（F-85-S）
+
+**決定**: `bridge_order:"small_first"` を opt-in で足す。プールの走査順を被引用の小さい順にするだけで、bridge も候補も外さない。既定（"pool"＝複数シードが共有する順）は変えない。llm-evolve の型 3 は `small_first` と `home_domain_preference:false` を渡す。
+
+**根拠**: llm-evolve 11-20（model merging）は、シードが全部同じ視覚のベンチマーク一式で評価するため、データセットの bridge がシード共有数 10〜14 でプールの先頭に並び、60 枠中 54 件がその利用者（医療画像・農業）になった。同じページの再生で、small_first は最小 bridge 5 千以上の候補を 11 → 0 件にし、テーマに沿う題を 1 → 6 件（F-85-D も切ると 8 件）にした。F-85-D は CS がホームだと数学・物理（同じ Physical Sciences）を後回しにするので、この主題では逆向きに働く。
+
+**既定にしない理由**: F-85-I で seihai の 2 テーマは bridge の大きさが anomaly を分けなかった（1〜6 千の基礎文献）。F-85-D の実運用の判定（12-01 頃）の途中で seihai の走査順を変えると、その判定が読めなくなる。効いたかは llm-evolve の次の型 3 の採点で見る。数字は呼び手の採点でなく題の語での目安（1 テーマ・1 回）。
+
+---
+
 ## 2026-11-20 — F-85-D は既定 ON のまま。実運用 4 回では効いたとも外れたとも言えない
 
 **決定**: bybridge の F-85-D（ホーム領域の外の引用側から枠を埋める）は戻さない。12-01 頃（各レーンで ON が 2 回）に `scripts/f85d_production_check.py` で再集計する。

@@ -38,6 +38,8 @@ from src.pipeline.bridge_diagnostics import (
     seed_pool_coverage,
     seed_routes,
     lexical_bridges_last,
+    small_bridges_first,
+    render_small_bridges_first,
     filter_live_bridges,
     candidate_bridge_sizes,
     render_bridge_size_tiers,
@@ -676,6 +678,15 @@ def _facet_breakdown_line(stats: List[Dict[str, Any]]) -> str:
             "具体ドメインへ見直してください（home_converged ＝ 結果がホーム分野に収束。何を"
             "ホームとしたかは scope_field の行を参照）。"
         )
+        # F-92: a converged facet that still had records outside the home Field.
+        spare = [f"[{i}] {r.get('converged_distant')} 件" for i, r in enumerate(stats, 1)
+                 if str(r.get("status") or "").startswith("棄却") and r.get("converged_distant")]
+        if spare:
+            line += (
+                f"\n  ・home_converged で棄却した facet にも、ホーム Field の外のレコードがありました（"
+                f"{'・'.join(spare)}）。近い段をわざと狙った facet なら、keep_converged_facets:true で"
+                "その分だけを残せます（ホーム除外はそのまま・F-92）。"
+            )
     if emptied:
         line += (
             f"\n⚠ 収穫0の facet: {', '.join(emptied)}（取得は成功・ホーム除外／重複／履歴除外で"
@@ -812,6 +823,7 @@ class StdinMcpServer:
                         "materials_max_chars": _materials_max_chars_prop(),
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "facet_language": {"type": ["string", "null"], "description": "When raw_only, opt-in (F-89): within each facet, records in another language than this one (OpenAlex `language`, ISO code, e.g. 'en') go to the END of the facet's list, so they take a slot only when the facet runs out of records in this language. Deferred, not dropped; records without a language code count as this language. Default null = the endpoint's order. Measured 2026-11-17 on 9 real calls: it swapped 5 of ~514 candidates, none of them anomaly by the caller's score, so it is not the default. The facet breakdown names each facet's non-English records either way.", "default": None},
+                        "keep_converged_facets": {"type": "boolean", "description": "When raw_only, opt-in (F-92): a facet whose raw results sit mostly (>60%) in the home Field is normally rejected whole as home_converged. With true it keeps that facet's records OUTSIDE the home Field instead (the home exclusion still applies) and the breakdown says it converged. For callers that deliberately aim one facet close to home (e.g. math next to Computer Science): llm-evolve 2026-11-20's random-matrix facet returned 38, 26 filed as CS Signal Processing, and the 12 Mathematics records on optimal singular-value shrinkage were dropped with them. Default false = reject as before (the rejection line still counts the non-home records).", "default": False},
                         "subfield_line": {"type": "boolean", "description": "When raw_only, opt-in (F-90): add one diagnostics line grouping the candidate ids by OpenAlex Subfield (e.g. 'Geometry and Topology (Mathematics)'), for callers that aim facets at branches of one Field and keep or drop candidates by branch. Display only: the home exclusion stays per Field (a Subfield-level exclusion was declined on 2026-09-27, F-37). One grouped line, not a per-candidate key, so abstracts keep their length under materials_max_chars (the line is counted in the budget). Default false = output unchanged.", "default": False},
                         "no_history": {"type": "boolean", "description": "Skip cross-run dedup. By default, papers already surfaced for this theme (keyed by theme_overview hash, stored under data/history/) are excluded, and adopted ones are recorded so re-running the same theme returns NEW papers instead of repeating.", "default": False},
                         "history_key": _history_key_prop(),
@@ -889,6 +901,15 @@ class StdinMcpServer:
                             "roster); same-Domain citers are deferred, not dropped. Measured on 1,680 "
                             "caller-scored candidates (28 runs): same-Domain sibling Fields 81% anomaly "
                             "(Business/Accounting under Finance 96%) vs other Domains 65%. false = page order.")},
+                        "bridge_order": {"type": "string", "enum": ["pool", "small_first"], "default": "pool", "description": (
+                            "F-85-S (opt-in): the order the per-bridge scan walks the pool. 'pool' (default) = "
+                            "bridges most seeds share first. 'small_first' = least-cited bridges first, so "
+                            "dataset / benchmark / foundation-model bridges (ImageNet, CLIP, a benchmark suite "
+                            "every seed evaluates on) only fill the slots the specific method bridges could "
+                            "not; nothing is dropped. Replaying llm-evolve 2026-11-20 (model merging) on the same "
+                            "pages: in pool order 54/60 candidates came through 7 vision benchmark/CLIP bridges; "
+                            "in small_first order the slots went to mode-connectivity / permutation-symmetry / "
+                            "merging bridges first. Not measured on seihai themes.")},
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "lexical_bridges_last": {"type": "boolean", "description": "When the semantic seed leg ran, scan the bridges cited ONLY by lexical-leg seeds after the others, so the 60 cross-candidate slots go first to bridges a semantic-leg seed also reaches; the lexical-only bridges fill what is left (F-66: on 15 seihai runs the caller rated purpose_sim >= 0.5 on 2 of 166 lexical-only candidates). Set false for the old pool order.", "default": True},
@@ -1212,7 +1233,8 @@ class StdinMcpServer:
         subfield_line = bool(args.get("subfield_line"))
         works = collect_track_b_from_spec(
             theme, spec, CollectConfig(facet_language_preference=(
-                str(facet_language).strip() or None) if facet_language else None),
+                str(facet_language).strip() or None) if facet_language else None,
+                keep_converged_facets=bool(args.get("keep_converged_facets"))),
             used_ids=used_ids, used_titles=used_titles, used_dois=used_dois,
             home_field_ids=home_ids, stats_out=facet_stats,
         )
@@ -1680,6 +1702,12 @@ class StdinMcpServer:
             bridge_pool, lexical_moved = lexical_bridges_last(
                 seeds, bridge_pool, {w.id for w in sem_seeds})
 
+        # F-85-S (opt-in): walk the least-cited bridges first (F-66's lexical-only tail stays last).
+        small_first_line = ""
+        if str(args.get("bridge_order") or "pool") == "small_first" and bridge_cited:
+            bridge_pool = small_bridges_first(bridge_pool, bridge_cited, keep_tail=lexical_moved)
+            small_first_line = render_small_bridges_first(bridge_pool, bridge_cited, keep_tail=lexical_moved)
+
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
@@ -1706,6 +1734,8 @@ class StdinMcpServer:
                 diag_line += "\n" + size_line
         if diagnostics and cands:
             diag_line += "\n" + _home_domain_line(cands, domain_stats)
+        if diagnostics and small_first_line:
+            diag_line += "\n" + small_first_line
         # F-46: which seed leg each pooled bridge (and so each candidate) came through. Needs
         # the semantic leg to have run; without it there is one leg and nothing to split.
         routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})

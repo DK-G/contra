@@ -1127,7 +1127,7 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 観測: `official-stockfish/Stockfish` が「issues 2件 / open 2 / closed 0」、OpenBench・Pikafish・Fairy-Stockfish・variant-nnue-tools が「issues 5件」。GitHub の実数は Stockfish 1,100・OpenBench 181・Fairy-Stockfish 533 件。
 - 機序: `_fetch_issue_signal` は直近 5 件（PR を除く。F-78-R 以降は、直近 5 件がすべて PR ならその前の issue 5 件）を採点し、その標本の件数をそのまま「issues N件」と書いていた。総数は取っていない（取るには別の呼び出しが要る）。
 
-### F-85. bybridge — **シードが主題に合っていても、bridge が「広く使われる手法・基礎の論文」だと、交差候補はその手法の利用者（構造を共有しない分野）で埋まる**（性能調査 2026-11-02 メタグモ「候補の中身」と 2026-11-04 EX将棋「巨大な基礎論文への吸収」の 2 回目で採番・2026-11-06 起票・**未対処・判断待ち**） → **2026-11-13 計器を足した＝「対処済み」節 F-85-I。処方 (a)（被引用の上限）は seihai の 2 テーマの採点で anomaly を分けない＝効かない見込み。判断待ちは (b) と性能調査の巨大な基礎文献の形** → **2026-11-16: 呼び手の採点 1,680 件で、効くのは距離ではなく「ホーム領域の兄弟 Field」だと分かった。bridge ごとの枠をホーム領域の外の引用側から先に埋める（既定・F-85-D）。「対処済み」節 F-85-D**
+### F-85. bybridge — **シードが主題に合っていても、bridge が「広く使われる手法・基礎の論文」だと、交差候補はその手法の利用者（構造を共有しない分野）で埋まる**（性能調査 2026-11-02 メタグモ「候補の中身」と 2026-11-04 EX将棋「巨大な基礎論文への吸収」の 2 回目で採番・2026-11-06 起票・**未対処・判断待ち**） → **2026-11-13 計器を足した＝「対処済み」節 F-85-I。処方 (a)（被引用の上限）は seihai の 2 テーマの採点で anomaly を分けない＝効かない見込み。判断待ちは (b) と性能調査の巨大な基礎文献の形** → **2026-11-16: 呼び手の採点 1,680 件で、効くのは距離ではなく「ホーム領域の兄弟 Field」だと分かった。bridge ごとの枠をホーム領域の外の引用側から先に埋める（既定・F-85-D）。「対処済み」節 F-85-D** → **2026-11-21: llm-evolve 11-20 の「シード全員が使うベンチマーク一式」の形に、被引用の小さい bridge から走査する opt-in を足した（F-85-S）**
 
 - 観測 1（11-02 メタグモ）: シードが可視化の手法（ワードクラウド）で、交差候補 60 件は農家の聞き取り・小児科の教育・観光など「道具として使っただけ」の論文。anomaly 39・hollow 19・通過 0。11-03 の注記 (5) で「2 回目が出たら起票」とした。
 - 観測 2（11-04 EX将棋）: シード 20 件中 19 件が Topic「Artificial Intelligence in Games」で主題どおり。交差候補の通った bridge の上位は AlphaGo（被引用 15,843・候補 15 件）・AlphaGo Zero（9,227・14 件）・AlphaZero（3,607・12 件）・ResNet（237,350・11 件）。候補は AI の経営効果・医療画像・エアロゾル観測・タンパク質構造予測。採点 60 件 → anomaly 52・hollow 6・通過 0。診断の最頻 bridge 25% の行と bridge 一覧で原因は読めた。
@@ -1169,7 +1169,18 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 
 ### F-91. bybridge — **`materials_max_chars` を渡しても 4 回続けて予算に収まらない（11-16 47,246／45k・11-17 46,126／40k・11-19 46,630／40k・11-20 46,310／45k）。抄録を最小の 200 字まで切った後に残るのは診断ブロック約 9k 字と、全 60 件で同じ値の `publication_type: "article"`（1.9k 字）**（seihai 2026-11-16〜11-20 の bybridge 行「予算に収まらず約 46k」4 回に採番・2026-11-20 起票。F-88-R の「効かなかった部分」の実地での再現） → **同日対処＝「対処済み」節 F-91-R（予算があるときだけ。45k の回は収まる・40k の回は診断ブロックの大きさを名指す）**
 
+### F-92. byserendipity(raw_only) — **ホームの近くをわざと狙った facet が home_converged で丸ごと棄却され、ホーム Field の外の主題どおりのレコードも一緒に捨てられる。結果はその件数を言わない**（llm-evolve 2026-11-20 の型 1・`D:\dev\agents\reports\contra-survey\failures.md` 11-20 の行に採番・2026-11-21 起票） → **同日対処＝「対処済み」節 F-92-K（opt-in。既定は棄却のまま、捨てた件数は既定で名指す）**
+
 ## 対処済み
+
+### F-92-K. byserendipity(raw_only) — **opt-in `keep_converged_facets`: home_converged の facet でも、ホーム Field の外のレコードは残す（ホーム除外はそのまま）。既定でも、棄却した facet にホームの外が何件あったかを警告の行で名指す** — **対処済み 2026-11-21（opt-in・既定の候補は不変）**
+
+- 観測（llm-evolve 2026-11-20 の型 1・ホーム Computer Science・`subfield_line`）: facet [2]「Random matrix theory and spectral estimation」（特異値の縮小で低ランクの信号を雑音から分ける）が `棄却 (home_converged)` で収穫 0。llm-evolve の型 1 は「LLM に近い数学」の段を毎回混ぜる決まりなので、この段は毎回落ちる恐れ。
+- 機序（同じ引数で 2026-11-21 に再実行）: 返却 38 件のうち Computer Science 26 件（OpenAlex が特異値の縮小の研究を **Signal Processing＝CS の Subfield** に分類する）＝68% が `_MAX_HOME_FRACTION` 0.6 を超え、facet ごと棄却。残る **Mathematics 12 件（Statistics and Probability・Applied Mathematics）は主題そのもの**: 「Singular vectors of sums of rectangular random matrices and optimal estimation of high-rank signals」（＝複数の差分の和を縮小する問い）・「Matrix denoising … optimal singular value shrinkage of spiked F-matrices」・「Generalized SURE for optimal shrinkage of singular values」など。ゲートは「facet がホームへ収束した＝遠くない」の判定（2026-06-23 の較正）で、**近い段を狙うこと自体が目的の呼び手**には、ホームの外の残りまで捨てる理由が無い。
+- 変えたもの（**byserendipity の facet の検証の段だけ**。ゲートの閾値・ホーム除外・重複・枠・順位・finalize は不変）: `validate_semantic_results` が home_converged のとき、ホーム除外を通る件数を `converged_distant` に記録。`keep_converged_facets:true` かつ 1 件以上なら facet を採用し、内訳の status に「home_converged＝返却 N 件のうちホーム Field M 件。ホームの外の K 件だけを残した」。既定（false）は棄却のままで、「収穫0の facet（棄却）」の警告の下に「ホーム Field の外のレコードがありました（[2] 12 件）。keep_converged_facets:true で残せます」の 1 行を足す。
+- 実測（同じ引数・実 OpenAlex）: 既定 候補 36 件（facet [2] は 0）→ opt-in **47 件（facet [2] が 11 件・すべて Mathematics。12 件のうち 1 件は抄録なしで落ちた）**。ホーム除外された 26 件は F-71-I どおり先頭 3 件が名指される（OptShrink・Optimal Shrinkage of Singular Values など＝CS に分類された主題の原典。id で read_works できる）。
+- 既定にしない理由: seihai・性能調査の home_converged は「facet の選び方の側・設計どおり」と記録してきた（11-12 hAIbit の時間生物学・seihai 11-13 の Near facet ほか）。そこで残る少数のホーム外は主題の兄弟 Field である見込みが高く（F-44・F-85-D と同じ形）、既定で採ると anomaly を増やす恐れがある。llm-evolve の型 1 の手順の側で渡す。
+- 検証: 新規 `tests/test_keep_converged_facets.py` 4 件（既定は棄却して件数を名指す／opt-in はホームの外だけ／ホームの外が 0 件なら opt-in でも棄却／スキーマの既定）。751 → 755 pass。
 
 ### F-91-R. bybridge — **予算があるときは、全候補で同じ値の `publication_type` を各候補から省いて見出しに 1 回だけ書く。予算に収まらないときは、診断ブロックの字数を名指す** — **対処済み 2026-11-20（予算があるときだけ。予算なしの出力・採点・順位・診断・finalize は不変）**
 
@@ -1194,6 +1205,25 @@ F-41-I の計器で「核の語はプールに入っていない」と確定し�
 - 検証: 新規 `tests/test_facet_language_preference.py` 6 件（後回しと名指し・既定は順を変えず数える・数えるのを止められる・並べ替え後の重複よけの索引・スキーマ）。734 → 740 pass。
 - 申し送り（seihai 側）: 既定の出力の中身は変わらない。内訳に言語の件数が出るので、英語以外が多い切り口は facet の語彙（制度・行政の語）を見直す手がかりになる。
 
+
+### F-85-S. bybridge — **opt-in `bridge_order:"small_first"`: プールを被引用の小さい bridge から走査する。データセット・基礎モデルの bridge は、小さい bridge の引用側で 60 枠が埋まらなかった分だけを埋める（外さない）** — **対処済み 2026-11-21（opt-in・既定は "pool"）**
+
+- 発端（llm-evolve 2026-11-20 の型 3・`D:\dev\agents\reports\contra-survey\failures.md` の 11-20 の行）: 主題「task vector の干渉」でシード 20 件は全部が主題どおり（TIES・TSV・Iso-merging など）。交差候補 60 件は医療 15・社会科学 14・農業 11 で、重みの操作に落ちる候補は 0（呼び手の最高点 0.41）。F-85 の 3 例目で、**巨大な基礎文献だけでなく「シード全員が評価に使うベンチマーク一式」**が原因。
+- 機序（同じ引数で 2026-11-21 に 1 回だけ実 OpenAlex を引き、50 本すべての bridge のページを記録して再生。記録した既定の再生は当夜の構成〔医療 16・社会 14・農業 12…〕と一致）: プールは「多くのシードが共有する順」で、model merging の論文は全部が同じ視覚の 8 タスク（RESISC45・DTD・GTSRB・Stanford Cars・EuroSAT・SUN397 など）と CLIP で評価するので、データセットの bridge がシード共有数 10〜14 で先頭に並ぶ。1 本 6 枠の配分（F-23/24）は効いているが、先頭の 11 本で 60 枠が尽き、うち 7 本がデータセットか CLIP（54 件）。データセットの被引用は 1.7〜5 千で、F-85 の処方 (a)（被引用の上限 2 万）では外れない。
+- 変えたもの（**bybridge のプールの走査順だけ**。シード段・プール・2-hop の問い合わせ・F-85-D の枠・順位・材料・finalize は不変）: `bridge_order:"small_first"` のとき、生存確認で取った被引用（F-85-I・リクエストは増えない）で安定ソート。同じ大きさはプールの順、大きさ不明は群の最後、F-66 の語彙側だけの末尾は末尾のまま。診断に 1 行「bridge の走査順 (F-85-S)」。
+- 実測（同じページの再生・題の語での目安＝重みの合成・忘却・低ランク・確率的最適化・行列の語を含む題の数。呼び手の採点ではない）:
+
+  | | 既定（pool・F-85-D ON） | small_first | small_first＋home_domain_preference:false |
+  |---|---|---|---|
+  | 最小 bridge が 5 千以上の候補 | 11 | **0** | **0** |
+  | 主題に沿う題 | 1（INTERGEN） | 6 | **8**（PINN のモデル統合・忘却を抑えた微調整 2・行列上の確率最適化・SGD の吸収状態など） |
+  | Field 上位 | 医療 16・社会 14・農業 12 | 工学 9・社会 9・医療 7 | 工学 12・医療 7・社会 7・物理 5 |
+
+  入れ替わっても雑多な応用（IoT・眼科・教育）は残る＝F-85 の「手法の利用者」は大きさに依らず起きる（F-85-I の読みと同じ）。small_first が減らすのは「ベンチマーク一式の利用者」の部分だけ。
+- **F-85-D との関係**: F-85-D は Finance ホーム（Social Sciences）の 1,680 件で作った。CS ホームだと同じ Physical Sciences の数学・物理・工学が「領域内」になり後回しになる。この主題では物理の 5 件（PINN の統合・SGD の動力学）が F-85-D で押し出された。F-85-D の既定は 12-01 頃の判定まで変えず、llm-evolve の手順の側で `home_domain_preference:false` を渡す。
+- 既定にしない理由: seihai の 2 テーマ（F-85-I）では bridge の大きさが anomaly を分けず、F-85-D の判定中に seihai の走査順を変えると判定が読めなくなる。効いたかは llm-evolve の次の金曜（型 3）の採点で見る（`scripts/bridge_size_vs_score.py` で bridge の大きさと採点を結べる）。
+- 再生の道具: `scripts/bybridge_replay_cache.py`（会話記録から取った引数で記録 1 回→引数違いを同じページで再生）。記録した生存確認の id の並びは set 由来で毎回変わるので、再生側は id の集合で照合する。
+- 検証: 新規 `tests/test_small_bridges_first.py` 5 件（小さい順・同値と不明・F-66 の末尾・診断の行・スキーマの既定）。746 → 751 pass。
 
 ### F-85-D. bybridge — **bridge ごとの 6 枠を、シードのホーム領域（OpenAlex Domain）の外の引用側から先に埋める。領域内の引用側は後回しにするだけで外さない** — **対処済み 2026-11-16（既定 ON・`home_domain_preference:false` で従来の順）**
 
