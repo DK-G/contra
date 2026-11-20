@@ -2,7 +2,7 @@
 ## 現在地（2026-11-04）
 - フェーズ: **実装は稼働中・Phase 1 は実地の成績で判定する**（11-04 に物差しを替えた）。MCP ツールとして稼働し、常設の利用者は seihai の日次ループ。完了記録は `docs/archive/task-history.md`。
 - 進行中（無人）: 直す日 `contra-failure-remediation`（火・金・日 21:00。main へ直接コミット・push なし）と性能調査 `contra-field-survey`（月・水・木・土 21:00。メタグモ・EX将棋・hAIbit・salon-sites。正本 `D:\dev\agents\routines\contra-field-survey.md`、台帳 `D:\dev\agents\reports\contra-survey\`）。
-- 直近: 11-01 に F-75（`read_works`）・F-76・F-77 を対処、702 pass。F-75 は 11-02 の調査で効果を確認。11-17 に F-90（byserendipity の opt-in `subfield_line`・llm-evolve の依頼）。調査の案は EX将棋で実装まで届いた（10-20・10-23 に統合）。経緯は `DECISION_LOG.md`。
+- 直近: 11-01 に F-75（`read_works`）・F-76・F-77 を対処、702 pass。F-75 は 11-02 の調査で効果を確認。11-17 に F-90（byserendipity の opt-in `subfield_line`・llm-evolve の依頼）。11-20 に F-91（bybridge の予算のとき同じ publication_type を見出しに 1 回・746 pass）。調査の案は EX将棋で実装まで届いた（10-20・10-23 に統合）。経緯は `DECISION_LOG.md`。
 - 次の一手:
   1. **Phase 1 は「渡した案が受け取り手の物差しで効いたか」で判定する**（11-04 Kira。人の採点はやめた）。完了＝物差しのある 2 テーマ以上で「効いた」が 1 件以上。11-04 時点で EX将棋の 1 件（D-012）。段階・物差し・集計は `docs/quality_eval.md` §6 と調査ルーティン「役立ったかの追跡」。
   2. 物差しのある 2 テーマ目が要る。11-04 にテーマを入れ替えた: 木＝hAIbit の知識（問い 20 問→ペルソナで選別→Kira の記録の 3 段。問いは haibit-ops Q-016）、土＝YouTube の毎日の投稿（EX Chess・EX将棋、7 日の平均視聴率）、seihai は日次ループの利用を土曜に写す（ライブで昇格したら効いた）。salon-sites は停止、hAIbit の動きは数えない。

@@ -82,3 +82,39 @@ def test_budget_that_cannot_be_met_says_so(monkeypatch, bridge_offline):
     text = _run(monkeypatch, materials_max_chars=5_000)
     assert "⚠ 大きさの予算 (materials_max_chars 5,000 字) に収まりません" in text
     assert len(_materials(text)) == 60
+
+
+def _run_typed(monkeypatch, ptype, **over):
+    """_run with every candidate carrying publication_type ``ptype`` (F-91)."""
+    orig_init = Work.__init__
+
+    def init(self, *a, **k):
+        orig_init(self, *a, **k)
+        if str(getattr(self, "id", "")).startswith("https://openalex.org/W"):
+            self.publication_type = ptype
+    monkeypatch.setattr(Work, "__init__", init)
+    return _run(monkeypatch, **over)
+
+
+def test_f91_constant_publication_type_is_named_once_under_a_budget(monkeypatch, bridge_offline):
+    plain = _materials(_run_typed(monkeypatch, "article"))
+    assert all(m["publication_type"] == "article" for m in plain)      # no budget: unchanged
+    text = _run_typed(monkeypatch, "article", materials_max_chars=200_000)
+    mats = _materials(text)
+    assert len(mats) == 60 and all("publication_type" not in m for m in mats)
+    assert "publication_type (F-91)" in text and '"article"' in text
+    # finalize reads a missing type as None, and only the github/hf/kaggle types are special
+    monkeypatch.undo()                                  # drop the Work.__init__ patch
+    from src.pipeline.delegate import work_from_material
+    assert work_from_material(mats[0]).publication_type is None
+
+
+def test_f91_none_publication_type_is_not_hoisted(monkeypatch, bridge_offline):
+    text = _run(monkeypatch, materials_max_chars=200_000)   # publication_type None on all
+    assert all("publication_type" in m for m in _materials(text))
+    assert "publication_type (F-91)" not in text
+
+
+def test_f91_over_budget_names_the_diagnostics_size(monkeypatch, bridge_offline):
+    text = _run(monkeypatch, materials_max_chars=2_000)
+    assert re.search(r"うち診断ブロックが [\d,]+ 字", text)

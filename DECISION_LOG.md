@@ -4,6 +4,18 @@ contra の重要な設計判断を記録する。新しいエントリを先頭�
 
 ---
 
+## 2026-11-20 — bybridge の予算のとき、全候補で同じ publication_type は見出しに 1 回だけ書く。診断は削らない（F-91）
+
+**決定**: materials_max_chars があるときだけ、交差候補の publication_type が全件同じ値（None 以外）なら各候補から外し、見出しに値を 1 回書く。予算に収まらないときは診断ブロックの字数を名指す。診断ブロック・シード一覧・DOI・説明文は削らない。
+
+**根拠**: seihai は F-88 の予算を 4 回続けて渡し、4 回とも 46〜47k 字で「収まりません」が出た。抄録を最小まで切った後の残りは診断ブロック約 9k と、60 件すべて "article" の publication_type 1.9k。finalize が publication_type で区別するのは GitHub／Hugging Face／Kaggle の型だけなので、同じ値の繰り返しを省いても情報は落ちない。再生で 11-20 の回（45k）は 46,310 → 44,823 字で収まった。
+
+**見送ったもの**: 40k を守るための診断の短縮（シード一覧の DOI・F-xx の説明文）。S-26 の観測プロトコルが診断を読むので、情報を落とすかどうかは呼び手の判断に残す（diagnostics:false で省ける）。
+
+**戻す条件**: publication_type の欠けた echo で finalize の扱いが変わる回が出たら（論文以外の型が bybridge に入るようになったときなど）、予算のときも各候補に戻す。
+
+---
+
 ## 2026-11-17 — 候補の Subfield は opt-in の 1 行で名指すだけ。除外は Field のまま（F-90）
 
 **決定**: byserendipity raw に `subfield_line`（既定 false）を足し、true のとき診断に候補の id を OpenAlex Subfield ごとにまとめた 1 行を出す。ホーム除外は Field 単位のまま。

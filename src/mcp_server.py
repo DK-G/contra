@@ -1874,6 +1874,14 @@ class StdinMcpServer:
                 return sig
 
             sigs = [_signals(w) for w in ranked_all]
+            # F-91 (2026-11-20): with the rows in place the budget was still missed four runs
+            # running (seihai 11-16/17/19/20: 46.1k-47.2k against 40k/45k). publication_type was
+            # "article" on all 60 candidates each time (1.9k chars of one repeated value) and
+            # delegate_finalize only tells GitHub/Hugging Face/Kaggle types apart, so under a
+            # budget a value shared by every candidate is named once in the header instead.
+            types = {w.publication_type for w in ranked_all}
+            hoisted_type = (next(iter(types)) if budget and len(types) == 1 and ranked_all
+                            and next(iter(types)) else None)
 
             def _build(cut: Optional[int]) -> List[Dict[str, Any]]:
                 out = []
@@ -1885,6 +1893,8 @@ class StdinMcpServer:
                         m[BRIDGE_SIGNAL_ROW_KEY] = [sig.get(k) for k in BRIDGE_SIGNAL_ROW_ORDER]
                     else:
                         m["bridge_signals"] = sig
+                    if hoisted_type:
+                        m.pop("publication_type", None)
                     out.append(m)
                 return out
 
@@ -1894,6 +1904,12 @@ class StdinMcpServer:
                 "（その回に無い値は null）。意味は下の bridge_signals.* の説明と同じです。"
                 "delegate_finalize は読まないので echo は不要です。\n"
                 if signal_rows else ""
+            ) + (
+                f"- publication_type (F-91): 大きさの予算があるので、全 {len(ranked_all)} 件で同じ値"
+                f" {json.dumps(hoisted_type, ensure_ascii=False)} を各候補から省いています"
+                "（delegate_finalize が区別するのは GitHub／Hugging Face／Kaggle の型だけなので、"
+                "echo に無くても扱いは同じです）。\n"
+                if hoisted_type else ""
             )
             instruction = (
                 f"bybridge raw 収集: 交差候補 {len(ranked_all)} 件（構造的関連度順。{head_note}）。"
@@ -1950,7 +1966,9 @@ class StdinMcpServer:
                         f"切っても結果は約 {size + 150:,} 字です（候補は全件返しています。件数は減らして"
                         "いません）。"
                         + ("" if lean else "materials_lean:true で concept_tags を省くと縮みます。")
-                        + ("" if not diagnostics else "診断ブロックは diagnostics:false で省けます。")
+                        + ("" if not diagnostics else
+                           f"うち診断ブロックが {len(diag_line):,} 字で、diagnostics:false で省けます"
+                           "（予算から診断ブロックを引いた分が材料に使える字数です・F-91）。")
                     )
             body = _render(abstract_cut, budget_note)
             return {"content": [{"type": "text", "text": body}], "isError": False}

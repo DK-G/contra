@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-11-20（CL-0178） bybridge の予算のとき、全候補で同じ publication_type を見出しに 1 回だけ書く（F-91）
+
+### 概要
+* `src/mcp_server.py`: bybridge の材料経路。予算（materials_max_chars）があり交差候補の publication_type が全件同じ（None 以外）なら各候補から外し、見出しに 1 行で値を書く。収まらないときの行に診断ブロックの字数を足した。予算なしの出力は不変。
+* `tests/test_bybridge_size_budget.py`: 3 件追加。746 pass。
+* 実測（seihai の実際の呼び出しの再生）: 11-20 r05（予算 45,000）46,310 → 44,823 字＝収まった。11-19 r04（予算 40,000）46,630 → 44,861 字＝まだ超える（診断ブロック 8,938 字）。
+* `docs/field_observations_seihai.md`: F-91・F-91-R・seihai 11-20 への注記。
+
 ## 2026-11-17（CL-0177） byserendipity raw に候補の OpenAlex Subfield をまとめた 1 行を出す（F-90・opt-in）
 
 ### 概要
