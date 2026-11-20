@@ -38,6 +38,8 @@ from src.pipeline.bridge_diagnostics import (
     seed_pool_coverage,
     seed_routes,
     lexical_bridges_last,
+    small_bridges_first,
+    render_small_bridges_first,
     filter_live_bridges,
     candidate_bridge_sizes,
     render_bridge_size_tiers,
@@ -889,6 +891,15 @@ class StdinMcpServer:
                             "roster); same-Domain citers are deferred, not dropped. Measured on 1,680 "
                             "caller-scored candidates (28 runs): same-Domain sibling Fields 81% anomaly "
                             "(Business/Accounting under Finance 96%) vs other Domains 65%. false = page order.")},
+                        "bridge_order": {"type": "string", "enum": ["pool", "small_first"], "default": "pool", "description": (
+                            "F-85-S (opt-in): the order the per-bridge scan walks the pool. 'pool' (default) = "
+                            "bridges most seeds share first. 'small_first' = least-cited bridges first, so "
+                            "dataset / benchmark / foundation-model bridges (ImageNet, CLIP, a benchmark suite "
+                            "every seed evaluates on) only fill the slots the specific method bridges could "
+                            "not; nothing is dropped. Replaying llm-evolve 2026-11-20 (model merging) on the same "
+                            "pages: in pool order 54/60 candidates came through 7 vision benchmark/CLIP bridges; "
+                            "in small_first order the slots went to mode-connectivity / permutation-symmetry / "
+                            "merging bridges first. Not measured on seihai themes.")},
                         "materials_abstract_part": _materials_abstract_part_prop(),
                         "seed_language": {"type": ["string", "null"], "description": "Language gate for seeds (ISO code). Seeds in other languages are dropped (records without a language code are kept). Default 'en' — the citation graph the 2-hop scan needs is overwhelmingly English; a Japanese-language theme once filled all 20 seed slots with Japanese institutional-repository records (F-12 run 1/3). Set null to disable.", "default": "en"},
                         "lexical_bridges_last": {"type": "boolean", "description": "When the semantic seed leg ran, scan the bridges cited ONLY by lexical-leg seeds after the others, so the 60 cross-candidate slots go first to bridges a semantic-leg seed also reaches; the lexical-only bridges fill what is left (F-66: on 15 seihai runs the caller rated purpose_sim >= 0.5 on 2 of 166 lexical-only candidates). Set false for the old pool order.", "default": True},
@@ -1680,6 +1691,12 @@ class StdinMcpServer:
             bridge_pool, lexical_moved = lexical_bridges_last(
                 seeds, bridge_pool, {w.id for w in sem_seeds})
 
+        # F-85-S (opt-in): walk the least-cited bridges first (F-66's lexical-only tail stays last).
+        small_first_line = ""
+        if str(args.get("bridge_order") or "pool") == "small_first" and bridge_cited:
+            bridge_pool = small_bridges_first(bridge_pool, bridge_cited, keep_tail=lexical_moved)
+            small_first_line = render_small_bridges_first(bridge_pool, bridge_cited, keep_tail=lexical_moved)
+
         # Exclude cross-domain candidates already surfaced for this theme in prior runs.
         used_ids, _used_titles, _used_dois = _history_exclusions(theme, args)
         _log("Bybridge: running citation 2-hop scan across the bridge pool...")
@@ -1706,6 +1723,8 @@ class StdinMcpServer:
                 diag_line += "\n" + size_line
         if diagnostics and cands:
             diag_line += "\n" + _home_domain_line(cands, domain_stats)
+        if diagnostics and small_first_line:
+            diag_line += "\n" + small_first_line
         # F-46: which seed leg each pooled bridge (and so each candidate) came through. Needs
         # the semantic leg to have run; without it there is one leg and nothing to split.
         routes = (seed_routes(seeds, cands, bridges, {w.id for w in sem_seeds})

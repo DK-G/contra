@@ -7,28 +7,31 @@
 
 ## 1. 変更目的 (必須)
 
-*   llm-evolve（ローカル LLM を改造して測る周回、2026-11-17 開始）が、byserendipity の facet を数学の小分野に向けて「数学の中で領域をまたぐ類推」を探す。どの候補がどの小分野から来たかを呼び手が見て、残す小分野を選べるようにする（F-90）。
-*   ホーム除外は Field 単位のまま。Subfield での除外は F-37（2026-09-27）で「残る候補が変わる」として見送っているので、名指すだけにする。
+*   llm-evolve 2026-11-20 の型 3（bybridge）で、交差候補 60 件が視覚のベンチマーク（RESISC45・DTD・GTSRB・Cars・EuroSAT・SUN）と CLIP の bridge 経由の医療画像・農業・リモートセンシングで埋まり、収穫 0（`D:\dev\agents\reports\contra-survey\failures.md` 11-20、F-85 の 3 例目）。
+*   model merging の論文は全部が同じベンチマーク一式で評価するので、データセットの bridge がシード共有数で先頭に並び、60 枠を先に使い切る。被引用は 1.7〜5 千で、上限の処方（F-85 (a)）では外れない。
+*   走査の順を「被引用の小さい bridge から」にする opt-in を足し、データセット・基礎モデルの bridge は残りの枠だけを埋めるようにする（F-85-S）。
 
 ---
 
 ## 2. 変更概要 (必須)
 
-*   変更ファイル: `src/mcp_server.py`, `tests/test_subfield_ids_line.py`（新規）, `DECISION_LOG.md`, `Changelog.md`, `diff.md`
-*   `_subfield_ids_line(works)`: 候補の id を `primary_topic_subfield_name`（括弧に Field）ごとにまとめた 1 行。`_field_ids_line`（F-65）と同じ形。
-*   byserendipity の引数 `subfield_line`（boolean・既定 false）。raw 経路で true のとき診断に上の 1 行を足す。予算（`materials_max_chars`）の計算に入る。既定の出力は不変。
+*   変更ファイル: `src/pipeline/bridge_diagnostics.py`, `src/mcp_server.py`, `tests/test_small_bridges_first.py`（新規）, `scripts/bybridge_replay_cache.py`（新規）, `docs/field_observations_seihai.md`, `DECISION_LOG.md`, `Changelog.md`, `diff.md`, `task.md`
+*   `small_bridges_first(pool, cited, keep_tail)`: プールを被引用の小さい順に安定ソート（同値はプール順・不明は群の最後・F-66 の語彙側だけの末尾は末尾のまま）。`render_small_bridges_first`: 診断の 1 行。
+*   bybridge の引数 `bridge_order`（"pool" 既定／"small_first"）。被引用は生存確認で既に取っている値（F-85-I）を使うのでリクエストは増えない。既定の出力は不変（F-85 の大きさの行の括弧の文言だけ更新）。
+*   ハブ側: `D:\dev\agents\routines\llm-evolve-daily.md` の型 3 に `bridge_order:"small_first"`・`home_domain_preference:false` を足した（リポ外）。
 
 ---
 
 ## 3. 確認方法 (必須)
 
-*   `python -m pytest tests/ -q` → 743 passed（新規 3 件: まとめ方・opt-in のときだけ出て他は同じ・スキーマの既定値）
-*   実 OpenAlex: 数学向け facet 3 つ（最適輸送・情報幾何・代数的位相）、`materials_lean`＋45,000。off 38,409 字／on 39,251 字（1 行 842 字）。候補 33 件、Mathematics 28 件が Applied Mathematics 17／Geometry and Topology 5／Mathematical Physics 5 に分かれて見えた。
+*   `python -m pytest tests/ -q` → 751 passed（新規 5 件）
+*   再生（実 OpenAlex を 1 回記録→同じページで引数違い）: `python scripts/bybridge_replay_cache.py . <dir> record` の後 `variants`。llm-evolve 11-20 の引数で、既定の再生は当夜の構成と一致。最小 bridge 5 千以上の候補 11 → 0、主題に沿う題（語での目安）1 → 6（small_first）→ 8（＋home_domain_preference:false）。
 
 ---
 
 ## 4. 既知の課題・リスク (必須)
 
-*   予算が厳しい呼び出しで true にすると、1 行の分だけ抄録の先頭が短くなる（F-65 の 1 行と同じ扱い）。既定 false なので既存の呼び手には影響しない。
-*   bybridge・read_works には付けていない（依頼元が使うのは byserendipity raw だけ）。
-*   動いている MCP サーバーは `repos/contra` の main を読むので、main へ merge するまで呼び手からは使えない。
+*   数字は 1 テーマ・1 回、題の語での目安で、呼び手の採点ではない。効いたかは llm-evolve の次の型 3（金曜）の採点で見る。
+*   入れ替わっても雑多な応用（IoT・眼科など）は残る。F-85 の「手法の利用者」は大きさに依らず起きる。
+*   F-85-D は CS ホームだと数学・物理を後回しにする（同じ Physical Sciences）。既定は 12-01 頃の判定まで変えず、llm-evolve 側で切る。
+*   seihai には効かない／測っていない（既定 "pool" のまま）。

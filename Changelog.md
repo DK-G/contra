@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-11-21（CL-0180） bybridge に opt-in の走査順 bridge_order:"small_first"（F-85-S）
+
+### 概要
+* `src/pipeline/bridge_diagnostics.py`: `small_bridges_first`（プールを被引用の小さい順に。F-66 の語彙側だけの末尾は末尾のまま、その中で小さい順）と診断の 1 行 `render_small_bridges_first`。F-85 の大きさの行の文言を更新。
+* `src/mcp_server.py`: bybridge の引数 `bridge_order`（"pool" 既定／"small_first"）。生存確認で取った被引用（F-85-I・リクエストは増えない）で並べ替える。既定の出力は不変。
+* `tests/test_small_bridges_first.py`（新規 5 件）。751 pass。
+* 発端は llm-evolve 2026-11-20 の型 3: 交差候補 60 件が視覚のベンチマーク（RESISC45・DTD・GTSRB・Cars・EuroSAT・SUN）と CLIP の bridge 経由の医療画像・農業・リモートセンシングで埋まった。同じページの再生で、テーマに沿う題（重みの合成・忘却・低ランク・確率的最適化）が 1/60 → small_first 6/60 → small_first＋home_domain_preference:false 8/60。
+* `scripts/bybridge_replay_cache.py`（新規）: 会話記録から取り出した bybridge の引数で 1 回だけ実 OpenAlex を引いて全 bridge のページを記録し、引数違いを同じページで再生する。
+* llm-evolve の手順（`D:\dev\agents\routines\llm-evolve-daily.md` 型 3）に `bridge_order:"small_first"`・`home_domain_preference:false` を足した。
+
 ## 2026-11-20（CL-0179） F-85-D の実運用 4 回を集計（コードは変えていない）
 
 ### 概要

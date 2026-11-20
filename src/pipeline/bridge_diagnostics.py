@@ -867,6 +867,46 @@ def lexical_bridges_last(
     return [b for b in pool if b not in moved] + lexical, len(lexical)
 
 
+def small_bridges_first(
+    pool: Sequence[str], cited: Dict[str, int], keep_tail: int = 0,
+) -> List[str]:
+    """The pool re-ordered so the per-bridge scan walks the least-cited bridges first (F-85-S).
+
+    The pool order is "most seeds share it first", and a theme whose seeds all evaluate on the
+    same benchmark suite puts the suite at the head: llm-evolve 2026-11-20 (model merging) had
+    RESISC45 / CLIP / DTD / GTSRB / Cars / EuroSAT / SUN at seed-share 10-14, and their citers
+    outside Computer Science (crop disease, remote sensing, chest X-ray) took 54 of the 60
+    slots. Walking by size, the method bridges (Fisher merging 825, Git Re-Basin 390, mode
+    connectivity 595-814) fill the slots first and the datasets / foundation models only fill
+    what those could not. Same-size bridges keep the pool order (stable sort); a bridge whose
+    size is unknown (liveness failed open) goes to the end of its group. ``keep_tail`` is the
+    F-66 lexical-only block at the end of the pool: it stays at the end, sorted on its own.
+    """
+    pool = list(pool)
+    split = len(pool) - max(0, min(keep_tail, len(pool)))
+
+    def key(b: str):
+        n = cited.get(short_id(b))
+        return (n is None, n or 0)
+
+    return sorted(pool[:split], key=key) + sorted(pool[split:], key=key)
+
+
+def render_small_bridges_first(pool: Sequence[str], cited: Dict[str, int], keep_tail: int = 0) -> str:
+    """One diagnostics line saying the scan walked the pool by size (F-85-S)."""
+    sizes = [cited[short_id(b)] for b in pool if short_id(b) in cited]
+    unknown = len(pool) - len(sizes)
+    span = f"被引用 {min(sizes):,}〜{max(sizes):,}" if sizes else "被引用は不明"
+    return (
+        f"- bridge の走査順 (F-85-S): 被引用の小さい bridge から走査した（プール {len(pool)} 本・{span}"
+        + (f"・不明 {unknown} 本はその群の最後" if unknown else "")
+        + (f"・語彙側だけの {keep_tail} 本は後ろのまま、その中で小さい順" if keep_tail else "")
+        + "）。データセットや基礎モデルのような被引用の大きい bridge は、小さい bridge の引用側で"
+          "枠が埋まらなかった分だけを埋める（外してはいない）。従来の順（複数シードが共有する bridge から）は"
+          " bridge_order:\"pool\"。"
+    )
+
+
 def seed_pool_coverage(seeds: Sequence[Work], pool: Iterable[str]) -> Dict[str, Any]:
     """How the bridge pool splits across the roster (F-73).
 
@@ -1253,5 +1293,6 @@ def render_bridge_size_tiers(
         f"- bridge の大きさ (F-85): 交差候補 {len(cands)} 件を、通る bridge のうち最小の被引用で分けると "
         f"{parts}" + (f" / 不明 {unknown} 件" if unknown else "")
         + "。候補ごとの値は materials の bridge_signals.bridge_cited_min／bridge_cited_max"
-          "（被引用の上限で bridge を外す処方は未実装。外れるのは最小の bridge まで上限を超える候補だけ）"
+          "（被引用の上限で bridge を外す処方は入れていない。被引用の小さい bridge から枠を埋めるのは "
+          "bridge_order:\"small_first\"・F-85-S）"
     )
