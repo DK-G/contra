@@ -7,6 +7,13 @@
 
 ---
 
+## 2026-11-20（CL-0179） F-85-D の実運用 4 回を集計（コードは変えていない）
+
+### 概要
+* `scripts/f85d_production_check.py`: 会話記録の bybridge 材料と finalize の採点を結び、ホーム領域の内外で anomaly を数える（API なし）。
+* seihai の 07 時台: OFF 22 回 anomaly 74%・領域内 68% → ON 4 回 70%・領域内 56%。レーン内のばらつきより小さい差＝既定 ON のまま 12-01 頃に再集計。
+* `docs/field_observations_seihai.md`: F-85-D の集計の行・seihai 11-19 への注記。`DECISION_LOG.md` に判定。
+
 ## 2026-11-20（CL-0178） bybridge の予算のとき、全候補で同じ publication_type を見出しに 1 回だけ書く（F-91）
 
 ### 概要
